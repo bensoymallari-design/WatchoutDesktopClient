@@ -102,8 +102,8 @@ CI also uploads **WatchMe-Setup** as a GitHub Actions artifact on each Windows b
 ## Workflow
 
 1. **New Show** or **Demo Show** (3-wide LED wall).
-2. **Assets → Import** an H.264 MP4. It plays immediately — no amber “building WebM” wait.
-3. Drag the clip on **Stage** (or double-click the asset). **Stage → Fit to Wall** to span every controller.
+2. **Assets → Import** an H.264 MP4, or drag files onto Assets. Then **drag the asset onto a Stage display** (or onto the Timeline). It should appear immediately — press **Space** or **Play**.
+3. Drag the clip on **Stage** to snap it; drag the amber handles to resize. **Fit wall** / **Fit display** on the Stage toolbar.
 4. **Devices → Map extra monitors to Stage**, then **Output all displays**. Win+P → Extend.
 5. Click the Stage, press **Space**. Esc stops (or closes outputs).
 6. For Resolume: **Live → Connect All Capture Cards**. Five cards → five live displays.

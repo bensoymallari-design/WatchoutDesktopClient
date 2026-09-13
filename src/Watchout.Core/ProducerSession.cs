@@ -249,6 +249,23 @@ public sealed class ProducerSession
         return created;
     }
 
+    public Cue? DropAssetOnStage(string assetId, string? displayId, double x, double y)
+    {
+        var cue = AddCueFromAsset(assetId, displayId: displayId);
+        if (cue is null) return null;
+        if (displayId is null)
+        {
+            UpdateCue(cue.Id, c =>
+            {
+                c.Position = new Vec3 { X = Math.Round(x), Y = Math.Round(y), Z = c.Position.Z };
+            }, record: false);
+        }
+        Log(displayId is null
+            ? $"Placed {cue.Name} on Stage — press Space to play"
+            : $"Placed {cue.Name} on the display — press Space to play");
+        return cue;
+    }
+
     public void FitSelectedToDisplay(string mode = "cover")
     {
         Mutate(show =>

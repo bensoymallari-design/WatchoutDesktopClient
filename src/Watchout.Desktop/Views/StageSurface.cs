@@ -21,6 +21,11 @@ public sealed class StageSurface : Canvas
     Point _dragStart;
     string? _dragCueId;
     Point _dragCueOrigin;
+    string? _dragDisplayId;
+    Point _dragDisplayOrigin;
+    string? _resizeHandle;
+    StageRect _resizeStart;
+    string? _hoverDisplayId;
     bool _panning;
     Point _panStart;
     (double X, double Y, double Zoom) _panCam;
@@ -35,11 +40,21 @@ public sealed class StageSurface : Canvas
         SnapsToDevicePixels = true;
         Focusable = true;
         Background = new SolidColorBrush(Color.FromRgb(17, 17, 17));
+        AllowDrop = true;
+        DragOver += OnDragOver;
+        DragLeave += (_, _) => { if (_hoverDisplayId is not null) { _hoverDisplayId = null; Refresh(); } };
+        Drop += OnDrop;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Refresh, DispatcherPriority.Render);
         SizeChanged += (_, _) => Refresh();
         MouseWheel += OnWheel;
         MouseLeftButtonDown += OnLeftDown;
-        MouseLeftButtonUp += (_, _) => { _dragCueId = null; ReleaseMouseCapture(); };
+        MouseLeftButtonUp += (_, _) =>
+        {
+            _dragCueId = null;
+            _dragDisplayId = null;
+            _resizeHandle = null;
+            ReleaseMouseCapture();
+        };
         MouseMove += OnMove;
         MouseRightButtonDown += (_, e) =>
         {
@@ -78,13 +93,14 @@ public sealed class StageSurface : Canvas
             {
                 var r = Map(display.X, display.Y, display.Width, display.Height, originX, originY, scale);
                 var selected = session.Selection.Kind == SelectionKind.Display && session.Selection.Ids.Contains(display.Id);
+                var hover = display.Id == _hoverDisplayId;
                 var border = new Border
                 {
                     Width = Math.Max(2, r.Width),
                     Height = Math.Max(2, r.Height),
-                    BorderBrush = new SolidColorBrush(selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(80, 80, 80)),
-                    BorderThickness = new Thickness(selected ? 2 : 1),
-                    Background = new SolidColorBrush(Color.FromArgb(28, 48, 48, 48)),
+                    BorderBrush = new SolidColorBrush(hover ? Color.FromRgb(74, 222, 128) : selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(80, 80, 80)),
+                    BorderThickness = new Thickness(hover || selected ? 3 : 1),
+                    Background = new SolidColorBrush(hover ? Color.FromArgb(50, 74, 222, 128) : Color.FromArgb(28, 48, 48, 48)),
                     IsHitTestVisible = false,
                 };
                 SetLeft(border, r.X);
@@ -169,6 +185,22 @@ public sealed class StageSurface : Canvas
                 Children.Add(outline);
                 _chrome.Add(outline);
                 SetZIndex(outline, 20);
+                foreach (var handle in new[] { "nw", "n", "ne", "e", "se", "s", "sw", "w" })
+                {
+                    var (hx, hy) = HandlePoint(mapped, handle);
+                    var knob = new Rectangle
+                    {
+                        Width = 8,
+                        Height = 8,
+                        Fill = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+                        IsHitTestVisible = false,
+                    };
+                    SetLeft(knob, hx - 4);
+                    SetTop(knob, hy - 4);
+                    Children.Add(knob);
+                    _chrome.Add(knob);
+                    SetZIndex(knob, 21);
+                }
             }
         }
     }
@@ -177,9 +209,9 @@ public sealed class StageSurface : Canvas
     {
         if (asset is null) return Placeholder(mapped, ev.Cue.Name, ev.Cue.Color);
         if (LiveSources.IsCapture(asset))
-            return new CaptureLayer { DeviceId = LiveSources.CaptureDeviceId(asset), Width = mapped.Width, Height = mapped.Height };
+            return new CaptureLayer { DeviceId = LiveSources.CaptureDeviceId(asset), Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         if (asset.Url.StartsWith("procedural:", StringComparison.Ordinal))
-            return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = mapped.Width, Height = mapped.Height };
+            return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         if (asset.Kind is AssetKind.Image or AssetKind.Ndi
             || asset.Url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase)
             || asset.Url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase)
@@ -187,7 +219,7 @@ public sealed class StageSurface : Canvas
         {
             var still = DemoArt.ForUrl(asset.Url, Math.Max(8, (int)asset.Width), Math.Max(8, (int)asset.Height)) ?? MediaLibrary.LoadStill(asset);
             if (still is null) return Placeholder(mapped, asset.Name, asset.Color);
-            return new Image { Source = still, Stretch = Stretch.Fill, Width = mapped.Width, Height = mapped.Height };
+            return new Image { Source = still, Stretch = Stretch.Fill, Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         }
         if (asset.Kind == AssetKind.Audio) return null;
 
@@ -201,13 +233,20 @@ public sealed class StageSurface : Canvas
             UnloadedBehavior = MediaState.Manual,
             Stretch = Stretch.Fill,
             ScrubbingEnabled = true,
+            Focusable = false,
+            IsHitTestVisible = false,
             IsMuted = !PlayAudio || ev.Volume <= 0,
             Width = mapped.Width,
             Height = mapped.Height,
         };
         video.MediaFailed += (_, e) => App.Session.Log($"Media Foundation could not play {asset.Name}: {e.ErrorException.Message}", "error");
-        video.MediaOpened += (_, _) => App.Session.Log($"{asset.Name} · Media Foundation / DXVA opened {System.IO.Path.GetFileName(file)}");
-        try { video.Source = new Uri(file); }
+        video.MediaOpened += (_, _) =>
+        {
+            App.Session.Log($"{asset.Name} · Media Foundation / DXVA opened {System.IO.Path.GetFileName(file)}");
+            var tlNow = App.Session.Show?.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
+            SyncVideo(video, ev, tlNow?.Playback ?? PlaybackState.Stop);
+        };
+        try { video.Source = MediaLibrary.LocalUri(file); }
         catch { return Placeholder(mapped, asset.Name, asset.Color); }
         _videos[ev.Cue.Id] = video;
         var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
@@ -237,7 +276,7 @@ public sealed class StageSurface : Canvas
 
     static FrameworkElement Placeholder(Rect mapped, string name, string color)
     {
-        var grid = new Grid { Width = mapped.Width, Height = mapped.Height, Background = BrushFrom(color) };
+        var grid = new Grid { Width = mapped.Width, Height = mapped.Height, Background = BrushFrom(color), IsHitTestVisible = false };
         grid.Children.Add(new TextBlock
         {
             Text = name,
@@ -270,6 +309,59 @@ public sealed class StageSurface : Canvas
         catch { return new SolidColorBrush(Color.FromRgb(59, 130, 196)); }
     }
 
+    static (double X, double Y) HandlePoint(Rect r, string handle) => handle switch
+    {
+        "nw" => (r.X, r.Y),
+        "n" => (r.X + r.Width / 2, r.Y),
+        "ne" => (r.X + r.Width, r.Y),
+        "e" => (r.X + r.Width, r.Y + r.Height / 2),
+        "se" => (r.X + r.Width, r.Y + r.Height),
+        "s" => (r.X + r.Width / 2, r.Y + r.Height),
+        "sw" => (r.X, r.Y + r.Height),
+        _ => (r.X, r.Y + r.Height / 2),
+    };
+
+    void OnDragOver(object sender, DragEventArgs e)
+    {
+        if (!Editing || !StudioDrag.IsMediaDrag(e.Data))
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+        e.Effects = DragDropEffects.Copy;
+        e.Handled = true;
+        var show = App.Session.Show;
+        if (show is null) return;
+        var stage = ScreenToStage(e.GetPosition(this), show);
+        var hit = StageGeometry.HitDisplay(show.Displays, stage)?.Id;
+        if (hit == _hoverDisplayId) return;
+        _hoverDisplayId = hit;
+        Refresh();
+    }
+
+    async void OnDrop(object sender, DragEventArgs e)
+    {
+        if (!Editing) return;
+        e.Handled = true;
+        _hoverDisplayId = null;
+        var show = App.Session.Show;
+        if (show is null) return;
+        var stage = ScreenToStage(e.GetPosition(this), show);
+        var display = StageGeometry.HitDisplay(show.Displays, stage);
+        if (StudioDrag.TryAssetId(e.Data, out var assetId))
+        {
+            App.Session.DropAssetOnStage(assetId, display?.Id, stage.X, stage.Y);
+            StudioDrag.AssetId = null;
+            return;
+        }
+        var files = StudioDrag.Files(e.Data);
+        if (files.Length == 0) return;
+        var ids = await MediaLibrary.ImportFilesAsync(files, App.Session);
+        foreach (var id in ids)
+            App.Session.DropAssetOnStage(id, display?.Id, stage.X, stage.Y);
+    }
+
     void OnWheel(object sender, MouseWheelEventArgs e)
     {
         if (!Editing) return;
@@ -285,6 +377,23 @@ public sealed class StageSurface : Canvas
         if (show is null) return;
         var stage = ScreenToStage(e.GetPosition(this), show);
         var media = PlaybackClock.VisibleMedia(show).ToList();
+        var selectedCue = App.Session.Selection.Kind == SelectionKind.Cue
+            ? media.FirstOrDefault(ev => App.Session.Selection.Ids.Contains(ev.Cue.Id))
+            : null;
+        if (selectedCue is not null)
+        {
+            var asset = show.Assets.FirstOrDefault(a => a.Id == selectedCue.Cue.AssetId);
+            var handle = StageGeometry.HitResizeHandle(StageGeometry.CueRect(selectedCue, asset), stage, Viewport(show).Scale);
+            if (handle is not null)
+            {
+                App.Session.Select(SelectionKind.Cue, selectedCue.Cue.Id);
+                _resizeHandle = handle;
+                _resizeStart = StageGeometry.CueRect(selectedCue, asset);
+                _dragStart = e.GetPosition(this);
+                CaptureMouse();
+                return;
+            }
+        }
         var hitCue = StageGeometry.HitCue(media, show.Assets, stage);
         if (hitCue is not null)
         {
@@ -296,7 +405,14 @@ public sealed class StageSurface : Canvas
             return;
         }
         var hitDisp = StageGeometry.HitDisplay(show.Displays, stage);
-        if (hitDisp is not null) App.Session.Select(SelectionKind.Display, hitDisp.Id);
+        if (hitDisp is not null)
+        {
+            App.Session.Select(SelectionKind.Display, hitDisp.Id);
+            _dragDisplayId = hitDisp.Id;
+            _dragStart = e.GetPosition(this);
+            _dragDisplayOrigin = new Point(hitDisp.X, hitDisp.Y);
+            CaptureMouse();
+        }
         else App.Session.ClearSelection();
     }
 
@@ -304,6 +420,7 @@ public sealed class StageSurface : Canvas
     {
         var show = App.Session.Show;
         if (show is null) return;
+        var (_, _, scale) = Viewport(show);
         if (_panning && Editing)
         {
             var p = e.GetPosition(this);
@@ -311,11 +428,52 @@ public sealed class StageSurface : Canvas
             App.Session.SetCamera(_panCam.X - (p.X - _panStart.X) / zoom, _panCam.Y - (p.Y - _panStart.Y) / zoom, zoom);
             return;
         }
+        if (_resizeHandle is not null && _dragStart != default)
+        {
+            var now = e.GetPosition(this);
+            var dx = (now.X - _dragStart.X) / scale;
+            var dy = (now.Y - _dragStart.Y) / scale;
+            var next = StageGeometry.ResizeRect(_resizeStart, _resizeHandle, dx, dy, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+            if (App.Session.Snap)
+            {
+                var guides = StageGeometry.DisplayGuides(show.Displays);
+                next = StageGeometry.SnapResizeRect(next, _resizeHandle, guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
+            }
+            var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => App.Session.Selection.Ids.Contains(c.Id));
+            var asset = cue?.AssetId is { } aid ? show.Assets.FirstOrDefault(a => a.Id == aid) : null;
+            if (cue is not null && asset is not null)
+            {
+                var fit = StageGeometry.RectToCueTransform(next, asset);
+                App.Session.UpdateCue(cue.Id, c =>
+                {
+                    c.Position = fit.Position;
+                    c.Scale = fit.Scale;
+                }, record: false);
+            }
+            return;
+        }
+        if (_dragDisplayId is not null)
+        {
+            var now = e.GetPosition(this);
+            var x = _dragDisplayOrigin.X + (now.X - _dragStart.X) / scale;
+            var y = _dragDisplayOrigin.Y + (now.Y - _dragStart.Y) / scale;
+            if (App.Session.Snap)
+            {
+                var guides = StageGeometry.DisplayMoveGuides(show.Displays, _dragDisplayId);
+                x = StageGeometry.SnapValue(x, guides.X, StageGeometry.SnapThreshold(scale));
+                y = StageGeometry.SnapValue(y, guides.Y, StageGeometry.SnapThreshold(scale));
+            }
+            App.Session.UpdateDisplay(_dragDisplayId, d =>
+            {
+                d.X = Math.Round(x);
+                d.Y = Math.Round(y);
+            }, record: false);
+            return;
+        }
         if (_dragCueId is null) return;
-        var now = e.GetPosition(this);
-        var (_, _, scale) = Viewport(show);
-        var x = _dragCueOrigin.X + (now.X - _dragStart.X) / scale;
-        var y = _dragCueOrigin.Y + (now.Y - _dragStart.Y) / scale;
+        var pos = e.GetPosition(this);
+        var cx = _dragCueOrigin.X + (pos.X - _dragStart.X) / scale;
+        var cy = _dragCueOrigin.Y + (pos.Y - _dragStart.Y) / scale;
         if (App.Session.Snap)
         {
             var guides = StageGeometry.DisplayGuides(show.Displays);
@@ -324,12 +482,12 @@ public sealed class StageSurface : Canvas
             if (cue is not null)
             {
                 var rect = StageGeometry.CueRect(cue, asset);
-                var snapped = StageGeometry.SnapRect(new StageRect(x, y, rect.W, rect.H), guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
-                x = snapped.X;
-                y = snapped.Y;
+                var snapped = StageGeometry.SnapRect(new StageRect(cx, cy, rect.W, rect.H), guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
+                cx = snapped.X;
+                cy = snapped.Y;
             }
         }
-        App.Session.UpdateCue(_dragCueId, c => c.Position = new Vec3 { X = Math.Round(x), Y = Math.Round(y), Z = c.Position.Z }, record: false);
+        App.Session.UpdateCue(_dragCueId, c => c.Position = new Vec3 { X = Math.Round(cx), Y = Math.Round(cy), Z = c.Position.Z }, record: false);
     }
 
     (double X, double Y) ScreenToStage(Point p, Show show)
