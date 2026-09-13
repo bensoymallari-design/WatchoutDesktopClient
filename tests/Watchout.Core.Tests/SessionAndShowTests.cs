@@ -148,4 +148,30 @@ public class SessionAndShowTests
         Assert.NotNull(Tweens.EvaluateCue(cue, 0));
         Assert.NotNull(Tweens.EvaluateCue(cue, 10_000));
     }
+
+    [Fact]
+    public void DropAssetOnStageFitsTheTargetDisplayAndIsPlayableAtPlayhead()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.AddDisplay();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 8_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/wall.mp4", "/library/wall.mp4", probe, 1_000_000, true);
+        session.ApplyImported(media);
+        var right = session.Show!.Displays[1];
+        var cue = session.DropAssetOnStage(media.Id, right.Id, 0, 0);
+        Assert.NotNull(cue);
+        Assert.Equal(right.X, cue!.Position.X);
+        Assert.Equal(right.Y, cue.Position.Y);
+        Assert.Equal(session.ActiveTimeline!.Playhead, cue.Start);
+        Assert.NotNull(Tweens.EvaluateCue(cue, session.ActiveTimeline.Playhead));
+        session.SetPlayback(session.ActiveTimeline.Id, PlaybackState.Play);
+        Assert.Equal(PlaybackState.Play, session.ActiveTimeline.Playback);
+        session.Tick(500);
+        Assert.True(session.ActiveTimeline.Playhead >= 500);
+
+        var loose = session.DropAssetOnStage(media.Id, null, 400, 80);
+        Assert.Equal(400, loose!.Position.X);
+        Assert.Equal(80, loose.Position.Y);
+    }
 }

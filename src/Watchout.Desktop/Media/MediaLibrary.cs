@@ -9,10 +9,11 @@ namespace Watchout.Desktop.Media;
 
 public static class MediaLibrary
 {
-    public static async Task ImportFilesAsync(IEnumerable<string> paths, ProducerSession session)
+    public static async Task<List<string>> ImportFilesAsync(IEnumerable<string> paths, ProducerSession session)
     {
         await FfmpegTools.DetectAsync();
         var root = Path.Combine(App.DataDir(), "media");
+        var ids = new List<string>();
         foreach (var src in Codecs.CollapseImportPaths(paths))
         {
             if (!File.Exists(src)) continue;
@@ -38,7 +39,7 @@ public static class MediaLibrary
                 {
                     var bmp = new BitmapImage();
                     bmp.BeginInit();
-                    bmp.UriSource = new Uri(dest);
+                    bmp.UriSource = LocalUri(dest);
                     bmp.CacheOption = BitmapCacheOption.OnLoad;
                     bmp.EndInit();
                     probe.Width = bmp.PixelWidth;
@@ -69,6 +70,7 @@ public static class MediaLibrary
                 media.PosterUrl = await ExtractPosterAsync(media.Id, dest);
 
             session.ApplyImported(media);
+            ids.Add(media.Id);
 
             if (prepared is null && Codecs.NeedsH264Transcode(probe.Codec, dest) && FfmpegTools.Available && MediaPolicy.ShouldBuildFullProxy(bytes, probe.Width, probe.Height))
             {
@@ -90,6 +92,7 @@ public static class MediaLibrary
                 });
             }
         }
+        return ids;
     }
 
     static string? FindPreparedH264(string src, string dest)
@@ -121,7 +124,7 @@ public static class MediaLibrary
         {
             var bmp = new BitmapImage();
             bmp.BeginInit();
-            bmp.UriSource = new Uri(file);
+            bmp.UriSource = LocalUri(file);
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.DecodePixelWidth = 480;
             bmp.EndInit();
@@ -132,5 +135,12 @@ public static class MediaLibrary
         {
             return null;
         }
+    }
+
+    public static Uri LocalUri(string path)
+    {
+        if (path.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(path, UriKind.Absolute, out var file))
+            return file;
+        return new Uri(Path.GetFullPath(path));
     }
 }

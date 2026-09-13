@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Watchout.Core;
 using Watchout.Core.Models;
+using Watchout.Desktop.Media;
 
 namespace Watchout.Desktop.Views;
 
@@ -19,6 +20,13 @@ public sealed class TimelinePanel : FrameworkElement
     {
         ClipToBounds = true;
         Focusable = true;
+        AllowDrop = true;
+        DragOver += (_, e) =>
+        {
+            e.Effects = StudioDrag.IsMediaDrag(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        };
+        Drop += OnDrop;
         App.Session.Changed += () => Dispatcher.BeginInvoke(InvalidateVisual);
         MouseLeftButtonDown += OnDown;
         MouseLeftButtonUp += (_, _) => { _dragId = null; ReleaseMouseCapture(); };
@@ -128,6 +136,30 @@ public sealed class TimelinePanel : FrameworkElement
         }
         else if (App.Session.ClickJumpsToTime)
             App.Session.SetPlayhead(tl.Id, Math.Max(0, msAt));
+    }
+
+    async void OnDrop(object sender, DragEventArgs e)
+    {
+        var tl = App.Session.ActiveTimeline;
+        if (tl is null) return;
+        e.Handled = true;
+        var p = e.GetPosition(this);
+        var zoom = App.Session.TimelineZoom;
+        var scroll = App.Session.TimelineScroll;
+        var start = Math.Max(0, (p.X - HeadW) / zoom + scroll);
+        var layerIndex = Math.Clamp((int)Math.Floor((p.Y - 22) / LaneH), 0, Math.Max(0, tl.Layers.Count - 1));
+        var layerId = tl.Layers[layerIndex].Id;
+        if (StudioDrag.TryAssetId(e.Data, out var assetId))
+        {
+            App.Session.AddCueFromAsset(assetId, layerId, start);
+            StudioDrag.AssetId = null;
+            return;
+        }
+        var files = StudioDrag.Files(e.Data);
+        if (files.Length == 0) return;
+        var ids = await MediaLibrary.ImportFilesAsync(files, App.Session);
+        foreach (var id in ids)
+            App.Session.AddCueFromAsset(id, layerId, start);
     }
 
     void OnMove(object sender, MouseEventArgs e)

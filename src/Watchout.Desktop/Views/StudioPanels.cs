@@ -11,6 +11,8 @@ public class AssetsPanel : UserControl
 {
     readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent };
     string _fingerprint = "";
+    Point _press;
+    Asset? _pressAsset;
 
     public AssetsPanel()
     {
@@ -27,14 +29,54 @@ public class AssetsPanel : UserControl
             else
                 await MainWindow.ImportMediaAsync();
         };
-        AllowDrop = true;
-        Drop += async (_, e) =>
+        _list.PreviewMouseLeftButtonDown += (_, e) =>
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)
-                await MediaLibrary.ImportFilesAsync(files, App.Session);
+            _press = e.GetPosition(_list);
+            _pressAsset = ItemAt(e.GetPosition(_list));
         };
+        _list.PreviewMouseMove += (_, e) =>
+        {
+            if (e.LeftButton != MouseButtonState.Pressed || _pressAsset is null) return;
+            var p = e.GetPosition(_list);
+            if (Math.Abs(p.X - _press.X) < 8 && Math.Abs(p.Y - _press.Y) < 8) return;
+            var asset = _pressAsset;
+            _pressAsset = null;
+            DragDrop.DoDragDrop(_list, StudioDrag.ForAsset(asset.Id), DragDropEffects.Copy);
+            StudioDrag.AssetId = null;
+        };
+        AllowDrop = true;
+        _list.AllowDrop = true;
+        DragOver += OnDragOver;
+        _list.DragOver += OnDragOver;
+        Drop += OnDropFiles;
+        _list.Drop += OnDropFiles;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
         Loaded += (_, _) => Reload();
+    }
+
+    static void OnDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = StudioDrag.Files(e.Data).Length > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    static async void OnDropFiles(object sender, DragEventArgs e)
+    {
+        var files = StudioDrag.Files(e.Data);
+        if (files.Length == 0) return;
+        e.Handled = true;
+        await MediaLibrary.ImportFilesAsync(files, App.Session);
+    }
+
+    Asset? ItemAt(Point p)
+    {
+        var el = _list.InputHitTest(p) as DependencyObject;
+        while (el is not null && el is not ListBox)
+        {
+            if (el is ListBoxItem item && item.DataContext is Asset a) return a;
+            el = VisualTreeHelper.GetParent(el);
+        }
+        return _list.SelectedItem as Asset;
     }
 
     public void Reload()

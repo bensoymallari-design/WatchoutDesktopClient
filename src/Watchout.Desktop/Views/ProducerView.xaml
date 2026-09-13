@@ -18,7 +18,15 @@
 
     <DockPanel Grid.Row="0" Grid.Column="0" Background="#1C1C1C">
       <Border DockPanel.Dock="Top" Background="#2A2A2A" Padding="8,4" BorderBrush="#111" BorderThickness="0,0,0,1">
-        <TextBlock Text="Stage" Foreground="#FFE8B0"/>
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FitWall_Click" Content="Fit wall"/>
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FitDisplay_Click" Content="Fit display"/>
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="Output_Click" Content="Output"/>
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="OutputAll_Click" Content="Output all"/>
+          </StackPanel>
+          <TextBlock Text="Stage  ·  drag assets or files onto a display" Foreground="#FFE8B0" VerticalAlignment="Center"/>
+        </DockPanel>
       </Border>
       <views:StageSurface x:Name="Stage" Editing="True" PlayAudio="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
     </DockPanel>
