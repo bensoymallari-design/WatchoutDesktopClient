@@ -38,17 +38,46 @@ USB bandwidth (not WatchMe) is what usually caps how many Elgato-style dongles y
 
 Alternatively: enable **NDI** in Resolume, run **NDI Webcam Input**, and connect that virtual camera from the same Devices list.
 
-## Run on Windows
+## Install on your Windows laptop (to build)
 
-Install the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (or the SDK if you build from source). Windows 10 1809+ is required for capture cards.
+WatchMe is a **Windows-only** WPF app. You cannot build the desktop EXE on a Mac.
+
+**Required**
+
+1. **Windows 10 (1809 / version 17763 or later)** or **Windows 11**, 64-bit.
+2. **Git** — [https://git-scm.com/download/win](https://git-scm.com/download/win)
+3. **.NET 8 SDK** (the SDK, not only the Runtime) — [https://dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0)  
+   Pick **SDK 8.0.x / Windows x64**. This includes WPF so you can compile `WatchMe.exe`.  
+   Or install **Visual Studio 2022** (17.8 or later) with the **.NET desktop development** workload — that also installs the SDK.
+
+In PowerShell, confirm:
 
 ```powershell
+dotnet --version
+```
+
+You should see `8.0.…`. If `dotnet` is not found, close and reopen the terminal after installing.
+
+**Optional**
+
+- **ffmpeg** on PATH — only if you import HAP, Resolume DXV, or ProRes. H.264 MP4 plays without it.  
+  `winget install Gyan.FFmpeg` or [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+- Capture-card **drivers** (Elgato, Blackmagic Desktop Video, Magewell) if you will ingest Resolume over HDMI/SDI.
+
+**Get the code and run**
+
+The WatchMe + capture-card work lives on branch `cursor/native-dotnet-h264-dxva-0b08` (merged PR #1 was an earlier WPF snapshot).
+
+```powershell
+git clone https://github.com/bensoymallari-design/WatchoutDesktopClient.git
+cd WatchoutDesktopClient
+git checkout cursor/native-dotnet-h264-dxva-0b08
 dotnet restore
 dotnet test tests/Watchout.Core.Tests/Watchout.Core.Tests.csproj
 dotnet run --project src/Watchout.Desktop/Watchout.Desktop.csproj -c Release
 ```
 
-Publish a folder you can copy to a show PC:
+Publish a folder you can copy to a show PC (no extra .NET install needed on that PC):
 
 ```powershell
 dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
@@ -56,7 +85,7 @@ dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x6
 
 `publish\WatchMe.exe` is the app.
 
-Optional: `choco install ffmpeg` if you will import HAP / DXV / ProRes.
+Visual Studio: open `Watchout.sln`, set **Watchout.Desktop** as startup project, press F5.
 
 ## Workflow
 
