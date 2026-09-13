@@ -57,6 +57,8 @@ public partial class ProducerView : UserControl
     }
 
     async void Import_Click(object sender, RoutedEventArgs e) => await MainWindow.ImportMediaAsync();
+    void DeleteAsset_Click(object sender, RoutedEventArgs e) => DeleteHighlightedAsset();
+    public void DeleteHighlightedAsset() => Assets.DeleteHighlighted();
     void Play_Click(object sender, RoutedEventArgs e) => App.Session.Play();
     void Pause_Click(object sender, RoutedEventArgs e) => App.Session.Pause();
     void Stop_Click(object sender, RoutedEventArgs e) => App.Session.Stop();

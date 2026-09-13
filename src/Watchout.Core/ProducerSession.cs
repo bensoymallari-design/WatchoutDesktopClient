@@ -385,7 +385,10 @@ public sealed class ProducerSession
                     tl.Cues = tl.Cues.Where(c => !drop.Contains(c.Id)).ToList();
             }
             else if (Selection.Kind == SelectionKind.Asset)
+            {
                 TimelineMath.PurgeAssets(show, Selection.Ids);
+                Log(Selection.Ids.Count == 1 ? "Deleted asset" : $"Deleted {Selection.Ids.Count} assets");
+            }
             else if (Selection.Kind == SelectionKind.Display)
             {
                 var drop = Selection.Ids.ToHashSet();
@@ -723,6 +726,23 @@ public sealed class ProducerSession
             var a = show.Assets.FirstOrDefault(x => x.Id == id);
             if (a is not null) patch(a);
         }, record: false);
+
+    public void DeleteAsset(string? id = null)
+    {
+        id ??= Selection.Kind == SelectionKind.Asset ? Selection.Ids.FirstOrDefault() : null;
+        if (Show is null || id is null) return;
+        if (Show.Assets.All(a => a.Id != id))
+        {
+            Log("Select an imported clip in Assets, then Delete", "warn");
+            return;
+        }
+        Mutate(show =>
+        {
+            TimelineMath.PurgeAssets(show, [id]);
+            Selection = new Selection();
+        });
+        Log("Deleted asset — it is gone from Assets and from the Timeline");
+    }
 
     Timeline? ActiveTimelineOf(Models.Show show) =>
         show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? show.Timelines.FirstOrDefault();

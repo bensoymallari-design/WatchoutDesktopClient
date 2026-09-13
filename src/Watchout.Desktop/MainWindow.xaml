@@ -22,6 +22,7 @@
         <MenuItem Header="_Redo" InputGestureText="Ctrl+Y" Click="Redo_Click"/>
         <Separator/>
         <MenuItem Header="_Delete" InputGestureText="Del" Click="Delete_Click"/>
+        <MenuItem Header="Delete Asset" Click="DeleteAsset_Click"/>
         <MenuItem Header="Du_plicate" InputGestureText="Ctrl+D" Click="Duplicate_Click"/>
         <Separator/>
         <MenuItem x:Name="SnapItem" Header="Snap to Edges" IsCheckable="True" IsChecked="True" Click="Snap_Click"/>

@@ -44,6 +44,29 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void DeleteAssetRemovesImportedVideoAndItsCues()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 8_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/wall.mp4", "/library/wall.mp4", probe, 1_000_000, true);
+        session.ApplyImported(media);
+        var cue = session.AddCueFromAsset(media.Id);
+        Assert.NotNull(cue);
+        Assert.Equal(SelectionKind.Cue, session.Selection.Kind);
+
+        session.DeleteAsset(media.Id);
+        Assert.Empty(session.Show!.Assets);
+        Assert.DoesNotContain(session.Show.Timelines.SelectMany(t => t.Cues), c => c.AssetId == media.Id);
+        Assert.Contains(session.Logs, l => l.Message.Contains("Deleted asset"));
+
+        session.ApplyImported(media);
+        session.Select(SelectionKind.Asset, media.Id);
+        session.DeleteSelected();
+        Assert.Empty(session.Show.Assets);
+    }
+
+    [Fact]
     public void PlaybackClockLoopsAndStops()
     {
         var session = new ProducerSession();
