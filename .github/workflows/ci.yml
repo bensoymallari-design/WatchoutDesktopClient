@@ -27,7 +27,18 @@ jobs:
         run: dotnet build src/Watchout.Desktop/Watchout.Desktop.csproj -c Release
       - name: Publish win-x64
         run: dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build WatchMe-Setup.exe
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe" }
+          & $iscc setup\WatchMe.iss
       - uses: actions/upload-artifact@v4
         with:
           name: WatchMe-win-x64
           path: publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WatchMe-Setup
+          path: dist/WatchMe-Setup.exe

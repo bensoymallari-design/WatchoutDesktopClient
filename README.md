@@ -66,12 +66,10 @@ You should see `8.0.…`. If `dotnet` is not found, close and reopen the termina
 
 **Get the code and run**
 
-The WatchMe + capture-card work lives on branch `cursor/native-dotnet-h264-dxva-0b08` (merged PR #1 was an earlier WPF snapshot).
-
 ```powershell
 git clone https://github.com/bensoymallari-design/WatchoutDesktopClient.git
 cd WatchoutDesktopClient
-git checkout cursor/native-dotnet-h264-dxva-0b08
+git checkout cursor/watchme-installer-0b08
 dotnet restore
 dotnet test tests/Watchout.Core.Tests/Watchout.Core.Tests.csproj
 dotnet run --project src/Watchout.Desktop/Watchout.Desktop.csproj -c Release
@@ -83,9 +81,23 @@ Publish a folder you can copy to a show PC (no extra .NET install needed on that
 dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
 ```
 
-`publish\WatchMe.exe` is the app.
+`publish\WatchMe.exe` is the portable app (copy the whole `publish` folder). It does **not** need .NET installed on the show PC.
 
 Visual Studio: open `Watchout.sln`, set **Watchout.Desktop** as startup project, press F5.
+
+## Installer (`WatchMe-Setup.exe`)
+
+You can also install WatchMe like a normal Windows program (Program Files or per-user, Start Menu, uninstall from Settings).
+
+On a **Windows** PC with the .NET 8 SDK plus [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup\build.ps1
+```
+
+That writes `dist\WatchMe-Setup.exe`. Double-click it on the laptop or show PC. No extra .NET install is required — the setup bundles the runtime.
+
+CI also uploads **WatchMe-Setup** as a GitHub Actions artifact on each Windows build.
 
 ## Workflow
 
