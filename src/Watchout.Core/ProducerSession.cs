@@ -707,6 +707,57 @@ public sealed class ProducerSession
         return Show.Assets.First(a => a.Id == media.Id);
     }
 
+    public Asset ConnectNdi(string sourceName, string? captureDeviceId = null, bool announce = true)
+    {
+        if (Show is null) NewShow();
+        var name = NdiNames.FriendlyName(sourceName);
+        var existing = Show!.Assets.FirstOrDefault(a =>
+                           captureDeviceId is not null && LiveSources.CaptureDeviceId(a) == captureDeviceId)
+                       ?? Show.Assets.FirstOrDefault(a => a.Kind == AssetKind.Ndi && string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))
+                       ?? Show.Assets.FirstOrDefault(a => a.Kind == AssetKind.Ndi && a.Url.StartsWith("procedural:", StringComparison.OrdinalIgnoreCase));
+        var media = LiveSources.NdiAsset(name, captureDeviceId);
+        if (existing is not null) media.Id = existing.Id;
+        ApplyImported(media);
+        if (captureDeviceId is not null)
+        {
+            Mutate(show =>
+            {
+                show.CaptureDevices = show.CaptureDevices
+                    .Where(d => d.Signal != captureDeviceId)
+                    .Append(new CaptureDevice
+                    {
+                        Id = Ids.New("cap"),
+                        Name = name,
+                        NodeId = "local-runner",
+                        Kind = "NDI",
+                        Signal = captureDeviceId,
+                    })
+                    .ToList();
+            }, record: false);
+        }
+        var hasCue = Show.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
+        var displaysBefore = Show.Displays.Count;
+        if (!hasCue)
+        {
+            string? displayId = null;
+            string? layerId = null;
+            Mutate(show =>
+            {
+                displayId = LiveSources.EnsureDisplayForLive(show).Id;
+                layerId = LiveSources.NextLiveLayerId(show);
+            }, record: false);
+            AddCueFromAsset(media.Id, layerId, 0, displayId);
+        }
+        if (announce)
+        {
+            Log(captureDeviceId is null
+                ? $"NDI {name} is on a timeline layer. Open NDI Webcam Input, pick this source, then Connect again to see picture."
+                : $"NDI connected: {name} — live on a timeline layer. Press Space if you need the clock running.");
+            if (Show.Displays.Count > displaysBefore) FrameDisplays();
+        }
+        return Show.Assets.First(a => a.Id == media.Id);
+    }
+
     public int ConnectCaptures(IEnumerable<(string Id, string Name)> devices)
     {
         var list = devices.ToList();

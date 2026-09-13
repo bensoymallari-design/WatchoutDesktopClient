@@ -11,6 +11,10 @@ public static class LiveSources
     public static bool IsCapture(Asset? asset) =>
         asset is not null && (asset.Kind == AssetKind.Capture || IsCaptureUrl(asset.Url));
 
+    public static bool IsNdi(Asset? asset) => NdiLive.IsNdi(asset);
+
+    public static bool IsLive(Asset? asset) => IsCapture(asset) || IsNdi(asset);
+
     public static bool IsCaptureUrl(string? url) =>
         !string.IsNullOrEmpty(url) && url.StartsWith(CapturePrefix, StringComparison.OrdinalIgnoreCase);
 
@@ -44,25 +48,58 @@ public static class LiveSources
         };
     }
 
+    public static ImportedMedia NdiAsset(string sourceName, string? captureDeviceId, int width = 1920, int height = 1080)
+    {
+        var name = string.IsNullOrWhiteSpace(sourceName) ? "NDI Program" : NdiNames.FriendlyName(sourceName);
+        var bound = !string.IsNullOrEmpty(captureDeviceId);
+        return new ImportedMedia
+        {
+            Id = Ids.New("asset"),
+            Name = name,
+            Kind = AssetKind.Ndi,
+            Width = width > 0 ? width : 1920,
+            Height = height > 0 ? height : 1080,
+            Duration = LiveCueDurationMs,
+            Fps = 60,
+            Url = bound ? CaptureUrl(captureDeviceId!) : NdiNames.NdiUrl(name),
+            Codec = bound ? "NDI · Webcam Input" : "NDI",
+            Color = "#4ade80",
+            Optimized = true,
+            Notes = bound
+                ? $"{name} · NDI live on a timeline layer via NDI Webcam Input"
+                : $"{name} · NDI seen on the LAN. Open NDI Webcam Input, pick this source, then Connect again for picture.",
+            OriginalPath = bound ? CaptureUrl(captureDeviceId!) : NdiNames.NdiUrl(name),
+        };
+    }
+
+    public static IReadOnlyList<Cue> LiveCues(Show show) =>
+        show.Timelines.SelectMany(t => t.Cues)
+            .Where(c => c.AssetId is { } id && show.Assets.Any(a => a.Id == id && IsLive(a)))
+            .ToList();
+
     public static IReadOnlyList<Cue> CaptureCues(Show show) =>
         show.Timelines.SelectMany(t => t.Cues)
             .Where(c => c.AssetId is { } id && show.Assets.Any(a => a.Id == id && IsCapture(a)))
             .ToList();
 
-    public static string? NextCaptureLayerId(Show show)
+    public static string? NextCaptureLayerId(Show show) => NextLiveLayerId(show);
+
+    public static string? NextLiveLayerId(Show show)
     {
         var tl = show.Timelines.FirstOrDefault();
         if (tl is null) return null;
-        var used = CaptureCues(show).Select(c => c.LayerId).ToHashSet();
+        var used = LiveCues(show).Select(c => c.LayerId).ToHashSet();
         return tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked && !used.Contains(l.Id))?.Id
                ?? tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked)?.Id
                ?? tl.Layers.FirstOrDefault()?.Id;
     }
 
-    public static Display EnsureDisplayForCapture(Show show)
+    public static Display EnsureDisplayForCapture(Show show) => EnsureDisplayForLive(show);
+
+    public static Display EnsureDisplayForLive(Show show)
     {
         var occupied = new HashSet<string>();
-        foreach (var cue in CaptureCues(show))
+        foreach (var cue in LiveCues(show))
         {
             var hit = StageGeometry.HitDisplay(show.Displays, (cue.Position.X + 16, cue.Position.Y + 16));
             if (hit is not null) occupied.Add(hit.Id);

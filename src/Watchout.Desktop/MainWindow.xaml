@@ -56,6 +56,8 @@
         <MenuItem Header="Toggle Fade Out" Click="FadeOut_Click"/>
       </MenuItem>
       <MenuItem Header="_Live">
+        <MenuItem Header="Find NDI Sources" Click="RefreshNdi_Click"/>
+        <MenuItem Header="Connect NDI to Layer" Click="ConnectNdi_Click"/>
         <MenuItem Header="Refresh Capture Cards" Click="RefreshCapture_Click"/>
         <MenuItem Header="Connect Capture Cards…" Click="ConnectCapture_Click"/>
         <MenuItem Header="Connect All Capture Cards" Click="ConnectAllCapture_Click"/>

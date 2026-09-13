@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Watchout.Core;
+using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Desktop.Media;
 
@@ -385,9 +386,11 @@ public class DevicesPanel : UserControl
         Content = new ScrollViewer { Content = _root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
         CaptureHub.Changed += () => Dispatcher.BeginInvoke(Reload);
+        NdiHub.Changed += () => Dispatcher.BeginInvoke(Reload);
         Loaded += async (_, _) =>
         {
             await CaptureHub.RefreshAsync();
+            _ = NdiHub.RefreshAsync();
             Reload();
         };
     }
@@ -396,12 +399,16 @@ public class DevicesPanel : UserControl
     {
         var show = App.Session.Show;
         var connected = show?.CaptureDevices.Select(d => d.Signal) ?? [];
+        var ndiCams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
+        var cards = CaptureHub.Devices.Where(d => !NdiNames.LooksLikeNdi(d.Name)).ToList();
         var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id))
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
                  + CaptureHub.Generation
                  + CaptureHub.LiveCount
+                 + NdiHub.Generation
                  + string.Join("|", CaptureHub.Devices.Select(d => d.Id))
+                 + string.Join("|", NdiHub.Sources.Select(s => s.Name + s.Address))
                  + string.Join("|", connected);
         if (fp == _fp && _root.Children.Count > 0) return;
         _fp = fp;
@@ -425,13 +432,84 @@ public class DevicesPanel : UserControl
         _root.Children.Add(Btn("Close outputs", () => App.Outputs.CloseAll()));
         _root.Children.Add(Btn("Test beep", Beep));
 
+        _root.Children.Add(Header("NDI"));
+        _root.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 4),
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            Text = "WatchMe cannot decode raw NDI itself. Scan finds sources on the LAN (Resolume, NDI Camera Pro, other PCs). Open NDI Tools → NDI Webcam Input, pick that source, then Connect to layer.",
+        });
+        if (NdiHub.Sources.Count == 0)
+        {
+            _root.Children.Add(new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Text = NdiHub.LastError is { } err
+                    ? $"No NDI names yet ({err}). Same network, source streaming, then Refresh NDI."
+                    : "No NDI names on the LAN yet. Start Resolume NDI output or NDI Camera Pro, then Refresh NDI.",
+            });
+        }
+        foreach (var source in NdiHub.Sources)
+        {
+            var advert = source;
+            _root.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrEmpty(advert.Address) ? advert.Name : $"{advert.Name}  ·  {advert.Address}",
+                Margin = new Thickness(0, 8, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Text"),
+            });
+            _root.Children.Add(Btn($"Connect {advert.Name} to layer", () => ConnectNdi(advert.Name)));
+        }
+        foreach (var cam in ndiCams)
+        {
+            var live = connected.Contains(cam.Id);
+            _root.Children.Add(new TextBlock
+            {
+                Text = $"{cam.Name}  ·  NDI Webcam{(live ? "  ·  live" : "")}",
+                Margin = new Thickness(0, 8, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Text"),
+            });
+            var id = cam.Id;
+            var name = cam.Name;
+            _root.Children.Add(Btn(live ? $"Reconnect {name} to layer" : $"Connect {name} to layer",
+                () => App.Session.ConnectNdi(name, id)));
+        }
+        if (ndiCams.Count == 0)
+        {
+            _root.Children.Add(new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Text = "No NDI Webcam device yet. Install NDI Tools, open NDI Webcam Input, pick your source, then Refresh NDI.",
+            });
+        }
+        _root.Children.Add(Btn("Refresh NDI", () =>
+        {
+            _ = CaptureHub.RefreshAsync();
+            _ = NdiHub.RefreshAsync();
+        }));
+        _root.Children.Add(Btn("Connect all NDI Webcams to layers", () =>
+        {
+            if (ndiCams.Count == 0)
+            {
+                App.Session.Log("No NDI Webcam device. Open NDI Webcam Input, then Refresh NDI.", "warn");
+                return;
+            }
+            foreach (var cam in ndiCams)
+                App.Session.ConnectNdi(cam.Name, cam.Id, announce: cam == ndiCams[^1]);
+        }));
+
         _root.Children.Add(Header("CAPTURE CARDS"));
         _root.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards on this PC. Each connected card gets its own Stage display. NDI Webcam Input also appears here.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards on this PC. Each connected card gets its own Stage display.",
         });
         _root.Children.Add(new TextBlock
         {
@@ -442,7 +520,7 @@ public class DevicesPanel : UserControl
                 ? "No capture devices yet. Plug in the cards and press Refresh."
                 : $"{CaptureHub.LiveCount} live session(s) · {CaptureHub.Devices.Count} device(s) found. Connect all to run them together.",
         });
-        foreach (var device in CaptureHub.Devices)
+        foreach (var device in cards)
         {
             var live = connected.Contains(device.Id);
             _root.Children.Add(new TextBlock
@@ -456,7 +534,7 @@ public class DevicesPanel : UserControl
             _root.Children.Add(Btn(live ? $"Reconnect {device.Name}" : $"Connect {device.Name}", () => App.Session.ConnectCapture(id, name)));
         }
         _root.Children.Add(Btn("Connect all capture cards", () =>
-            App.Session.ConnectCaptures(CaptureHub.Devices.Select(d => (d.Id, d.Name)))));
+            App.Session.ConnectCaptures(cards.Select(d => (d.Id, d.Name)))));
         _root.Children.Add(Btn("Refresh capture cards", () => _ = CaptureHub.RefreshAsync()));
 
         _root.Children.Add(Header("CODEC"));
@@ -476,6 +554,13 @@ public class DevicesPanel : UserControl
         var b = new Button { Content = label, Style = (Style)Application.Current.FindResource("Wo.Button"), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
         b.Click += (_, _) => click();
         return b;
+    }
+
+    static void ConnectNdi(string sourceName)
+    {
+        var devices = CaptureHub.Devices.Select(d => (d.Id, d.Name));
+        var cam = NdiNames.MatchWebcam(sourceName, devices);
+        App.Session.ConnectNdi(sourceName, cam?.Id);
     }
 
     static void Beep()
