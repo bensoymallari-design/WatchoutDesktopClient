@@ -66,8 +66,8 @@ public static class LiveSources
             Color = "#4ade80",
             Optimized = true,
             Notes = bound
-                ? $"{name} · NDI live on a timeline layer via NDI Webcam Input"
-                : $"{name} · NDI seen on the LAN. Open NDI Webcam Input, pick this source, then Connect again for picture.",
+                ? $"{name} · NDI live via Webcam Input — drag onto a timeline layer"
+                : $"{name} · NDI on the LAN. Drag onto a timeline layer. For picture, open NDI Webcam Input, pick this source, then Import NDI again.",
             OriginalPath = bound ? CaptureUrl(captureDeviceId!) : NdiNames.NdiUrl(name),
         };
     }

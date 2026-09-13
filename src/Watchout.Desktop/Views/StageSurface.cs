@@ -235,7 +235,7 @@ public sealed class StageSurface : Canvas
         if (asset.Url.StartsWith("procedural:", StringComparison.Ordinal))
             return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         if (LiveSources.IsNdi(asset))
-            return Placeholder(mapped, $"{asset.Name}\nNDI · pick this source in NDI Webcam Input, then Connect", asset.Color);
+            return Placeholder(mapped, $"{asset.Name}\nNDI · pick this source in NDI Webcam Input, then Import NDI again", asset.Color);
         if (asset.Kind is AssetKind.Image
             || asset.Url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase)
             || asset.Url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase)

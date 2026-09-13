@@ -255,16 +255,17 @@ public sealed class ProducerSession
             var display = displayId is not null
                 ? show.Displays.FirstOrDefault(d => d.Id == displayId)
                 : show.Displays.FirstOrDefault(d => d.Enabled);
+            var live = LiveSources.IsLive(asset);
             var cue = ShowFactory.EmptyCue(new Cue
             {
                 Name = asset.Name,
                 LayerId = layer.Id,
-                Start = LiveSources.IsCapture(asset) ? 0 : start ?? tl.Playhead,
-                Duration = LiveSources.IsCapture(asset) ? Math.Max(tl.Duration, LiveSources.LiveCueDurationMs) : (asset.Duration > 0 ? asset.Duration : show.Prefs.ImageDuration),
+                Start = live ? 0 : start ?? tl.Playhead,
+                Duration = live ? Math.Max(tl.Duration, LiveSources.LiveCueDurationMs) : (asset.Duration > 0 ? asset.Duration : show.Prefs.ImageDuration),
                 AssetId = asset.Id,
                 Color = asset.Color,
                 Type = CueType.Media,
-                FreeRunning = LiveSources.IsCapture(asset) || asset.Kind == AssetKind.Ndi,
+                FreeRunning = live,
             });
             if (display is not null)
             {
@@ -707,7 +708,7 @@ public sealed class ProducerSession
         return Show.Assets.First(a => a.Id == media.Id);
     }
 
-    public Asset ConnectNdi(string sourceName, string? captureDeviceId = null, bool announce = true)
+    public Asset ImportNdi(string sourceName, string? captureDeviceId = null, bool placeOnLayer = false, bool announce = true)
     {
         if (Show is null) NewShow();
         var name = NdiNames.FriendlyName(sourceName);
@@ -735,28 +736,31 @@ public sealed class ProducerSession
                     .ToList();
             }, record: false);
         }
-        var hasCue = Show.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
-        var displaysBefore = Show.Displays.Count;
-        if (!hasCue)
+        if (placeOnLayer)
         {
-            string? displayId = null;
-            string? layerId = null;
-            Mutate(show =>
+            var hasCue = Show.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
+            if (!hasCue)
             {
-                displayId = LiveSources.EnsureDisplayForLive(show).Id;
-                layerId = LiveSources.NextLiveLayerId(show);
-            }, record: false);
-            AddCueFromAsset(media.Id, layerId, 0, displayId);
+                string? layerId = null;
+                Mutate(show => layerId = LiveSources.NextLiveLayerId(show), record: false);
+                AddCueFromAsset(media.Id, layerId, 0);
+            }
+            if (announce)
+                Log(captureDeviceId is null
+                    ? $"NDI {name} is on a timeline layer. Open NDI Webcam Input, pick this source, then Import NDI again for picture."
+                    : $"NDI {name} is on a timeline layer. Press Space if you need the clock running.");
         }
-        if (announce)
+        else
         {
-            Log(captureDeviceId is null
-                ? $"NDI {name} is on a timeline layer. Open NDI Webcam Input, pick this source, then Connect again to see picture."
-                : $"NDI connected: {name} — live on a timeline layer. Press Space if you need the clock running.");
-            if (Show.Displays.Count > displaysBefore) FrameDisplays();
+            Select(SelectionKind.Asset, media.Id);
+            if (announce)
+                Log($"NDI {name} is in Assets. Drag it onto a timeline layer like a video.");
         }
         return Show.Assets.First(a => a.Id == media.Id);
     }
+
+    public Asset ConnectNdi(string sourceName, string? captureDeviceId = null, bool announce = true) =>
+        ImportNdi(sourceName, captureDeviceId, placeOnLayer: true, announce);
 
     public int ConnectCaptures(IEnumerable<(string Id, string Name)> devices)
     {

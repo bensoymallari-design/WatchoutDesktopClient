@@ -55,6 +55,7 @@ public class NdiTests
     {
         var session = new ProducerSession();
         session.NewShow();
+        var displays = session.Show!.Displays.Count;
         var asset = session.ConnectNdi("SHOW-PC (Resolume)");
         Assert.Equal(AssetKind.Ndi, asset.Kind);
         Assert.True(LiveSources.IsNdi(asset));
@@ -63,12 +64,35 @@ public class NdiTests
         var cue = session.Show!.Timelines.SelectMany(t => t.Cues).First(c => c.AssetId == asset.Id);
         Assert.True(cue.FreeRunning);
         Assert.False(string.IsNullOrEmpty(cue.LayerId));
+        Assert.Equal(displays, session.Show.Displays.Count);
 
         var bound = session.ConnectNdi("SHOW-PC (Resolume)", "webcam-ndi");
         Assert.Equal(asset.Id, bound.Id);
         Assert.Equal("capture:webcam-ndi", bound.Url);
         Assert.True(LiveSources.IsCapture(bound));
         Assert.Contains(session.Show.CaptureDevices, d => d.Kind == "NDI" && d.Signal == "webcam-ndi");
+    }
+
+    [Fact]
+    public void ImportNdiAddsAnAssetYouPlaceOnALayerLikeAVideo()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var displays = session.Show!.Displays.Count;
+        var layer = session.Show.Timelines[0].Layers[2];
+        var asset = session.ImportNdi("NDI Camera Pro");
+        Assert.Equal(AssetKind.Ndi, asset.Kind);
+        Assert.Equal("NDI Camera Pro", asset.Name);
+        Assert.DoesNotContain(session.Show.Timelines.SelectMany(t => t.Cues), c => c.AssetId == asset.Id);
+        Assert.Equal(SelectionKind.Asset, session.Selection.Kind);
+        Assert.Contains(asset.Id, session.Selection.Ids);
+
+        var cue = session.AddCueFromAsset(asset.Id, layer.Id, 12_000);
+        Assert.NotNull(cue);
+        Assert.Equal(layer.Id, cue!.LayerId);
+        Assert.Equal(0, cue.Start);
+        Assert.True(cue.FreeRunning);
+        Assert.Equal(displays, session.Show.Displays.Count);
     }
 
     [Fact]
