@@ -1,0 +1,57 @@
+<UserControl x:Class="Watchout.Desktop.Views.WelcomeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Background="#0D0D0D">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="1.4*"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+    <StackPanel VerticalAlignment="Center" Margin="64,0">
+      <TextBlock Text="DATATON-STYLE SHOW CONTROL" FontSize="11" Foreground="#F5A623"/>
+      <TextBlock Text="WATCHOUT" FontSize="64" FontWeight="Black" Foreground="#F5A623" Margin="0,4,0,0"/>
+      <TextBlock Text="PRODUCER  7.8.12" FontSize="22" FontWeight="SemiBold" Foreground="#F5A623" Margin="0,4,0,0"/>
+      <TextBlock TextWrapping="Wrap" MaxWidth="560" Margin="0,20,0,0" Foreground="#A8A29E" FontSize="13" LineHeight="20"
+                 Text="Native Windows Producer — not Electron. Stage, Timeline, Assets, and Runner outputs on real monitors. H.264 plays through Media Foundation / DXVA. HAP and DXV can be transcoded to H.264 MP4. Nothing is converted to WebM."/>
+      <WrapPanel Margin="0,36,0,0">
+        <Button Style="{StaticResource Wo.Primary}" Click="New_Click" MinWidth="160" Margin="0,0,10,10">
+          <StackPanel>
+            <TextBlock Text="New Show" FontWeight="SemiBold"/>
+            <TextBlock Text="Local Director + Asset Manager" FontSize="11" Foreground="#111" Opacity="0.7"/>
+          </StackPanel>
+        </Button>
+        <Button Style="{StaticResource Wo.Button}" Click="Open_Click" MinWidth="160" Margin="0,0,10,10">
+          <StackPanel>
+            <TextBlock Text="Open Show" FontWeight="SemiBold"/>
+            <TextBlock Text="Load a .watch.json file" FontSize="11" Foreground="#9A958D"/>
+          </StackPanel>
+        </Button>
+        <Button Style="{StaticResource Wo.Button}" Click="Demo_Click" MinWidth="160" Margin="0,0,10,10">
+          <StackPanel>
+            <TextBlock Text="Demo Show" FontWeight="SemiBold"/>
+            <TextBlock Text="3-wide LED wall with cues" FontSize="11" Foreground="#9A958D"/>
+          </StackPanel>
+        </Button>
+      </WrapPanel>
+    </StackPanel>
+    <Border Grid.Column="1" Background="#161616" BorderBrush="#2A2A2A" BorderThickness="1,0,0,0" Padding="40,48">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Text="RECENT SHOWS" FontSize="11" Foreground="#78716C"/>
+        <TextBlock DockPanel.Dock="Bottom" Margin="0,16,0,0" TextWrapping="Wrap" Foreground="#57534E" FontSize="11"
+                   Text="Shows save as .watch.json. H.264 masters play in place. Electron WebM proxies are not required."/>
+        <ListBox x:Name="Recents" Margin="0,16,0,0" BorderThickness="0" Background="Transparent" MouseDoubleClick="Recents_Open">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <DockPanel Margin="0,6">
+                <TextBlock DockPanel.Dock="Right" Text="OPEN" Foreground="#F5A623" FontSize="11" VerticalAlignment="Center"/>
+                <StackPanel>
+                  <TextBlock Text="{Binding Name}" Foreground="#E7E5E4"/>
+                  <TextBlock Text="{Binding Path}" Foreground="#78716C" FontSize="11"/>
+                </StackPanel>
+              </DockPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

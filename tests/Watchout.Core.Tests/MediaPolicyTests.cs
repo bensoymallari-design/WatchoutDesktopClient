@@ -1,0 +1,29 @@
+using Watchout.Core.Media;
+using Xunit;
+
+namespace Watchout.Core.Tests;
+
+public class MediaPolicyTests
+{
+    [Fact]
+    public void HundredGbMastersAreLinked()
+    {
+        var hundredGb = 100L * 1024 * 1024 * 1024;
+        Assert.False(MediaPolicy.ShouldCopyOnImport(hundredGb));
+        Assert.True(MediaPolicy.ShouldCopyOnImport(500L * 1024 * 1024));
+        Assert.False(MediaPolicy.ShouldCopyOnImport(MediaPolicy.CopyLimitBytes));
+    }
+
+    [Fact]
+    public void Huge4kFilesSkipAFullResProxy()
+    {
+        Assert.False(MediaPolicy.ShouldBuildFullProxy(100L * 1024 * 1024 * 1024, 3840, 2160));
+        Assert.True(MediaPolicy.ShouldBuildFullProxy(200L * 1024 * 1024, 1920, 1080));
+    }
+
+    [Fact]
+    public void FormatsByteCounts()
+    {
+        Assert.Equal("100.00 GB", MediaPolicy.FormatBytes(100L * 1024 * 1024 * 1024));
+    }
+}
