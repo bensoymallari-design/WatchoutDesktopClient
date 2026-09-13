@@ -18,7 +18,7 @@ public partial class WelcomeView : UserControl
     void Demo_Click(object sender, System.Windows.RoutedEventArgs e) => App.Session.OpenDemo();
     void Open_Click(object sender, System.Windows.RoutedEventArgs e)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "WATCHOUT Show|*.watch.json;*.json" };
+        var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "WatchMe show|*.watchme.json;*.watch.json;*.json" };
         if (dlg.ShowDialog() == true) MainWindow.OpenPath(dlg.FileName);
     }
 

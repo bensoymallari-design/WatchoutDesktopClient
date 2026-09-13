@@ -50,14 +50,14 @@ public sealed class ProducerSession
     public void NewShow()
     {
         LoadShow(ShowFactory.EmptyShow(), null);
-        Log("New show — Media Foundation / DXVA will play H.264 MP4 natively. No WebM proxy.");
+        Log("New show — H.264 plays through DXVA. Connect a capture card in Devices to bring Resolume onto the Stage.");
     }
 
     public void OpenDemo()
     {
         LoadShow(ShowFactory.MakeDemoShow(), null);
         Camera = (2880, 540, 0.18);
-        Log("Opened LED wall demo. Import an H.264 MP4 onto the Timeline — it plays through DXVA, not VP9/WebM.");
+        Log("Opened LED wall demo. Import H.264 or connect a capture card (Resolume HDMI) in Devices.");
     }
 
     public void LoadShow(Models.Show show, string? path)
@@ -229,11 +229,12 @@ public sealed class ProducerSession
             {
                 Name = asset.Name,
                 LayerId = layer.Id,
-                Start = start ?? tl.Playhead,
-                Duration = asset.Duration > 0 ? asset.Duration : show.Prefs.ImageDuration,
+                Start = LiveSources.IsCapture(asset) ? 0 : start ?? tl.Playhead,
+                Duration = LiveSources.IsCapture(asset) ? Math.Max(tl.Duration, LiveSources.LiveCueDurationMs) : (asset.Duration > 0 ? asset.Duration : show.Prefs.ImageDuration),
                 AssetId = asset.Id,
                 Color = asset.Color,
                 Type = CueType.Media,
+                FreeRunning = LiveSources.IsCapture(asset) || asset.Kind == AssetKind.Ndi,
             });
             if (display is not null)
             {
@@ -487,6 +488,61 @@ public sealed class ProducerSession
         Show = ShowSerializer.Load(_future[^1]);
         _future.RemoveAt(_future.Count - 1);
         Changed?.Invoke();
+    }
+
+    public Asset ConnectCapture(string deviceId, string name, int width = 1920, int height = 1080, bool announce = true)
+    {
+        if (Show is null) NewShow();
+        var existing = Show!.Assets.FirstOrDefault(a => LiveSources.CaptureDeviceId(a) == deviceId);
+        var media = LiveSources.CaptureAsset(deviceId, name, width, height);
+        if (existing is not null) media.Id = existing.Id;
+        ApplyImported(media);
+        Mutate(show =>
+        {
+            show.CaptureDevices = show.CaptureDevices
+                .Where(d => d.Signal != deviceId)
+                .Append(new CaptureDevice
+                {
+                    Id = Ids.New("cap"),
+                    Name = name,
+                    NodeId = "local-runner",
+                    Kind = "HDMI",
+                    Signal = deviceId,
+                })
+                .ToList();
+        }, record: false);
+        var hasCue = Show.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
+        var displaysBefore = Show.Displays.Count;
+        if (!hasCue)
+        {
+            string? displayId = null;
+            string? layerId = null;
+            Mutate(show =>
+            {
+                displayId = LiveSources.EnsureDisplayForCapture(show).Id;
+                layerId = LiveSources.NextCaptureLayerId(show);
+            }, record: false);
+            AddCueFromAsset(media.Id, layerId, 0, displayId);
+        }
+        if (announce)
+        {
+            Log($"Live capture connected: {name} — play Resolume (or any HDMI/SDI source) into this card");
+            if (Show.Displays.Count > displaysBefore) FrameDisplays();
+        }
+        return Show.Assets.First(a => a.Id == media.Id);
+    }
+
+    public int ConnectCaptures(IEnumerable<(string Id, string Name)> devices)
+    {
+        var list = devices.ToList();
+        foreach (var device in list)
+            ConnectCapture(device.Id, device.Name, announce: false);
+        if (list.Count > 0) FrameDisplays();
+        if (list.Count == 1)
+            Log($"Live capture connected: {list[0].Name} — play Resolume (or any HDMI/SDI source) into this card");
+        else if (list.Count > 1)
+            Log($"Connected {list.Count} capture cards across {Show!.Displays.Count} display(s). Each card is its own live layer — map extra HDMI outputs in Devices.");
+        return list.Count;
     }
 
     public void UpdateAsset(string id, Action<Asset> patch) =>

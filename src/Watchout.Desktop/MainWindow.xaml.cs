@@ -39,7 +39,7 @@ public partial class MainWindow : Window
     {
         var s = App.Session;
         Root.Content = s.View == "producer" ? _producer : _welcome;
-        Title = s.Show is { } show ? $"{show.Name} — WATCHOUT Producer" : "WATCHOUT 7 — Producer";
+        Title = s.Show is { } show ? $"{show.Name} — {Brand.Name}" : Brand.Name;
         if (s.ActiveTimeline is { } tl)
             StatusClock.Text = TimeFormat.FormatPlayTime(tl.Playhead);
         StatusLog.Text = s.Logs.FirstOrDefault()?.Message ?? "Ready";
@@ -73,8 +73,8 @@ public partial class MainWindow : Window
     {
         var dlg = new OpenFileDialog
         {
-            Filter = "WATCHOUT Show|*.watch.json;*.json|All files|*.*",
-            Title = "Open WATCHOUT show",
+            Filter = "WatchMe show|*.watchme.json;*.watch.json;*.json|All files|*.*",
+            Title = "Open WatchMe show",
         };
         if (dlg.ShowDialog() == true) OpenPath(dlg.FileName);
     }
@@ -98,9 +98,9 @@ public partial class MainWindow : Window
         {
             var dlg = new SaveFileDialog
             {
-                Filter = "WATCHOUT Show|*.watch.json|JSON|*.json",
-                FileName = App.Session.Show.Name.Replace(' ', '_') + ".watch.json",
-                Title = "Save WATCHOUT show",
+                Filter = "WatchMe show|*.watchme.json|WATCHOUT show|*.watch.json|JSON|*.json",
+                FileName = App.Session.Show.Name.Replace(' ', '_') + ".watchme.json",
+                Title = "Save WatchMe show",
             };
             if (dlg.ShowDialog() != true) return;
             path = dlg.FileName;
@@ -145,16 +145,46 @@ public partial class MainWindow : Window
 
     void CloseOutputs_Click(object sender, RoutedEventArgs e) => App.Outputs.CloseAll();
 
+    async void RefreshCapture_Click(object sender, RoutedEventArgs e)
+    {
+        await CaptureHub.RefreshAsync();
+        App.Session.Log(CaptureHub.Devices.Count == 0
+            ? "No capture cards found. Plug in an HDMI/SDI card (Elgato, Blackmagic, Magewell) or enable NDI Webcam Input."
+            : $"Found {CaptureHub.Devices.Count} capture device(s). Connect all of them (Live → Connect All) — each card gets its own Stage display.");
+    }
+
+    async void ConnectCapture_Click(object sender, RoutedEventArgs e)
+    {
+        await CaptureHub.RefreshAsync();
+        var picks = CapturePicker.ChooseMany(this, CaptureHub.Devices);
+        if (picks.Count == 0) return;
+        App.Session.ConnectCaptures(picks.Select(p => (p.Id, p.Name)));
+    }
+
+    async void ConnectAllCapture_Click(object sender, RoutedEventArgs e)
+    {
+        await CaptureHub.RefreshAsync();
+        if (CaptureHub.Devices.Count == 0)
+        {
+            CapturePicker.ChooseMany(this, CaptureHub.Devices);
+            return;
+        }
+        App.Session.ConnectCaptures(CaptureHub.Devices.Select(d => (d.Id, d.Name)));
+    }
+
     void About_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show(this,
-            "WATCHOUT Producer 7.8.12 — native .NET / WPF desktop.\n\n" +
+            $"{Brand.Name} {Brand.Version} — native .NET / WPF desktop.\n\n" +
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
+            "Live: many HDMI/SDI capture cards at once (Elgato, Blackmagic, Magewell, USB).\n" +
+            "Each card is a separate live layer on its own Stage display.\n" +
+            "Send Resolume (or any program) into each card — or Resolume NDI through\n" +
+            "NDI Webcam Input — then Live → Connect All Capture Cards.\n\n" +
             "HAP, Resolume DXV, ProRes, DNx: optional ffmpeg transcode to H.264 MP4\n" +
-            "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.\n\n" +
-            "This is the desktop replacement for WatchOutElctron.",
-            "About codecs");
+            "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.",
+            $"About {Brand.Name}");
     }
 
     public static async Task ImportMediaAsync()

@@ -7,11 +7,11 @@
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
     <StackPanel VerticalAlignment="Center" Margin="64,0">
-      <TextBlock Text="DATATON-STYLE SHOW CONTROL" FontSize="11" Foreground="#F5A623"/>
-      <TextBlock Text="WATCHOUT" FontSize="64" FontWeight="Black" Foreground="#F5A623" Margin="0,4,0,0"/>
-      <TextBlock Text="PRODUCER  7.8.12" FontSize="22" FontWeight="SemiBold" Foreground="#F5A623" Margin="0,4,0,0"/>
+      <TextBlock Text="NATIVE SHOW CONTROL" FontSize="11" Foreground="#F5A623"/>
+      <TextBlock Text="WatchMe" FontSize="64" FontWeight="Black" Foreground="#F5A623" Margin="0,4,0,0"/>
+      <TextBlock Text="PRODUCER  1.0.0" FontSize="22" FontWeight="SemiBold" Foreground="#F5A623" Margin="0,4,0,0"/>
       <TextBlock TextWrapping="Wrap" MaxWidth="560" Margin="0,20,0,0" Foreground="#A8A29E" FontSize="13" LineHeight="20"
-                 Text="Native Windows Producer — not Electron. Stage, Timeline, Assets, and Runner outputs on real monitors. H.264 plays through Media Foundation / DXVA. HAP and DXV can be transcoded to H.264 MP4. Nothing is converted to WebM."/>
+                 Text="Native Windows Producer — not Electron. Stage, Timeline, Assets, Runner outputs, and live HDMI/SDI capture (Resolume program out). H.264 plays through Media Foundation / DXVA. HAP and DXV can be transcoded to H.264 MP4. Nothing is converted to WebM."/>
       <WrapPanel Margin="0,36,0,0">
         <Button Style="{StaticResource Wo.Primary}" Click="New_Click" MinWidth="160" Margin="0,0,10,10">
           <StackPanel>
@@ -22,7 +22,7 @@
         <Button Style="{StaticResource Wo.Button}" Click="Open_Click" MinWidth="160" Margin="0,0,10,10">
           <StackPanel>
             <TextBlock Text="Open Show" FontWeight="SemiBold"/>
-            <TextBlock Text="Load a .watch.json file" FontSize="11" Foreground="#9A958D"/>
+            <TextBlock Text="Load a .watchme.json file" FontSize="11" Foreground="#9A958D"/>
           </StackPanel>
         </Button>
         <Button Style="{StaticResource Wo.Button}" Click="Demo_Click" MinWidth="160" Margin="0,0,10,10">
@@ -37,7 +37,7 @@
       <DockPanel>
         <TextBlock DockPanel.Dock="Top" Text="RECENT SHOWS" FontSize="11" Foreground="#78716C"/>
         <TextBlock DockPanel.Dock="Bottom" Margin="0,16,0,0" TextWrapping="Wrap" Foreground="#57534E" FontSize="11"
-                   Text="Shows save as .watch.json. H.264 masters play in place. Electron WebM proxies are not required."/>
+                   Text="Shows save as .watchme.json (old .watch.json still opens). H.264 masters play in place. HDMI capture plays Resolume live. Electron WebM proxies are not required."/>
         <ListBox x:Name="Recents" Margin="0,16,0,0" BorderThickness="0" Background="Transparent" MouseDoubleClick="Recents_Open">
           <ListBox.ItemTemplate>
             <DataTemplate>

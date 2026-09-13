@@ -1,7 +1,7 @@
 <Window x:Class="Watchout.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WATCHOUT 7 — Producer"
+        Title="WatchMe"
         Width="1600" Height="980" MinWidth="1100" MinHeight="720"
         Background="#111111" Foreground="#E8E6E3"
         WindowStartupLocation="CenterScreen">
@@ -39,13 +39,18 @@
         <MenuItem Header="Toggle Fade In" Click="FadeIn_Click"/>
         <MenuItem Header="Toggle Fade Out" Click="FadeOut_Click"/>
       </MenuItem>
+      <MenuItem Header="_Live">
+        <MenuItem Header="Refresh Capture Cards" Click="RefreshCapture_Click"/>
+        <MenuItem Header="Connect Capture Cards…" Click="ConnectCapture_Click"/>
+        <MenuItem Header="Connect All Capture Cards" Click="ConnectAllCapture_Click"/>
+      </MenuItem>
       <MenuItem Header="_Output">
         <MenuItem Header="Output Selected Display" Click="OutputSelected_Click"/>
         <MenuItem Header="Output All Displays" Click="OutputAll_Click"/>
         <MenuItem Header="Close All Outputs" Click="CloseOutputs_Click"/>
       </MenuItem>
       <MenuItem Header="_Help">
-        <MenuItem Header="About Codecs" Click="About_Click"/>
+        <MenuItem Header="About WatchMe" Click="About_Click"/>
       </MenuItem>
     </Menu>
     <StatusBar DockPanel.Dock="Bottom" Background="#1A1A1A" Foreground="#9A958D">

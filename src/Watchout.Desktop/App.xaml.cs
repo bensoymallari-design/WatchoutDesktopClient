@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Persistence;
+using Watchout.Desktop.Media;
 using Watchout.Desktop.Output;
 
 namespace Watchout.Desktop;
@@ -21,10 +22,11 @@ public partial class App : Application
         base.OnStartup(e);
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
         LoadRecents();
-        Session.Log("WATCHOUT Producer 7.8.12 — native Windows desktop. H.264 plays through Media Foundation / DXVA. No Electron, no WebM proxy.");
+        Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through Media Foundation / DXVA. HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
         _clock.Tick += OnClock;
         _clock.Start();
         Session.Changed += () => Outputs.PushShow(Session.Show);
+        _ = CaptureHub.RefreshAsync();
     }
 
     void OnClock(object? sender, EventArgs e)
@@ -39,7 +41,7 @@ public partial class App : Application
 
     public static string DataDir()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WATCHOUT Producer");
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Brand.Name);
         Directory.CreateDirectory(dir);
         Directory.CreateDirectory(Path.Combine(dir, "media"));
         Directory.CreateDirectory(Path.Combine(dir, "media", "proxies"));
@@ -62,6 +64,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         Outputs.CloseAll();
+        CaptureHub.Shutdown();
         PersistRecents();
         base.OnExit(e);
     }

@@ -29,8 +29,8 @@ public static class Tweens
     public static EvaluatedCue? EvaluateCue(Cue cue, double playhead, IReadOnlyList<Cue>? others = null)
     {
         if (!cue.Enabled) return null;
-        if (playhead < cue.Start || playhead >= cue.Start + cue.Duration) return null;
-        var local = playhead - cue.Start;
+        if (!cue.FreeRunning && (playhead < cue.Start || playhead >= cue.Start + cue.Duration)) return null;
+        var local = cue.FreeRunning ? playhead : playhead - cue.Start;
         var map = cue.Tweens.GroupBy(t => t.Type).ToDictionary(g => g.Key, g => g.First());
         var opacity = Pick(map, TweenType.Opacity, local, cue.Opacity) * TimelineMath.FadeMultiplier(cue, local, others);
         return new EvaluatedCue
