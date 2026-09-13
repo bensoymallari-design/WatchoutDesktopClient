@@ -43,10 +43,27 @@ public partial class MainWindow : Window
         if (s.ActiveTimeline is { } tl)
             StatusClock.Text = TimeFormat.FormatPlayTime(tl.Playhead);
         StatusLog.Text = s.Logs.FirstOrDefault()?.Message ?? "Ready";
+        SnapItem.IsChecked = s.Snap;
+        ClickJumpItem.IsChecked = s.ClickJumpsToTime;
+        LoopItem.IsChecked = s.ActiveTimeline?.Loop == true;
     }
 
     void OnPreviewKey(object sender, KeyEventArgs e)
     {
+        var typing = e.OriginalSource is TextBox or PasswordBox or ComboBox or ComboBoxItem;
+        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            Save_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            Open_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+        if (typing) return;
         if (e.Key == Key.Space && App.Session.View == "producer")
         {
             App.Session.TogglePlay();
@@ -55,15 +72,21 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Escape)
         {
             if (App.Outputs.LiveIds.Count > 0) App.Outputs.CloseAll();
-            else App.Session.SetPlayback(null, PlaybackState.Stop);
+            else App.Session.Stop();
             e.Handled = true;
         }
         else if (e.Key == Key.Delete) App.Session.DeleteSelected();
         else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) App.Session.Undo();
         else if (e.Key == Key.Y && Keyboard.Modifiers == ModifierKeys.Control) App.Session.Redo();
-        else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control) Save_Click(sender, e);
-        else if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control) Open_Click(sender, e);
         else if (e.Key == Key.D && Keyboard.Modifiers == ModifierKeys.Control) App.Session.DuplicateSelected();
+        else if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 10 : 1;
+            var dx = e.Key == Key.Left ? -step : e.Key == Key.Right ? step : 0;
+            var dy = e.Key == Key.Up ? -step : e.Key == Key.Down ? step : 0;
+            App.Session.NudgeSelected(dx, dy);
+            e.Handled = true;
+        }
     }
 
     void NewShow_Click(object sender, RoutedEventArgs e) => App.Session.NewShow();
@@ -111,10 +134,13 @@ public partial class MainWindow : Window
     }
 
     void Exit_Click(object sender, RoutedEventArgs e) => Close();
+    void QuitWelcome_Click(object sender, RoutedEventArgs e) => App.Session.QuitToWelcome();
     void Undo_Click(object sender, RoutedEventArgs e) => App.Session.Undo();
     void Redo_Click(object sender, RoutedEventArgs e) => App.Session.Redo();
     void Delete_Click(object sender, RoutedEventArgs e) => App.Session.DeleteSelected();
     void Duplicate_Click(object sender, RoutedEventArgs e) => App.Session.DuplicateSelected();
+    void Snap_Click(object sender, RoutedEventArgs e) => App.Session.SetSnap(SnapItem.IsChecked == true);
+    void ClickJump_Click(object sender, RoutedEventArgs e) => App.Session.SetClickJumpsToTime(ClickJumpItem.IsChecked == true);
     void FitDisplay_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToDisplay();
     void FitWall_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToWall();
     void Frame_Click(object sender, RoutedEventArgs e) => App.Session.FrameDisplays();
@@ -123,7 +149,16 @@ public partial class MainWindow : Window
     void Grid22_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(2, 2, 1920, 1080);
     void Grid41_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(4, 1, 1920, 1080);
     void Play_Click(object sender, RoutedEventArgs e) => App.Session.TogglePlay();
-    void Stop_Click(object sender, RoutedEventArgs e) => App.Session.SetPlayback(null, PlaybackState.Stop);
+    void Pause_Click(object sender, RoutedEventArgs e) => App.Session.Pause();
+    void Stop_Click(object sender, RoutedEventArgs e) => App.Session.Stop();
+    void Loop_Click(object sender, RoutedEventArgs e) => App.Session.SetLoop(null, LoopItem.IsChecked == true);
+    void AddTimeline_Click(object sender, RoutedEventArgs e) => App.Session.AddTimeline();
+    void DeleteTimeline_Click(object sender, RoutedEventArgs e) => App.Session.DeleteTimeline();
+    void AddLayer_Click(object sender, RoutedEventArgs e) => App.Session.AddLayer();
+    void InsertLayer_Click(object sender, RoutedEventArgs e) => App.Session.InsertLayer();
+    void DeleteLayer_Click(object sender, RoutedEventArgs e) => App.Session.DeleteLayer();
+    void EditCues_Click(object sender, RoutedEventArgs e) => App.Session.SetStageEditMode(StageEditMode.Cues);
+    void EditDisplays_Click(object sender, RoutedEventArgs e) => App.Session.SetStageEditMode(StageEditMode.Displays);
     void Crossfade_Click(object sender, RoutedEventArgs e) => App.Session.ApplyCrossfade();
     void FadeIn_Click(object sender, RoutedEventArgs e) => App.Session.ToggleFade("in");
     void FadeOut_Click(object sender, RoutedEventArgs e) => App.Session.ToggleFade("out");

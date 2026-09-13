@@ -144,4 +144,39 @@ public class StageGeometryTests
         Assert.Equal(0, snapped.X);
         Assert.Equal(1920, snapped.W);
     }
+
+    [Fact]
+    public void ClickDisplayCanvasHitsDisplayEvenUnderMedia()
+    {
+        var display = Display();
+        var cue = new Cue
+        {
+            Id = "c",
+            Type = CueType.Media,
+            AssetId = "a",
+            Position = new Vec3(),
+            Scale = new Vec2 { X = 100, Y = 100 },
+        };
+        var asset = new Asset { Id = "a", Width = 1920, Height = 1080 };
+        var rects = StageGeometry.CueRects([cue], [asset]);
+        var none = new Selection();
+        var overMedia = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, none, (200, 200), 1);
+        Assert.Equal(StageHitKind.Cue, overMedia.Kind);
+        Assert.Equal("c", overMedia.Id);
+
+        var canvas = StageGeometry.HitEditTarget(StageEditMode.Displays, [display], rects, none, (200, 200), 1);
+        Assert.Equal(StageHitKind.Display, canvas.Kind);
+        Assert.Equal("d1", canvas.Id);
+
+        var alt = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, none, (200, 200), 1, preferDisplay: true);
+        Assert.Equal(StageHitKind.Display, alt.Kind);
+
+        var chrome = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, none, (40, 8), 1);
+        Assert.Equal(StageHitKind.Display, chrome.Kind);
+
+        var selected = new Selection { Kind = SelectionKind.Display, Ids = ["d1"] };
+        var handle = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, selected, (1920, 1080), 1);
+        Assert.Equal(StageHitKind.DisplayHandle, handle.Kind);
+        Assert.Equal("se", handle.Handle);
+    }
 }

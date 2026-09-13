@@ -14,6 +14,7 @@
         <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="Save_Click"/>
         <MenuItem Header="Save _As…" InputGestureText="Ctrl+Shift+S" Click="SaveAs_Click"/>
         <Separator/>
+        <MenuItem Header="Close Show" Click="QuitWelcome_Click"/>
         <MenuItem Header="E_xit" Click="Exit_Click"/>
       </MenuItem>
       <MenuItem Header="_Edit">
@@ -22,19 +23,33 @@
         <Separator/>
         <MenuItem Header="_Delete" InputGestureText="Del" Click="Delete_Click"/>
         <MenuItem Header="Du_plicate" InputGestureText="Ctrl+D" Click="Duplicate_Click"/>
+        <Separator/>
+        <MenuItem x:Name="SnapItem" Header="Snap to Edges" IsCheckable="True" IsChecked="True" Click="Snap_Click"/>
+        <MenuItem x:Name="ClickJumpItem" Header="Click Jumps Playhead" IsCheckable="True" IsChecked="True" Click="ClickJump_Click"/>
       </MenuItem>
       <MenuItem Header="_Stage">
         <MenuItem Header="Fit to _Display" Click="FitDisplay_Click"/>
         <MenuItem Header="Fit to _Wall" Click="FitWall_Click"/>
         <MenuItem Header="Frame Displays" Click="Frame_Click"/>
         <MenuItem Header="Add Display" Click="AddDisplay_Click"/>
+        <MenuItem Header="_Edit Cues" Click="EditCues_Click"/>
+        <MenuItem Header="Edit _Displays / Canvas" Click="EditDisplays_Click"/>
         <MenuItem Header="Display Grid 3×1" Click="Grid31_Click"/>
         <MenuItem Header="Display Grid 2×2" Click="Grid22_Click"/>
         <MenuItem Header="Display Grid 4×1" Click="Grid41_Click"/>
       </MenuItem>
       <MenuItem Header="_Timeline">
         <MenuItem Header="Play / Pause" InputGestureText="Space" Click="Play_Click"/>
+        <MenuItem Header="Pause" Click="Pause_Click"/>
         <MenuItem Header="Stop" InputGestureText="Esc" Click="Stop_Click"/>
+        <MenuItem x:Name="LoopItem" Header="Loop Play" IsCheckable="True" IsChecked="True" Click="Loop_Click"/>
+        <Separator/>
+        <MenuItem Header="Add Timeline" Click="AddTimeline_Click"/>
+        <MenuItem Header="Delete Timeline" Click="DeleteTimeline_Click"/>
+        <MenuItem Header="Add Layer" Click="AddLayer_Click"/>
+        <MenuItem Header="Insert Layer" Click="InsertLayer_Click"/>
+        <MenuItem Header="Delete Layer" Click="DeleteLayer_Click"/>
+        <Separator/>
         <MenuItem Header="Crossfade Selected" Click="Crossfade_Click"/>
         <MenuItem Header="Toggle Fade In" Click="FadeIn_Click"/>
         <MenuItem Header="Toggle Fade Out" Click="FadeOut_Click"/>

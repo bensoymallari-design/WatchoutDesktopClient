@@ -174,4 +174,66 @@ public class SessionAndShowTests
         Assert.Equal(400, loose!.Position.X);
         Assert.Equal(80, loose.Position.Y);
     }
+
+    [Fact]
+    public void DeleteTimelineKeepsOneAndSelectsTheRest()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.AddTimeline();
+        session.AddTimeline();
+        Assert.Equal(3, session.Show!.Timelines.Count);
+        var doomed = session.ActiveTimelineId;
+        session.DeleteTimeline(doomed);
+        Assert.Equal(2, session.Show.Timelines.Count);
+        Assert.NotEqual(doomed, session.ActiveTimelineId);
+        session.Select(SelectionKind.Timeline, session.Show.Timelines[0].Id);
+        session.DeleteSelected();
+        Assert.Single(session.Show.Timelines);
+        session.DeleteTimeline();
+        Assert.Single(session.Show.Timelines);
+        Assert.Contains(session.Logs, l => l.Message.Contains("at least one timeline"));
+    }
+
+    [Fact]
+    public void ToggleLoopAndLayerEdit()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var tl = session.ActiveTimeline!;
+        Assert.True(tl.Loop);
+        session.SetLoop(tl.Id, false);
+        Assert.False(tl.Loop);
+        session.ToggleLoop();
+        Assert.True(tl.Loop);
+
+        var before = tl.Layers.Count;
+        session.AddLayer();
+        Assert.Equal(before + 1, tl.Layers.Count);
+        Assert.Equal(SelectionKind.Layer, session.Selection.Kind);
+        var insertedAt = tl.Layers.Count;
+        session.InsertLayer(session.Selection.Ids[0]);
+        Assert.Equal(insertedAt + 1, tl.Layers.Count);
+        session.DeleteLayer(session.Selection.Ids[0]);
+        Assert.Equal(before + 1, tl.Layers.Count);
+        session.Select(SelectionKind.Layer, tl.Layers[0].Id);
+        session.UpdateLayer(tl.Layers[0].Id, l => l.Locked = true);
+        Assert.True(tl.Layers[0].Locked);
+    }
+
+    [Fact]
+    public void DisplayCanvasModeIgnoresCuesUntilToggledBack()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        Assert.Equal(StageEditMode.Cues, session.StageEditMode);
+        session.SetStageEditMode(StageEditMode.Displays);
+        Assert.Equal(StageEditMode.Displays, session.StageEditMode);
+        session.Select(SelectionKind.Display, session.Show!.Displays[0].Id);
+        session.NudgeSelected(40, -10);
+        Assert.Equal(40, session.Show.Displays[0].X);
+        Assert.Equal(-10, session.Show.Displays[0].Y);
+        session.SetStageEditMode(StageEditMode.Cues);
+        Assert.Equal(StageEditMode.Cues, session.StageEditMode);
+    }
 }
