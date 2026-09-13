@@ -9,6 +9,8 @@ obj/
 TestResults/
 artifacts/
 release/
+publish/
+dist/
 *.log
 .DS_Store
 .env*
