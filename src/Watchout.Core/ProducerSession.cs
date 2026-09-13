@@ -490,7 +490,7 @@ public sealed class ProducerSession
         Changed?.Invoke();
     }
 
-    public Asset ConnectCapture(string deviceId, string name, int width = 1920, int height = 1080)
+    public Asset ConnectCapture(string deviceId, string name, int width = 1920, int height = 1080, bool announce = true)
     {
         if (Show is null) NewShow();
         var existing = Show!.Assets.FirstOrDefault(a => LiveSources.CaptureDeviceId(a) == deviceId);
@@ -512,9 +512,37 @@ public sealed class ProducerSession
                 .ToList();
         }, record: false);
         var hasCue = Show.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
-        if (!hasCue) AddCueFromAsset(media.Id);
-        Log($"Live capture connected: {name} — play Resolume (or any HDMI/SDI source) into this card");
+        var displaysBefore = Show.Displays.Count;
+        if (!hasCue)
+        {
+            string? displayId = null;
+            string? layerId = null;
+            Mutate(show =>
+            {
+                displayId = LiveSources.EnsureDisplayForCapture(show).Id;
+                layerId = LiveSources.NextCaptureLayerId(show);
+            }, record: false);
+            AddCueFromAsset(media.Id, layerId, 0, displayId);
+        }
+        if (announce)
+        {
+            Log($"Live capture connected: {name} — play Resolume (or any HDMI/SDI source) into this card");
+            if (Show.Displays.Count > displaysBefore) FrameDisplays();
+        }
         return Show.Assets.First(a => a.Id == media.Id);
+    }
+
+    public int ConnectCaptures(IEnumerable<(string Id, string Name)> devices)
+    {
+        var list = devices.ToList();
+        foreach (var device in list)
+            ConnectCapture(device.Id, device.Name, announce: false);
+        if (list.Count > 0) FrameDisplays();
+        if (list.Count == 1)
+            Log($"Live capture connected: {list[0].Name} — play Resolume (or any HDMI/SDI source) into this card");
+        else if (list.Count > 1)
+            Log($"Connected {list.Count} capture cards across {Show!.Displays.Count} display(s). Each card is its own live layer — map extra HDMI outputs in Devices.");
+        return list.Count;
     }
 
     public void UpdateAsset(string id, Action<Asset> patch) =>

@@ -19,7 +19,7 @@ Electron could not hardware-decode H.264 the way a show PC needs, so the old app
 
 **Play natively (DXVA):** H.264/AVC, H.265/HEVC, MPEG-2, WMV, JPEG/PNG stills, WAV, AAC, MP3.
 
-**Live capture:** HDMI/SDI from a capture card. Send Resolume Program Out (or any mixer) into the card, then **Live → Connect Capture Card** (or Devices → Connect). The same session is shared on Stage and Runner outputs.
+**Live capture:** HDMI/SDI from one or **many** capture cards at the same time. Send Resolume Program Out (or any mixer) into each card, then **Live → Connect All Capture Cards**. Each card gets its own Stage display and timeline layer. The same sessions are shared on Runner outputs.
 
 **Optional H.264 transcode (never WebM):** HAP, Resolume DXV, ProRes, DNx, CineForm. Needs [ffmpeg](https://ffmpeg.org/) on PATH. The encoder is `h264_nvenc` (NVIDIA), `h264_amf` (AMD), `h264_qsv` (Intel), or `libx264`.
 
@@ -29,10 +29,12 @@ Opening an old Electron `.watch.json` prefers the original H.264 file over a lef
 
 ## Resolume → WatchMe
 
-1. In Resolume, set **Output → Advanced Output** (or Preview/Program) to the HDMI/SDI output that feeds your capture card.
-2. Plug that cable into Elgato / Blackmagic / Magewell / a USB HDMI capture dongle on the WatchMe PC.
-3. Open WatchMe → **Live → Refresh Capture Cards** (or the Devices tab).
-4. **Connect** the card. A live layer appears on Stage and the Timeline. Press **Space** and output to LED as usual.
+1. In Resolume, set **Output → Advanced Output** (or Preview/Program) to the HDMI/SDI output that feeds each capture card. You can run several Resolume outputs into several cards.
+2. Plug those cables into Elgato / Blackmagic / Magewell / USB HDMI dongles on the WatchMe PC.
+3. Open WatchMe → **Live → Connect All Capture Cards** (or pick several in **Connect Capture Cards…**).
+4. Each card becomes a live layer on its own Stage display. Map extra HDMI monitors in Devices, then **Output all displays**.
+
+USB bandwidth (not WatchMe) is what usually caps how many Elgato-style dongles you can run; DeckLink / Magewell PCIe cards scale further. WatchMe opens one Media Foundation session per device and drops frames if the UI thread is busy, so 5×1080p is expected to work on a show PC.
 
 Alternatively: enable **NDI** in Resolume, run **NDI Webcam Input**, and connect that virtual camera from the same Devices list.
 
@@ -63,7 +65,7 @@ Optional: `choco install ffmpeg` if you will import HAP / DXV / ProRes.
 3. Drag the clip on **Stage** (or double-click the asset). **Stage → Fit to Wall** to span every controller.
 4. **Devices → Map extra monitors to Stage**, then **Output all displays**. Win+P → Extend.
 5. Click the Stage, press **Space**. Esc stops (or closes outputs).
-6. For Resolume: **Devices → Capture cards → Connect**.
+6. For Resolume: **Live → Connect All Capture Cards**. Five cards → five live displays.
 
 Shows save as `.watchme.json`. Old `.watch.json` files still open.
 

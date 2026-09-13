@@ -1,4 +1,5 @@
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 
 namespace Watchout.Core.Media;
 
@@ -41,5 +42,47 @@ public static class LiveSources
             Notes = $"{name} · live HDMI/SDI capture · Resolume or any program output · Media Foundation",
             OriginalPath = CaptureUrl(deviceId),
         };
+    }
+
+    public static IReadOnlyList<Cue> CaptureCues(Show show) =>
+        show.Timelines.SelectMany(t => t.Cues)
+            .Where(c => c.AssetId is { } id && show.Assets.Any(a => a.Id == id && IsCapture(a)))
+            .ToList();
+
+    public static string? NextCaptureLayerId(Show show)
+    {
+        var tl = show.Timelines.FirstOrDefault();
+        if (tl is null) return null;
+        var used = CaptureCues(show).Select(c => c.LayerId).ToHashSet();
+        return tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked && !used.Contains(l.Id))?.Id
+               ?? tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked)?.Id
+               ?? tl.Layers.FirstOrDefault()?.Id;
+    }
+
+    public static Display EnsureDisplayForCapture(Show show)
+    {
+        var occupied = new HashSet<string>();
+        foreach (var cue in CaptureCues(show))
+        {
+            var hit = StageGeometry.HitDisplay(show.Displays, (cue.Position.X + 16, cue.Position.Y + 16));
+            if (hit is not null) occupied.Add(hit.Id);
+        }
+        var free = show.Displays.Where(d => d.Enabled).OrderBy(d => d.X).ThenBy(d => d.Channel)
+            .FirstOrDefault(d => !occupied.Contains(d.Id));
+        if (free is not null) return free;
+
+        var last = show.Displays.OrderBy(d => d.X).LastOrDefault() ?? ShowFactory.EmptyDisplay();
+        var created = ShowFactory.EmptyDisplay(new Display
+        {
+            Name = $"Display {show.Displays.Count + 1}",
+            X = last.X + Math.Max(1, last.Width),
+            Y = last.Y,
+            Width = last.Width > 0 ? last.Width : 1920,
+            Height = last.Height > 0 ? last.Height : 1080,
+            Channel = show.Displays.Count + 1,
+            NodeId = string.IsNullOrEmpty(last.NodeId) ? "local-runner" : last.NodeId,
+        });
+        show.Displays.Add(created);
+        return created;
     }
 }

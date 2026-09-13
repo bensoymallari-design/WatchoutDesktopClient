@@ -41,7 +41,8 @@
       </MenuItem>
       <MenuItem Header="_Live">
         <MenuItem Header="Refresh Capture Cards" Click="RefreshCapture_Click"/>
-        <MenuItem Header="Connect Capture Card…" Click="ConnectCapture_Click"/>
+        <MenuItem Header="Connect Capture Cards…" Click="ConnectCapture_Click"/>
+        <MenuItem Header="Connect All Capture Cards" Click="ConnectAllCapture_Click"/>
       </MenuItem>
       <MenuItem Header="_Output">
         <MenuItem Header="Output Selected Display" Click="OutputSelected_Click"/>

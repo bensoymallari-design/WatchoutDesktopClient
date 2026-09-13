@@ -116,6 +116,25 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void ConnectsFiveCaptureCardsOntoSeparateDisplaysAndLayers()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        Assert.Single(session.Show!.Displays);
+
+        var count = session.ConnectCaptures(Enumerable.Range(1, 5).Select(i => ($"card-{i}", $"Card {i}")));
+        Assert.Equal(5, count);
+        Assert.Equal(5, session.Show.Displays.Count);
+        Assert.Equal(5, session.Show.Assets.Count(LiveSources.IsCapture));
+        var cues = LiveSources.CaptureCues(session.Show);
+        Assert.Equal(5, cues.Count);
+        Assert.Equal(5, cues.Select(c => c.Position.X).Distinct().Count());
+        Assert.Equal(5, cues.Select(c => c.LayerId).Distinct().Count());
+        session.ConnectCaptures([("card-1", "Card 1")]);
+        Assert.Equal(5, LiveSources.CaptureCues(session.Show).Count);
+    }
+
+    [Fact]
     public void FreeRunningCueStaysVisibleOutsideWindow()
     {
         var cue = ShowFactory.EmptyCue(new Cue

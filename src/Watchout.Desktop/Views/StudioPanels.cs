@@ -127,6 +127,7 @@ public class DevicesPanel : UserControl
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
                  + CaptureHub.Generation
+                 + CaptureHub.LiveCount
                  + string.Join("|", CaptureHub.Devices.Select(d => d.Id))
                  + string.Join("|", connected);
         if (fp == _fp && _root.Children.Count > 0) return;
@@ -157,18 +158,17 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into a capture card on this PC, then Connect. NDI Webcam Input also appears here.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards on this PC. Each connected card gets its own Stage display. NDI Webcam Input also appears here.",
         });
-        if (CaptureHub.Devices.Count == 0)
+        _root.Children.Add(new TextBlock
         {
-            _root.Children.Add(new TextBlock
-            {
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0),
-                Foreground = (Brush)FindResource("Wo.Muted"),
-                Text = "No capture devices yet. Plug in the card and press Refresh.",
-            });
-        }
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            Text = CaptureHub.Devices.Count == 0
+                ? "No capture devices yet. Plug in the cards and press Refresh."
+                : $"{CaptureHub.LiveCount} live session(s) · {CaptureHub.Devices.Count} device(s) found. Connect all to run them together.",
+        });
         foreach (var device in CaptureHub.Devices)
         {
             var live = connected.Contains(device.Id);
@@ -182,6 +182,8 @@ public class DevicesPanel : UserControl
             var name = device.Name;
             _root.Children.Add(Btn(live ? $"Reconnect {device.Name}" : $"Connect {device.Name}", () => App.Session.ConnectCapture(id, name)));
         }
+        _root.Children.Add(Btn("Connect all capture cards", () =>
+            App.Session.ConnectCaptures(CaptureHub.Devices.Select(d => (d.Id, d.Name)))));
         _root.Children.Add(Btn("Refresh capture cards", () => _ = CaptureHub.RefreshAsync()));
 
         _root.Children.Add(Header("CODEC"));

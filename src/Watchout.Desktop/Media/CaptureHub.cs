@@ -22,6 +22,7 @@ public static class CaptureHub
     static readonly object Gate = new();
     public static IReadOnlyList<CaptureDeviceInfo> Devices { get; private set; } = [];
     public static int Generation { get; private set; }
+    public static int LiveCount { get { lock (Gate) return Sessions.Count; } }
     public static event Action? Changed;
 
     public static async Task RefreshAsync()
@@ -128,6 +129,7 @@ public static class CaptureHub
         int _width;
         int _height;
         bool _logged;
+        int _uiBusy;
 
         public WriteableBitmap? Bitmap { get; private set; }
         public int Listeners { get { lock (_listeners) return _listeners.Count; } }
@@ -220,44 +222,63 @@ public static class CaptureHub
 
         void OnFrame(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
         {
-            using var frame = sender.TryAcquireLatestFrame();
-            var raw = frame?.VideoMediaFrame?.SoftwareBitmap;
-            if (raw is null) return;
-            SoftwareBitmap bgra = raw;
-            var converted = false;
-            if (raw.BitmapPixelFormat != BitmapPixelFormat.Bgra8)
+            if (Interlocked.CompareExchange(ref _uiBusy, 1, 0) != 0) return;
+            try
             {
-                bgra = SoftwareBitmap.Convert(raw, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-                converted = true;
-            }
-            var w = bgra.PixelWidth;
-            var h = bgra.PixelHeight;
-            var needed = w * h * 4;
-            if (_scratch is null || _scratch.Length != needed) _scratch = new byte[needed];
-            var buffer = new Windows.Storage.Streams.Buffer((uint)needed);
-            bgra.CopyToBuffer(buffer);
-            using var reader = DataReader.FromBuffer(buffer);
-            reader.ReadBytes(_scratch);
-            if (converted) bgra.Dispose();
-
-            _ui.BeginInvoke(() =>
-            {
-                if (Bitmap is null || _width != w || _height != h)
+                using var frame = sender.TryAcquireLatestFrame();
+                var raw = frame?.VideoMediaFrame?.SoftwareBitmap;
+                if (raw is null)
                 {
-                    Bitmap = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
-                    _width = w;
-                    _height = h;
-                    if (!_logged)
-                    {
-                        _logged = true;
-                        App.Session.Log($"Capture signal {w}×{h} — live on Stage");
-                    }
+                    Interlocked.Exchange(ref _uiBusy, 0);
+                    return;
                 }
-                Bitmap.WritePixels(new Int32Rect(0, 0, w, h), _scratch, w * 4, 0);
-                Action[] listeners;
-                lock (_listeners) listeners = _listeners.ToArray();
-                foreach (var fn in listeners) fn();
-            }, DispatcherPriority.Render);
+                SoftwareBitmap bgra = raw;
+                var converted = false;
+                if (raw.BitmapPixelFormat != BitmapPixelFormat.Bgra8)
+                {
+                    bgra = SoftwareBitmap.Convert(raw, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                    converted = true;
+                }
+                var w = bgra.PixelWidth;
+                var h = bgra.PixelHeight;
+                var needed = w * h * 4;
+                if (_scratch is null || _scratch.Length != needed) _scratch = new byte[needed];
+                var buffer = new Windows.Storage.Streams.Buffer((uint)needed);
+                bgra.CopyToBuffer(buffer);
+                using var reader = DataReader.FromBuffer(buffer);
+                reader.ReadBytes(_scratch);
+                if (converted) bgra.Dispose();
+
+                _ui.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        if (Bitmap is null || _width != w || _height != h)
+                        {
+                            Bitmap = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
+                            _width = w;
+                            _height = h;
+                            if (!_logged)
+                            {
+                                _logged = true;
+                                App.Session.Log($"Capture signal {w}×{h} — live on Stage");
+                            }
+                        }
+                        Bitmap.WritePixels(new Int32Rect(0, 0, w, h), _scratch, w * 4, 0);
+                        Action[] listeners;
+                        lock (_listeners) listeners = _listeners.ToArray();
+                        foreach (var fn in listeners) fn();
+                    }
+                    finally
+                    {
+                        Interlocked.Exchange(ref _uiBusy, 0);
+                    }
+                }, DispatcherPriority.Render);
+            }
+            catch
+            {
+                Interlocked.Exchange(ref _uiBusy, 0);
+            }
         }
 
         public void Dispose()

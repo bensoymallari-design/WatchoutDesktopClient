@@ -150,15 +150,26 @@ public partial class MainWindow : Window
         await CaptureHub.RefreshAsync();
         App.Session.Log(CaptureHub.Devices.Count == 0
             ? "No capture cards found. Plug in an HDMI/SDI card (Elgato, Blackmagic, Magewell) or enable NDI Webcam Input."
-            : $"Found {CaptureHub.Devices.Count} capture device(s). Connect one to play Resolume (or any HDMI/SDI) on Stage.");
+            : $"Found {CaptureHub.Devices.Count} capture device(s). Connect all of them (Live → Connect All) — each card gets its own Stage display.");
     }
 
     async void ConnectCapture_Click(object sender, RoutedEventArgs e)
     {
         await CaptureHub.RefreshAsync();
-        var pick = CapturePicker.Choose(this, CaptureHub.Devices);
-        if (pick is null) return;
-        App.Session.ConnectCapture(pick.Id, pick.Name);
+        var picks = CapturePicker.ChooseMany(this, CaptureHub.Devices);
+        if (picks.Count == 0) return;
+        App.Session.ConnectCaptures(picks.Select(p => (p.Id, p.Name)));
+    }
+
+    async void ConnectAllCapture_Click(object sender, RoutedEventArgs e)
+    {
+        await CaptureHub.RefreshAsync();
+        if (CaptureHub.Devices.Count == 0)
+        {
+            CapturePicker.ChooseMany(this, CaptureHub.Devices);
+            return;
+        }
+        App.Session.ConnectCaptures(CaptureHub.Devices.Select(d => (d.Id, d.Name)));
     }
 
     void About_Click(object sender, RoutedEventArgs e)
@@ -167,9 +178,10 @@ public partial class MainWindow : Window
             $"{Brand.Name} {Brand.Version} — native .NET / WPF desktop.\n\n" +
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
-            "Live: HDMI/SDI capture cards (Elgato, Blackmagic, Magewell, USB capture).\n" +
-            "Send Resolume’s program out over HDMI/SDI into the card — or Resolume NDI\n" +
-            "through NDI Webcam Input — then Live → Connect Capture Card.\n\n" +
+            "Live: many HDMI/SDI capture cards at once (Elgato, Blackmagic, Magewell, USB).\n" +
+            "Each card is a separate live layer on its own Stage display.\n" +
+            "Send Resolume (or any program) into each card — or Resolume NDI through\n" +
+            "NDI Webcam Input — then Live → Connect All Capture Cards.\n\n" +
             "HAP, Resolume DXV, ProRes, DNx: optional ffmpeg transcode to H.264 MP4\n" +
             "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.",
             $"About {Brand.Name}");
