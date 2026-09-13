@@ -138,6 +138,11 @@ public partial class MainWindow : Window
     void Undo_Click(object sender, RoutedEventArgs e) => App.Session.Undo();
     void Redo_Click(object sender, RoutedEventArgs e) => App.Session.Redo();
     void Delete_Click(object sender, RoutedEventArgs e) => App.Session.DeleteSelected();
+    void DeleteAsset_Click(object sender, RoutedEventArgs e)
+    {
+        if (Root.Content is ProducerView producer) producer.DeleteHighlightedAsset();
+        else App.Session.DeleteAsset();
+    }
     void Duplicate_Click(object sender, RoutedEventArgs e) => App.Session.DuplicateSelected();
     void Snap_Click(object sender, RoutedEventArgs e) => App.Session.SetSnap(SnapItem.IsChecked == true);
     void ClickJump_Click(object sender, RoutedEventArgs e) => App.Session.SetClickJumpsToTime(ClickJumpItem.IsChecked == true);

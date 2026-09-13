@@ -10,49 +10,43 @@ namespace Watchout.Desktop.Views;
 
 public class AssetsPanel : UserControl
 {
-    readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent };
+    readonly StackPanel _rows = new();
+    readonly Dictionary<string, AssetRow> _byId = [];
     string _fingerprint = "";
-    Point _press;
-    Asset? _pressAsset;
+    public string? HighlightedId { get; private set; }
 
     public AssetsPanel()
     {
-        Content = _list;
-        _list.SelectionChanged += (_, _) =>
+        var scroll = new ScrollViewer
         {
-            if (_list.SelectedItem is Asset a)
-                App.Session.Select(SelectionKind.Asset, a.Id);
+            Content = _rows,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Background = Brushes.Transparent,
         };
-        _list.MouseDoubleClick += async (_, _) =>
-        {
-            if (_list.SelectedItem is Asset a)
-                App.Session.AddCueFromAsset(a.Id);
-            else
-                await MainWindow.ImportMediaAsync();
-        };
-        _list.PreviewMouseLeftButtonDown += (_, e) =>
-        {
-            _press = e.GetPosition(_list);
-            _pressAsset = ItemAt(e.GetPosition(_list));
-        };
-        _list.PreviewMouseMove += (_, e) =>
-        {
-            if (e.LeftButton != MouseButtonState.Pressed || _pressAsset is null) return;
-            var p = e.GetPosition(_list);
-            if (Math.Abs(p.X - _press.X) < 8 && Math.Abs(p.Y - _press.Y) < 8) return;
-            var asset = _pressAsset;
-            _pressAsset = null;
-            DragDrop.DoDragDrop(_list, StudioDrag.ForAsset(asset.Id), DragDropEffects.Copy);
-            StudioDrag.AssetId = null;
-        };
+        Content = scroll;
+        Focusable = true;
         AllowDrop = true;
-        _list.AllowDrop = true;
         DragOver += OnDragOver;
-        _list.DragOver += OnDragOver;
         Drop += OnDropFiles;
-        _list.Drop += OnDropFiles;
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Delete or Key.Back)) return;
+            DeleteHighlighted();
+            e.Handled = true;
+        };
+        var menu = new ContextMenu();
+        menu.Items.Add(Menu("Delete asset", DeleteHighlighted));
+        ContextMenu = menu;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
         Loaded += (_, _) => Reload();
+    }
+
+    static MenuItem Menu(string header, Action click)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => click();
+        return item;
     }
 
     static void OnDragOver(object sender, DragEventArgs e)
@@ -69,25 +63,146 @@ public class AssetsPanel : UserControl
         await MediaLibrary.ImportFilesAsync(files, App.Session);
     }
 
-    Asset? ItemAt(Point p)
+    public void DeleteHighlighted()
     {
-        var el = _list.InputHitTest(p) as DependencyObject;
-        while (el is not null && el is not ListBox)
+        var id = HighlightedId
+                 ?? (App.Session.Selection.Kind == SelectionKind.Asset ? App.Session.Selection.Ids.FirstOrDefault() : null);
+        if (id is null)
         {
-            if (el is ListBoxItem item && item.DataContext is Asset a) return a;
-            el = VisualTreeHelper.GetParent(el);
+            App.Session.Log("Click the clip in Assets, then Delete", "warn");
+            return;
         }
-        return _list.SelectedItem as Asset;
+        App.Session.DeleteAsset(id);
+        HighlightedId = null;
     }
 
     public void Reload()
     {
         var show = App.Session.Show;
-        var fp = show is null ? "" : string.Join("|", show.Assets.Select(a => a.Id + a.Notes + a.Optimized));
-        if (fp == _fingerprint) return;
+        var fp = show is null ? "" : string.Join("|", show.Assets.Select(a => a.Id + a.Name + a.Notes + a.Optimized));
+        if (fp == _fingerprint)
+        {
+            foreach (var asset in show?.Assets ?? [])
+                if (_byId.TryGetValue(asset.Id, out var row)) row.Sync(asset, HighlightedId);
+            return;
+        }
         _fingerprint = fp;
-        _list.ItemsSource = show?.Assets.ToList();
-        _list.DisplayMemberPath = "Name";
+        _rows.Children.Clear();
+        _byId.Clear();
+        if (HighlightedId is not null && show?.Assets.All(a => a.Id != HighlightedId) == true)
+            HighlightedId = null;
+        foreach (var asset in show?.Assets ?? [])
+        {
+            var row = new AssetRow(asset, OnPick, OnDelete, OnDrag);
+            _byId[asset.Id] = row;
+            _rows.Children.Add(row);
+            row.Sync(asset, HighlightedId);
+        }
+    }
+
+    void OnPick(string id)
+    {
+        HighlightedId = id;
+        App.Session.Select(SelectionKind.Asset, id);
+        Focus();
+        foreach (var row in _byId.Values) row.SyncHighlight(id);
+    }
+
+    void OnDelete(string id)
+    {
+        HighlightedId = id;
+        App.Session.DeleteAsset(id);
+    }
+
+    static void OnDrag(Asset asset, FrameworkElement source)
+    {
+        DragDrop.DoDragDrop(source, StudioDrag.ForAsset(asset.Id), DragDropEffects.Copy);
+        StudioDrag.AssetId = null;
+    }
+
+    sealed class AssetRow : Border
+    {
+        readonly TextBlock _name = new() { FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        readonly TextBlock _meta = new() { FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0) };
+        readonly string _id;
+        readonly Asset _asset;
+        Point _press;
+        bool _dragging;
+
+        public AssetRow(Asset asset, Action<string> pick, Action<string> delete, Action<Asset, FrameworkElement> drag)
+        {
+            _id = asset.Id;
+            _asset = asset;
+            Margin = new Thickness(6, 4, 6, 0);
+            Padding = new Thickness(8, 6, 8, 6);
+            CornerRadius = new CornerRadius(3);
+            BorderThickness = new Thickness(1);
+            Cursor = Cursors.Hand;
+            var root = new DockPanel();
+            var del = new Button
+            {
+                Content = "Delete",
+                Style = (Style)Application.Current.FindResource("Wo.Button"),
+                Padding = new Thickness(8, 2, 8, 2),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            del.Click += (_, e) =>
+            {
+                e.Handled = true;
+                delete(_id);
+            };
+            DockPanel.SetDock(del, Dock.Right);
+            var text = new StackPanel();
+            text.Children.Add(_name);
+            text.Children.Add(_meta);
+            root.Children.Add(del);
+            root.Children.Add(text);
+            Child = root;
+            MouseLeftButtonDown += (_, e) =>
+            {
+                _press = e.GetPosition(this);
+                _dragging = false;
+                pick(_id);
+                if (e.ClickCount >= 2)
+                {
+                    App.Session.AddCueFromAsset(_id);
+                    return;
+                }
+                CaptureMouse();
+            };
+            MouseMove += (_, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || _dragging) return;
+                var p = e.GetPosition(this);
+                if (Math.Abs(p.X - _press.X) < 8 && Math.Abs(p.Y - _press.Y) < 8) return;
+                _dragging = true;
+                ReleaseMouseCapture();
+                drag(_asset, this);
+            };
+            MouseLeftButtonUp += (_, _) => { _dragging = false; ReleaseMouseCapture(); };
+            MouseRightButtonDown += (_, e) =>
+            {
+                pick(_id);
+                e.Handled = true;
+            };
+        }
+
+        public void Sync(Asset asset, string? highlightedId)
+        {
+            _name.Text = asset.Name;
+            _meta.Text = string.IsNullOrWhiteSpace(asset.Codec) ? asset.Kind.ToString() : asset.Codec;
+            SyncHighlight(highlightedId);
+        }
+
+        public void SyncHighlight(string? highlightedId)
+        {
+            var on = highlightedId == _id || (App.Session.Selection.Kind == SelectionKind.Asset && App.Session.Selection.Ids.Contains(_id));
+            Background = new SolidColorBrush(on ? Color.FromRgb(42, 36, 24) : Color.FromRgb(22, 22, 22));
+            BorderBrush = new SolidColorBrush(on ? Color.FromRgb(245, 166, 35) : Color.FromRgb(48, 48, 48));
+            _name.Foreground = (Brush)Application.Current.FindResource("Wo.Text");
+            _meta.Foreground = (Brush)Application.Current.FindResource("Wo.Muted");
+        }
     }
 }
 
@@ -463,7 +578,7 @@ public class PropertiesPanel : UserControl
             _root.Children.Add(new TextBlock { Text = a.Name, Foreground = (Brush)FindResource("Wo.Text"), FontWeight = FontWeights.SemiBold });
             _root.Children.Add(new TextBlock { Text = a.Notes, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 0) });
             _root.Children.Add(new TextBlock { Text = $"{a.Width:0}×{a.Height:0}  ·  {a.Codec}", Foreground = (Brush)FindResource("Wo.Amber"), Margin = new Thickness(0, 8, 0, 0) });
-            ActionBtn("Delete asset", () => s.DeleteSelected());
+            ActionBtn("Delete asset", () => s.DeleteAsset(a.Id));
         }
         else
         {

@@ -52,6 +52,7 @@
         <Border DockPanel.Dock="Top" Background="#2A2A2A" Padding="8,4">
           <DockPanel>
             <Button DockPanel.Dock="Right" Style="{StaticResource Wo.Button}" Padding="8,2" Click="Import_Click" Content="Import"/>
+            <Button DockPanel.Dock="Right" Style="{StaticResource Wo.Button}" Padding="8,2" Click="DeleteAsset_Click" Content="Delete"/>
             <TextBlock Text="Assets" Foreground="#D6D3D1" VerticalAlignment="Center"/>
           </DockPanel>
         </Border>
