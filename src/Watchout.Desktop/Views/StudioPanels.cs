@@ -111,12 +111,24 @@ public class DevicesPanel : UserControl
     {
         Content = new ScrollViewer { Content = _root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
-        Loaded += (_, _) => Reload();
+        CaptureHub.Changed += () => Dispatcher.BeginInvoke(Reload);
+        Loaded += async (_, _) =>
+        {
+            await CaptureHub.RefreshAsync();
+            Reload();
+        };
     }
 
     public void Reload()
     {
-        var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id)) + App.Session.LiveOutputs.Count + (App.Session.Show?.Displays.Count ?? 0);
+        var show = App.Session.Show;
+        var connected = show?.CaptureDevices.Select(d => d.Signal) ?? [];
+        var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id))
+                 + App.Session.LiveOutputs.Count
+                 + (show?.Displays.Count ?? 0)
+                 + CaptureHub.Generation
+                 + string.Join("|", CaptureHub.Devices.Select(d => d.Id))
+                 + string.Join("|", connected);
         if (fp == _fp && _root.Children.Count > 0) return;
         _fp = fp;
         _root.Children.Clear();
@@ -134,17 +146,51 @@ public class DevicesPanel : UserControl
         _root.Children.Add(Btn("Include laptop in Stage", () => App.Session.MapScreens(Interop.Monitors.List(), true)));
         _root.Children.Add(Btn("Output all displays", () =>
         {
-            if (App.Session.Show is { } show) App.Outputs.OpenAll(show.Displays);
+            if (App.Session.Show is { } s) App.Outputs.OpenAll(s.Displays);
         }));
         _root.Children.Add(Btn("Close outputs", () => App.Outputs.CloseAll()));
         _root.Children.Add(Btn("Test beep", Beep));
+
+        _root.Children.Add(Header("CAPTURE CARDS"));
+        _root.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 4),
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            Text = "Play Resolume (or any HDMI/SDI program) into a capture card on this PC, then Connect. NDI Webcam Input also appears here.",
+        });
+        if (CaptureHub.Devices.Count == 0)
+        {
+            _root.Children.Add(new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Text = "No capture devices yet. Plug in the card and press Refresh.",
+            });
+        }
+        foreach (var device in CaptureHub.Devices)
+        {
+            var live = connected.Contains(device.Id);
+            _root.Children.Add(new TextBlock
+            {
+                Text = $"{device.Name}  ·  {device.Kind}{(live ? "  ·  live" : "")}",
+                Margin = new Thickness(0, 8, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Text"),
+            });
+            var id = device.Id;
+            var name = device.Name;
+            _root.Children.Add(Btn(live ? $"Reconnect {device.Name}" : $"Connect {device.Name}", () => App.Session.ConnectCapture(id, name)));
+        }
+        _root.Children.Add(Btn("Refresh capture cards", () => _ = CaptureHub.RefreshAsync()));
+
         _root.Children.Add(Header("CODEC"));
         _root.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Outputs decode H.264 with Windows Media Foundation / DXVA. Import MP4/MOV/H.264 directly. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM.",
+            Text = "Outputs decode H.264 with Windows Media Foundation / DXVA. Import MP4/MOV/H.264 directly. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture plays frames from the card, not a file.",
         });
     }
 

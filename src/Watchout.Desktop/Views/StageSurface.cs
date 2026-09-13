@@ -136,6 +136,8 @@ public sealed class StageSurface : Canvas
                 proc.LocalTime = ev.LocalTime;
                 proc.InvalidateVisual();
             }
+            else if (el is CaptureLayer capture)
+                capture.DeviceId = LiveSources.CaptureDeviceId(asset);
             else if (el is MediaElement video)
             {
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
@@ -174,9 +176,14 @@ public sealed class StageSurface : Canvas
     FrameworkElement? BuildLayer(EvaluatedCue ev, Asset? asset, Rect mapped, Show show)
     {
         if (asset is null) return Placeholder(mapped, ev.Cue.Name, ev.Cue.Color);
+        if (LiveSources.IsCapture(asset))
+            return new CaptureLayer { DeviceId = LiveSources.CaptureDeviceId(asset), Width = mapped.Width, Height = mapped.Height };
         if (asset.Url.StartsWith("procedural:", StringComparison.Ordinal))
             return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = mapped.Width, Height = mapped.Height };
-        if (asset.Kind is AssetKind.Image or AssetKind.Ndi || asset.Url.StartsWith("watchout:", StringComparison.Ordinal) || asset.Url.StartsWith("data:", StringComparison.Ordinal))
+        if (asset.Kind is AssetKind.Image or AssetKind.Ndi
+            || asset.Url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase)
+            || asset.Url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase)
+            || asset.Url.StartsWith("data:", StringComparison.Ordinal))
         {
             var still = DemoArt.ForUrl(asset.Url, Math.Max(8, (int)asset.Width), Math.Max(8, (int)asset.Height)) ?? MediaLibrary.LoadStill(asset);
             if (still is null) return Placeholder(mapped, asset.Name, asset.Color);

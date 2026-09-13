@@ -9,9 +9,9 @@ public static class DemoArt
     {
         return url switch
         {
-            "watchout:demo/bars" => Bars(width, height),
-            "watchout:demo/title" => Title(width, height),
-            "watchout:demo/grid" => Grid(width, height),
+            "watchout:demo/bars" or "watchme:demo/bars" => Bars(width, height),
+            "watchout:demo/title" or "watchme:demo/title" => Title(width, height),
+            "watchout:demo/grid" or "watchme:demo/grid" => Grid(width, height),
             _ => null,
         };
     }
@@ -25,7 +25,7 @@ public static class DemoArt
             var col = w / 7.0;
             for (var i = 0; i < 7; i++)
                 dc.DrawRectangle(new SolidColorBrush(colors[i]), null, new System.Windows.Rect(i * col, 0, col + 1, h));
-            DrawCentered(dc, "WATCHOUT 7", w, h, 72, Colors.White);
+            DrawCentered(dc, "WatchMe", w, h, 72, Colors.White);
         }
         return Render(dv, w, h);
     }
@@ -37,7 +37,7 @@ public static class DemoArt
         {
             dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(11, 18, 32), Color.FromRgb(28, 25, 23), 45), null, new System.Windows.Rect(0, 0, w, h));
             dc.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromRgb(245, 166, 35)), 4), new System.Windows.Rect(80, 80, w - 160, h - 160));
-            DrawCentered(dc, "WATCHOUT", w, h - 80, 92, Color.FromRgb(245, 166, 35));
+            DrawCentered(dc, "WatchMe", w, h - 80, 92, Color.FromRgb(245, 166, 35));
             DrawCentered(dc, "MULTI-DISPLAY SHOW COMPOSER", w, h + 80, 28, Color.FromRgb(231, 229, 228));
         }
         return Render(dv, w, h);

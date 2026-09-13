@@ -5,7 +5,7 @@ namespace Watchout.Core;
 
 public static class ShowFactory
 {
-    public const string Version = "7.8.12";
+    public const string Version = Brand.Version;
 
     public static string DefaultCueColor(CueType type) => type switch
     {
@@ -193,7 +193,7 @@ public static class ShowFactory
                 }),
             ],
             AudioDevices = [new AudioDevice { Id = Ids.New("aud"), Name = "WASAPI Default", NodeId = "local-runner", Channels = 2, Driver = "WASAPI" }],
-            CaptureDevices = [new CaptureDevice { Id = Ids.New("cap"), Name = "NDI Source 1", NodeId = "local-runner", Kind = "NDI", Signal = "WATCHOUT-PREVIEW" }],
+            CaptureDevices = [new CaptureDevice { Id = Ids.New("cap"), Name = "HDMI Capture", NodeId = "local-runner", Kind = "HDMI", Signal = "WatchMe-CAPTURE" }],
             Variables =
             [
                 new ShowVariable { Id = Ids.New("var"), Name = "intensity", Value = 1, Min = 0, Max = 1, Protocol = "osc", Address = "/watchin/intensity" },
@@ -205,7 +205,7 @@ public static class ShowFactory
 
     public static Show MakeDemoShow()
     {
-        var show = EmptyShow("WATCHOUT Demo — LED Wall");
+        var show = EmptyShow("WatchMe Demo — LED Wall");
         show.Displays =
         [
             EmptyDisplay(new Display { Name = "LED Left", X = 0, Y = 0, Width = 1920, Height = 1080, Channel = 1, NodeId = "local-runner" }),
@@ -214,9 +214,9 @@ public static class ShowFactory
         ];
 
         var aurora = EmptyAsset(new Asset { Name = "Aurora Wash", Kind = AssetKind.Procedural, Codec = "Procedural", Duration = 30_000, Color = "#22d3ee", Url = "procedural:aurora", Notes = "Live generated aurora wash across the wall" });
-        var bars = EmptyAsset(new Asset { Name = "Color Bars HDR", Kind = AssetKind.Image, Codec = "PNG", Duration = 8000, Color = "#fbbf24", Url = "watchout:demo/bars" });
-        var title = EmptyAsset(new Asset { Name = "Show Title Card", Kind = AssetKind.Image, Codec = "PNG", Duration = 6000, Color = "#fb7185", Url = "watchout:demo/title" });
-        var grid = EmptyAsset(new Asset { Name = "Pixel Grid", Kind = AssetKind.Image, Codec = "PNG", Duration = 10_000, Color = "#64748b", Url = "watchout:demo/grid" });
+        var bars = EmptyAsset(new Asset { Name = "Color Bars HDR", Kind = AssetKind.Image, Codec = "PNG", Duration = 8000, Color = "#fbbf24", Url = "watchme:demo/bars" });
+        var title = EmptyAsset(new Asset { Name = "Show Title Card", Kind = AssetKind.Image, Codec = "PNG", Duration = 6000, Color = "#fb7185", Url = "watchme:demo/title" });
+        var grid = EmptyAsset(new Asset { Name = "Pixel Grid", Kind = AssetKind.Image, Codec = "PNG", Duration = 10_000, Color = "#64748b", Url = "watchme:demo/grid" });
         var ndi = EmptyAsset(new Asset { Name = "NDI Program", Kind = AssetKind.Ndi, Codec = "NDI HX3", Duration = 60_000, Color = "#4ade80", Url = "procedural:ndi", Notes = "Placeholder until a capture device is connected" });
         var sting = EmptyAsset(new Asset { Name = "Impact Sting", Kind = AssetKind.Audio, Codec = "WAV 48k", Duration = 2500, Width = 0, Height = 0, Color = "#38bdf8", Url = "" });
         show.Assets = [aurora, bars, title, grid, ndi, sting];

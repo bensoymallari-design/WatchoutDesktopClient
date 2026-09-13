@@ -230,7 +230,7 @@ public static class Codecs
         if (string.IsNullOrWhiteSpace(url)) return null;
         if (url.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return Uri.UnescapeDataString(uri.LocalPath);
-        if (url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("procedural:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        if (url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("procedural:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || url.StartsWith("capture:", StringComparison.OrdinalIgnoreCase))
             return null;
         if (File.Exists(url)) return url;
         return null;

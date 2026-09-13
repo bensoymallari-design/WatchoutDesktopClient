@@ -93,4 +93,40 @@ public class SessionAndShowTests
         Assert.Contains("\"playback\": \"stop\"", json);
         Assert.DoesNotContain("\"type\": \"Media\"", json);
     }
+
+    [Fact]
+    public void CaptureUrlRoundTripAndConnectCaptureAddsLiveCue()
+    {
+        Assert.True(LiveSources.IsCaptureUrl("capture:elgato-1"));
+        Assert.Equal("elgato-1", LiveSources.CaptureDeviceId("capture:elgato-1"));
+        Assert.Equal("capture:elgato-1", LiveSources.CaptureUrl("elgato-1"));
+
+        var session = new ProducerSession();
+        session.NewShow();
+        var asset = session.ConnectCapture("elgato-1", "Elgato 4K");
+        Assert.Equal(AssetKind.Capture, asset.Kind);
+        Assert.Equal("capture:elgato-1", asset.Url);
+        Assert.True(LiveSources.IsCapture(asset));
+        Assert.Contains(session.Show!.CaptureDevices, d => d.Signal == "elgato-1");
+        var cue = session.Show.Timelines.SelectMany(t => t.Cues).First(c => c.AssetId == asset.Id);
+        Assert.True(cue.FreeRunning);
+        Assert.True(cue.Duration >= LiveSources.LiveCueDurationMs);
+        Assert.NotNull(Tweens.EvaluateCue(cue, 0));
+        Assert.NotNull(Tweens.EvaluateCue(cue, cue.Duration + 5_000));
+    }
+
+    [Fact]
+    public void FreeRunningCueStaysVisibleOutsideWindow()
+    {
+        var cue = ShowFactory.EmptyCue(new Cue
+        {
+            LayerId = "l",
+            Start = 1_000,
+            Duration = 500,
+            FreeRunning = true,
+            Opacity = 100,
+        });
+        Assert.NotNull(Tweens.EvaluateCue(cue, 0));
+        Assert.NotNull(Tweens.EvaluateCue(cue, 10_000));
+    }
 }

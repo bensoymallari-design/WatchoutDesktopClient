@@ -232,7 +232,7 @@ public sealed class ShowNode
     public double GpuLoad { get; set; }
     public double Ram { get; set; }
     public double Disk { get; set; }
-    public string Version { get; set; } = "7.8.12";
+    public string Version { get; set; } = "1.0.0";
 }
 
 public sealed class AudioDevice
@@ -250,7 +250,7 @@ public sealed class CaptureDevice
     public string Name { get; set; } = "NDI Source 1";
     public string NodeId { get; set; } = "local-runner";
     public string Kind { get; set; } = "NDI";
-    public string Signal { get; set; } = "WATCHOUT-PREVIEW";
+    public string Signal { get; set; } = "WatchMe-CAPTURE";
 }
 
 public sealed class ShowVariable

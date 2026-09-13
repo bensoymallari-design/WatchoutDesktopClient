@@ -13,7 +13,7 @@ public sealed class OutputWindow : Window
     public OutputWindow(Display display, OutputScreen screen, bool playAudio)
     {
         DisplayId = display.Id;
-        Title = $"WATCHOUT · {display.Name}";
+        Title = $"WatchMe · {display.Name}";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         Background = System.Windows.Media.Brushes.Black;

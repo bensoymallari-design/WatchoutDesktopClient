@@ -3,6 +3,6 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Watchout.Core</RootNamespace>
     <AssemblyName>Watchout.Core</AssemblyName>
-    <Description>WATCHOUT Producer show model, timeline, stage geometry, and H.264/DXVA media policy.</Description>
+    <Description>WatchMe show model, timeline, stage geometry, live capture URLs, and H.264/DXVA media policy.</Description>
   </PropertyGroup>
 </Project>

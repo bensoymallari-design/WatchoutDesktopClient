@@ -29,5 +29,5 @@ jobs:
         run: dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
       - uses: actions/upload-artifact@v4
         with:
-          name: WatchoutProducer-win-x64
+          name: WatchMe-win-x64
           path: publish
