@@ -21,6 +21,7 @@ public sealed class ProducerSession
     public List<WindowLayout> Windows { get; private set; } = WindowLayouts.DefaultLayout();
     public bool Snap { get; set; } = true;
     public bool ClickJumpsToTime { get; set; } = true;
+    public StageEditMode StageEditMode { get; private set; } = StageEditMode.Cues;
     public double TimelineZoom { get; set; } = 0.012;
     public double TimelineScroll { get; set; }
     public string? HoverCueId { get; set; }
@@ -148,6 +149,35 @@ public sealed class ProducerSession
         var tl = ActiveTimeline;
         if (tl is null) return;
         SetPlayback(tl.Id, tl.Playback == PlaybackState.Play ? PlaybackState.Pause : PlaybackState.Play);
+    }
+
+    public void Play(string? timelineId = null) => SetPlayback(timelineId ?? ActiveTimelineId, PlaybackState.Play);
+
+    public void Pause(string? timelineId = null) => SetPlayback(timelineId ?? ActiveTimelineId, PlaybackState.Pause);
+
+    public void Stop(string? timelineId = null) => SetPlayback(timelineId, PlaybackState.Stop);
+
+    public void SetStageEditMode(StageEditMode mode)
+    {
+        if (StageEditMode == mode) return;
+        StageEditMode = mode;
+        if (mode == StageEditMode.Displays)
+            Log("Display canvas — click a display to move and resize it. Amber handles edit Width×Height.");
+        else
+            Log("Cue canvas — double-click a display (or hold Alt) to edit the display instead.");
+        Changed?.Invoke();
+    }
+
+    public void SetSnap(bool snap)
+    {
+        Snap = snap;
+        Changed?.Invoke();
+    }
+
+    public void SetClickJumpsToTime(bool value)
+    {
+        ClickJumpsToTime = value;
+        Changed?.Invoke();
     }
 
     public void Tick(double dtMs)
@@ -329,6 +359,23 @@ public sealed class ProducerSession
 
     public void DeleteSelected()
     {
+        if (Selection.Kind == SelectionKind.Timeline)
+        {
+            var id = Selection.Ids.FirstOrDefault();
+            if (id is not null) DeleteTimeline(id);
+            return;
+        }
+        if (Selection.Kind == SelectionKind.Layer)
+        {
+            var id = Selection.Ids.FirstOrDefault();
+            if (id is not null) DeleteLayer(id);
+            return;
+        }
+        if (Selection.Kind == SelectionKind.Display && Show is not null && Show.Displays.Count <= Selection.Ids.Count)
+        {
+            Log("Keep at least one display", "warn");
+            return;
+        }
         Mutate(show =>
         {
             if (Selection.Kind == SelectionKind.Cue)
@@ -344,13 +391,35 @@ public sealed class ProducerSession
                 var drop = Selection.Ids.ToHashSet();
                 show.Displays = show.Displays.Where(d => !drop.Contains(d.Id)).ToList();
             }
-            else if (Selection.Kind == SelectionKind.Timeline)
-            {
-                show.Timelines = TimelineMath.RemoveTimelinesById(show.Timelines, Selection.Ids, t => t.Id);
-                ActiveTimelineId = show.Timelines.First().Id;
-            }
             Selection = new Selection();
         });
+    }
+
+    public void NudgeSelected(double dx, double dy)
+    {
+        if (dx == 0 && dy == 0) return;
+        if (Selection.Kind == SelectionKind.Cue)
+        {
+            Mutate(show =>
+            {
+                foreach (var cue in SelectedCues(show))
+                {
+                    cue.Position.X += dx;
+                    cue.Position.Y += dy;
+                }
+            });
+        }
+        else if (Selection.Kind == SelectionKind.Display)
+        {
+            Mutate(show =>
+            {
+                foreach (var display in show.Displays.Where(d => Selection.Ids.Contains(d.Id)))
+                {
+                    display.X += dx;
+                    display.Y += dy;
+                }
+            });
+        }
     }
 
     public void DuplicateSelected()
@@ -463,7 +532,28 @@ public sealed class ProducerSession
             var tl = ShowFactory.EmptyTimeline($"Timeline {show.Timelines.Count + 1}");
             show.Timelines.Add(tl);
             ActiveTimelineId = tl.Id;
+            Selection = new Selection { Kind = SelectionKind.Timeline, Ids = [tl.Id] };
         });
+    }
+
+    public void DeleteTimeline(string? id = null)
+    {
+        id ??= Selection.Kind == SelectionKind.Timeline ? Selection.Ids.FirstOrDefault() : ActiveTimelineId;
+        if (Show is null || id is null) return;
+        if (!TimelineMath.CanRemoveTimeline(Show.Timelines.Count))
+        {
+            Log("Keep at least one timeline", "warn");
+            return;
+        }
+        if (Show.Timelines.All(t => t.Id != id)) return;
+        Mutate(show =>
+        {
+            show.Timelines = TimelineMath.RemoveTimelinesById(show.Timelines, [id], t => t.Id);
+            if (ActiveTimelineId == id)
+                ActiveTimelineId = show.Timelines[0].Id;
+            Selection = new Selection();
+        });
+        Log("Deleted timeline");
     }
 
     public void UpdateTimeline(string id, Action<Timeline> patch) =>
@@ -473,14 +563,79 @@ public sealed class ProducerSession
             if (tl is not null) patch(tl);
         });
 
+    public void SetLoop(string? id, bool loop)
+    {
+        id ??= ActiveTimelineId;
+        if (id is null) return;
+        UpdateTimeline(id, t => t.Loop = loop);
+        Log(loop ? "Loop on — play repeats this timeline" : "Loop off — play stops at the end");
+    }
+
+    public void ToggleLoop(string? id = null)
+    {
+        var tl = id is null ? ActiveTimeline : Show?.Timelines.FirstOrDefault(t => t.Id == id);
+        if (tl is null) return;
+        SetLoop(tl.Id, !tl.Loop);
+    }
+
     public void AddLayer()
     {
         Mutate(show =>
         {
             var tl = ActiveTimelineOf(show);
-            tl?.Layers.Add(ShowFactory.EmptyLayer($"Layer {tl.Layers.Count + 1}", tl.Layers.Count + 1));
+            if (tl is null) return;
+            var layer = ShowFactory.EmptyLayer($"Layer {tl.Layers.Count + 1}", tl.Layers.Count + 1);
+            tl.Layers.Add(layer);
+            Selection = new Selection { Kind = SelectionKind.Layer, Ids = [layer.Id] };
         });
     }
+
+    public void InsertLayer(string? afterId = null)
+    {
+        Mutate(show =>
+        {
+            var tl = ActiveTimelineOf(show);
+            if (tl is null) return;
+            afterId ??= Selection.Kind == SelectionKind.Layer ? Selection.Ids.FirstOrDefault() : null;
+            var at = TimelineMath.InsertLayerIndex(tl.Layers, afterId);
+            var layer = ShowFactory.EmptyLayer($"Layer {tl.Layers.Count + 1}", at + 1);
+            tl.Layers.Insert(at, layer);
+            Selection = new Selection { Kind = SelectionKind.Layer, Ids = [layer.Id] };
+        });
+    }
+
+    public void DeleteLayer(string? id = null)
+    {
+        id ??= Selection.Kind == SelectionKind.Layer ? Selection.Ids.FirstOrDefault() : ActiveTimeline?.Layers.LastOrDefault()?.Id;
+        if (id is null) return;
+        var tl = ActiveTimeline;
+        if (tl is null) return;
+        if (!TimelineMath.CanRemoveLayer(tl.Layers.Count))
+        {
+            Log("Keep at least one layer", "warn");
+            return;
+        }
+        if (tl.Layers.All(l => l.Id != id)) return;
+        Mutate(show =>
+        {
+            var live = ActiveTimelineOf(show);
+            if (live is null) return;
+            var next = TimelineMath.RemoveLayer(live.Layers, live.Cues, id);
+            if (next is null) return;
+            live.Layers = next.Value.Layers;
+            live.Cues = next.Value.Cues;
+            if (Selection.Kind == SelectionKind.Layer && Selection.Ids.Contains(id))
+                Selection = new Selection();
+        });
+        Log("Deleted layer");
+    }
+
+    public void UpdateLayer(string id, Action<Layer> patch) =>
+        Mutate(show =>
+        {
+            var layer = show.Timelines.SelectMany(t => t.Layers).FirstOrDefault(l => l.Id == id);
+            if (layer is not null) patch(layer);
+        });
 
     public void SetShowName(string name)
     {

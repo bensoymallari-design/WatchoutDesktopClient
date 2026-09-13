@@ -24,9 +24,11 @@ public sealed class StageSurface : Canvas
     string? _dragDisplayId;
     Point _dragDisplayOrigin;
     string? _resizeHandle;
+    bool _resizeDisplay;
     StageRect _resizeStart;
     string? _hoverDisplayId;
     bool _panning;
+    bool _dragArmed;
     Point _panStart;
     (double X, double Y, double Zoom) _panCam;
 
@@ -53,6 +55,8 @@ public sealed class StageSurface : Canvas
             _dragCueId = null;
             _dragDisplayId = null;
             _resizeHandle = null;
+            _resizeDisplay = false;
+            _dragArmed = false;
             ReleaseMouseCapture();
         };
         MouseMove += OnMove;
@@ -110,7 +114,9 @@ public sealed class StageSurface : Canvas
                 _chrome.Add(border);
                 var label = new TextBlock
                 {
-                    Text = $"{display.Name}  {display.Width:0}×{display.Height:0}",
+                    Text = session.StageEditMode == StageEditMode.Displays || selected
+                        ? $"{display.Name}  {display.Width:0}×{display.Height:0}  ·  canvas"
+                        : $"{display.Name}  {display.Width:0}×{display.Height:0}",
                     Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
                     FontSize = 11,
                     IsHitTestVisible = false,
@@ -119,6 +125,8 @@ public sealed class StageSurface : Canvas
                 SetTop(label, r.Y + 4);
                 Children.Add(label);
                 _chrome.Add(label);
+                if (selected)
+                    DrawHandles(r, 30);
             }
         }
 
@@ -185,23 +193,28 @@ public sealed class StageSurface : Canvas
                 Children.Add(outline);
                 _chrome.Add(outline);
                 SetZIndex(outline, 20);
-                foreach (var handle in new[] { "nw", "n", "ne", "e", "se", "s", "sw", "w" })
-                {
-                    var (hx, hy) = HandlePoint(mapped, handle);
-                    var knob = new Rectangle
-                    {
-                        Width = 8,
-                        Height = 8,
-                        Fill = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
-                        IsHitTestVisible = false,
-                    };
-                    SetLeft(knob, hx - 4);
-                    SetTop(knob, hy - 4);
-                    Children.Add(knob);
-                    _chrome.Add(knob);
-                    SetZIndex(knob, 21);
-                }
+                DrawHandles(mapped, 21);
             }
+        }
+    }
+
+    void DrawHandles(Rect mapped, int z)
+    {
+        foreach (var handle in new[] { "nw", "n", "ne", "e", "se", "s", "sw", "w" })
+        {
+            var (hx, hy) = HandlePoint(mapped, handle);
+            var knob = new Rectangle
+            {
+                Width = 8,
+                Height = 8,
+                Fill = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+                IsHitTestVisible = false,
+            };
+            SetLeft(knob, hx - 4);
+            SetTop(knob, hy - 4);
+            Children.Add(knob);
+            _chrome.Add(knob);
+            SetZIndex(knob, z);
         }
     }
 
@@ -376,44 +389,66 @@ public sealed class StageSurface : Canvas
         var show = App.Session.Show;
         if (show is null) return;
         var stage = ScreenToStage(e.GetPosition(this), show);
-        var media = PlaybackClock.VisibleMedia(show).ToList();
-        var selectedCue = App.Session.Selection.Kind == SelectionKind.Cue
-            ? media.FirstOrDefault(ev => App.Session.Selection.Ids.Contains(ev.Cue.Id))
-            : null;
-        if (selectedCue is not null)
+        if (e.ClickCount >= 2)
         {
-            var asset = show.Assets.FirstOrDefault(a => a.Id == selectedCue.Cue.AssetId);
-            var handle = StageGeometry.HitResizeHandle(StageGeometry.CueRect(selectedCue, asset), stage, Viewport(show).Scale);
-            if (handle is not null)
+            var canvas = HitAt(show, stage, preferDisplay: true);
+            if (canvas.Kind is StageHitKind.Display or StageHitKind.DisplayHandle)
             {
-                App.Session.Select(SelectionKind.Cue, selectedCue.Cue.Id);
-                _resizeHandle = handle;
-                _resizeStart = StageGeometry.CueRect(selectedCue, asset);
-                _dragStart = e.GetPosition(this);
-                CaptureMouse();
+                App.Session.SetStageEditMode(StageEditMode.Displays);
+                App.Session.Select(SelectionKind.Display, canvas.Id!);
                 return;
             }
         }
-        var hitCue = StageGeometry.HitCue(media, show.Assets, stage);
-        if (hitCue is not null)
+        var hit = HitAt(show, stage, Keyboard.Modifiers.HasFlag(ModifierKeys.Alt));
+        _dragArmed = false;
+        switch (hit.Kind)
         {
-            App.Session.Select(SelectionKind.Cue, hitCue.Cue.Id);
-            _dragCueId = hitCue.Cue.Id;
-            _dragStart = e.GetPosition(this);
-            _dragCueOrigin = new Point(hitCue.Cue.Position.X, hitCue.Cue.Position.Y);
-            CaptureMouse();
-            return;
+            case StageHitKind.DisplayHandle:
+                App.Session.Select(SelectionKind.Display, hit.Id!);
+                _resizeHandle = hit.Handle;
+                _resizeDisplay = true;
+                _resizeStart = StageGeometry.DisplayRect(show.Displays.First(d => d.Id == hit.Id));
+                _dragStart = e.GetPosition(this);
+                CaptureMouse();
+                return;
+            case StageHitKind.CueHandle:
+                App.Session.Select(SelectionKind.Cue, hit.Id!);
+                _resizeHandle = hit.Handle;
+                _resizeDisplay = false;
+                var ev = PlaybackClock.VisibleMedia(show).FirstOrDefault(c => c.Cue.Id == hit.Id);
+                var asset = show.Assets.FirstOrDefault(a => a.Id == ev?.Cue.AssetId);
+                _resizeStart = ev is null ? default : StageGeometry.CueRect(ev, asset);
+                _dragStart = e.GetPosition(this);
+                CaptureMouse();
+                return;
+            case StageHitKind.Cue:
+                App.Session.Select(SelectionKind.Cue, hit.Id!);
+                var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == hit.Id);
+                _dragCueId = hit.Id;
+                _dragStart = e.GetPosition(this);
+                _dragCueOrigin = new Point(cue?.Position.X ?? 0, cue?.Position.Y ?? 0);
+                CaptureMouse();
+                return;
+            case StageHitKind.Display:
+                App.Session.Select(SelectionKind.Display, hit.Id!);
+                var display = show.Displays.First(d => d.Id == hit.Id);
+                _dragDisplayId = hit.Id;
+                _dragStart = e.GetPosition(this);
+                _dragDisplayOrigin = new Point(display.X, display.Y);
+                _dragArmed = true;
+                CaptureMouse();
+                return;
+            default:
+                App.Session.ClearSelection();
+                break;
         }
-        var hitDisp = StageGeometry.HitDisplay(show.Displays, stage);
-        if (hitDisp is not null)
-        {
-            App.Session.Select(SelectionKind.Display, hitDisp.Id);
-            _dragDisplayId = hitDisp.Id;
-            _dragStart = e.GetPosition(this);
-            _dragDisplayOrigin = new Point(hitDisp.X, hitDisp.Y);
-            CaptureMouse();
-        }
-        else App.Session.ClearSelection();
+    }
+
+    StageHit HitAt(Show show, (double X, double Y) stage, bool preferDisplay)
+    {
+        var live = PlaybackClock.VisibleMedia(show);
+        var rects = StageGeometry.CueRects(live, show.Assets);
+        return StageGeometry.HitEditTarget(App.Session.StageEditMode, show.Displays, rects, App.Session.Selection, stage, Viewport(show).Scale, preferDisplay);
     }
 
     void OnMove(object sender, MouseEventArgs e)
@@ -436,32 +471,51 @@ public sealed class StageSurface : Canvas
             var next = StageGeometry.ResizeRect(_resizeStart, _resizeHandle, dx, dy, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
             if (App.Session.Snap)
             {
-                var guides = StageGeometry.DisplayGuides(show.Displays);
+                var guides = _resizeDisplay
+                    ? StageGeometry.DisplayMoveGuides(show.Displays, App.Session.Selection.Ids.FirstOrDefault())
+                    : StageGeometry.DisplayGuides(show.Displays);
                 next = StageGeometry.SnapResizeRect(next, _resizeHandle, guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
             }
-            var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => App.Session.Selection.Ids.Contains(c.Id));
-            var asset = cue?.AssetId is { } aid ? show.Assets.FirstOrDefault(a => a.Id == aid) : null;
-            if (cue is not null && asset is not null)
+            if (_resizeDisplay && App.Session.Selection.Ids.FirstOrDefault() is { } displayId)
             {
-                var fit = StageGeometry.RectToCueTransform(next, asset);
-                App.Session.UpdateCue(cue.Id, c =>
+                App.Session.UpdateDisplay(displayId, d =>
                 {
-                    c.Position = fit.Position;
-                    c.Scale = fit.Scale;
+                    d.X = Math.Round(next.X);
+                    d.Y = Math.Round(next.Y);
+                    d.Width = Math.Round(next.W);
+                    d.Height = Math.Round(next.H);
                 }, record: false);
+            }
+            else
+            {
+                var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => App.Session.Selection.Ids.Contains(c.Id));
+                var asset = cue?.AssetId is { } aid ? show.Assets.FirstOrDefault(a => a.Id == aid) : null;
+                if (cue is not null && asset is not null)
+                {
+                    var fit = StageGeometry.RectToCueTransform(next, asset);
+                    App.Session.UpdateCue(cue.Id, c =>
+                    {
+                        c.Position = fit.Position;
+                        c.Scale = fit.Scale;
+                    }, record: false);
+                }
             }
             return;
         }
         if (_dragDisplayId is not null)
         {
             var now = e.GetPosition(this);
+            if (_dragArmed && Math.Abs(now.X - _dragStart.X) < 4 && Math.Abs(now.Y - _dragStart.Y) < 4) return;
+            _dragArmed = false;
             var x = _dragDisplayOrigin.X + (now.X - _dragStart.X) / scale;
             var y = _dragDisplayOrigin.Y + (now.Y - _dragStart.Y) / scale;
             if (App.Session.Snap)
             {
+                var display = show.Displays.FirstOrDefault(d => d.Id == _dragDisplayId);
                 var guides = StageGeometry.DisplayMoveGuides(show.Displays, _dragDisplayId);
-                x = StageGeometry.SnapValue(x, guides.X, StageGeometry.SnapThreshold(scale));
-                y = StageGeometry.SnapValue(y, guides.Y, StageGeometry.SnapThreshold(scale));
+                var snapped = StageGeometry.SnapRect(new StageRect(x, y, display?.Width ?? 1920, display?.Height ?? 1080), guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
+                x = snapped.X;
+                y = snapped.Y;
             }
             App.Session.UpdateDisplay(_dragDisplayId, d =>
             {
@@ -470,7 +524,22 @@ public sealed class StageSurface : Canvas
             }, record: false);
             return;
         }
-        if (_dragCueId is null) return;
+        if (_dragCueId is null)
+        {
+            if (Editing && e.LeftButton != MouseButtonState.Pressed)
+            {
+                var stage = ScreenToStage(e.GetPosition(this), show);
+                var hit = HitAt(show, stage, Keyboard.Modifiers.HasFlag(ModifierKeys.Alt));
+                Cursor = hit.Kind switch
+                {
+                    StageHitKind.DisplayHandle or StageHitKind.CueHandle => HandleCursor(hit.Handle),
+                    StageHitKind.Cue => Cursors.SizeAll,
+                    StageHitKind.Display => Cursors.Hand,
+                    _ => Cursors.Arrow,
+                };
+            }
+            return;
+        }
         var pos = e.GetPosition(this);
         var cx = _dragCueOrigin.X + (pos.X - _dragStart.X) / scale;
         var cy = _dragCueOrigin.Y + (pos.Y - _dragStart.Y) / scale;
@@ -489,6 +558,15 @@ public sealed class StageSurface : Canvas
         }
         App.Session.UpdateCue(_dragCueId, c => c.Position = new Vec3 { X = Math.Round(cx), Y = Math.Round(cy), Z = c.Position.Z }, record: false);
     }
+
+    static Cursor HandleCursor(string? handle) => handle switch
+    {
+        "n" or "s" => Cursors.SizeNS,
+        "e" or "w" => Cursors.SizeWE,
+        "ne" or "sw" => Cursors.SizeNESW,
+        "nw" or "se" => Cursors.SizeNWSE,
+        _ => Cursors.SizeAll,
+    };
 
     (double X, double Y) ScreenToStage(Point p, Show show)
     {

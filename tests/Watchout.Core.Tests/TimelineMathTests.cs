@@ -95,6 +95,22 @@ public class TimelineMathTests
         Assert.Equal(["a", "c"], TimelineMath.RemoveTimelinesById(tls, ["b"], t => t.Id).Select(t => t.Id));
         Assert.Equal(["a", "b", "c"], TimelineMath.RemoveTimelinesById(tls, ["a", "b", "c"], t => t.Id).Select(t => t.Id));
         Assert.Equal(["only"], TimelineMath.RemoveTimelinesById([new Timeline { Id = "only" }], ["only"], t => t.Id).Select(t => t.Id));
+        Assert.False(TimelineMath.CanRemoveTimeline(1));
+        Assert.True(TimelineMath.CanRemoveTimeline(2));
+    }
+
+    [Fact]
+    public void RemovingLayerDropsItsCuesAndKeepsOne()
+    {
+        var layers = new List<Layer> { new() { Id = "a" }, new() { Id = "b" } };
+        var cues = new List<Cue> { new() { Id = "c1", LayerId = "a" }, new() { Id = "c2", LayerId = "b" } };
+        var next = TimelineMath.RemoveLayer(layers, cues, "a");
+        Assert.NotNull(next);
+        Assert.Equal(["b"], next.Value.Layers.Select(l => l.Id));
+        Assert.Equal(["c2"], next.Value.Cues.Select(c => c.Id));
+        Assert.Null(TimelineMath.RemoveLayer([new Layer { Id = "only" }], cues, "only"));
+        Assert.Equal(1, TimelineMath.InsertLayerIndex(layers, "a"));
+        Assert.Equal(2, TimelineMath.InsertLayerIndex(layers, null));
     }
 
     [Fact]

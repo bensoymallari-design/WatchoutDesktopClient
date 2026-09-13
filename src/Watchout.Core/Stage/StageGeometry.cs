@@ -5,6 +5,8 @@ namespace Watchout.Core.Stage;
 
 public readonly record struct StageRect(double X, double Y, double W, double H);
 
+public readonly record struct StageHit(StageHitKind Kind, string? Id = null, string? Handle = null);
+
 public static class StageGeometry
 {
     public static StageRect DisplayRect(Display d) => new(d.X, d.Y, d.Width, d.Height);
@@ -291,5 +293,89 @@ public static class StageGeometry
                    cue.Position.Y < d.Y + d.Height)
                ?? displays.FirstOrDefault(d => d.Enabled)
                ?? displays[0];
+    }
+
+    public static double DisplayChromeHeight(double zoom) => Math.Max(24, 24 / Math.Max(0.04, zoom));
+
+    public static bool PointInDisplayChrome(Display d, (double X, double Y) pt, double zoom)
+    {
+        if (!d.Enabled) return false;
+        var h = Math.Min(DisplayChromeHeight(zoom), d.Height);
+        return pt.X >= d.X && pt.X <= d.X + d.Width && pt.Y >= d.Y && pt.Y <= d.Y + h;
+    }
+
+    public static List<(Cue Cue, StageRect Rect)> CueRects(IEnumerable<Cue> cues, IReadOnlyList<Asset> assets)
+    {
+        var byId = assets.ToDictionary(a => a.Id);
+        return cues.Select(c =>
+        {
+            Asset? asset = c.AssetId is { } id && byId.TryGetValue(id, out var a) ? a : null;
+            return (c, CueRect(c, asset));
+        }).ToList();
+    }
+
+    public static List<(Cue Cue, StageRect Rect)> CueRects(IEnumerable<EvaluatedCue> cues, IReadOnlyList<Asset> assets)
+    {
+        var byId = assets.ToDictionary(a => a.Id);
+        return cues.Select(ev =>
+        {
+            Asset? asset = ev.Cue.AssetId is { } id && byId.TryGetValue(id, out var a) ? a : null;
+            return (ev.Cue, CueRect(ev, asset));
+        }).ToList();
+    }
+
+    public static StageHit HitEditTarget(
+        StageEditMode mode,
+        IReadOnlyList<Display> displays,
+        IReadOnlyList<(Cue Cue, StageRect Rect)> cueRects,
+        Selection selection,
+        (double X, double Y) pt,
+        double zoom,
+        bool preferDisplay = false)
+    {
+        var editDisplays = mode == StageEditMode.Displays || preferDisplay;
+        Display? selectedDisplay = selection.Kind == SelectionKind.Display
+            ? displays.FirstOrDefault(d => selection.Ids.Contains(d.Id) && d.Enabled)
+            : null;
+        if (selectedDisplay is not null)
+        {
+            var handle = HitResizeHandle(DisplayRect(selectedDisplay), pt, zoom);
+            if (handle is not null)
+                return new StageHit(StageHitKind.DisplayHandle, selectedDisplay.Id, handle);
+        }
+
+        if (editDisplays)
+        {
+            var display = HitDisplay(displays, pt);
+            return display is null ? default : new StageHit(StageHitKind.Display, display.Id);
+        }
+
+        for (var i = displays.Count - 1; i >= 0; i--)
+        {
+            if (PointInDisplayChrome(displays[i], pt, zoom))
+                return new StageHit(StageHitKind.Display, displays[i].Id);
+        }
+
+        if (selection.Kind == SelectionKind.Cue)
+        {
+            var selected = cueRects.LastOrDefault(c => selection.Ids.Contains(c.Cue.Id));
+            if (selected.Cue is not null)
+            {
+                var handle = HitResizeHandle(selected.Rect, pt, zoom);
+                if (handle is not null)
+                    return new StageHit(StageHitKind.CueHandle, selected.Cue.Id, handle);
+            }
+        }
+
+        for (var i = cueRects.Count - 1; i >= 0; i--)
+        {
+            var (cue, rect) = cueRects[i];
+            if (cue.Type != CueType.Media) continue;
+            if (PointInRect(pt, rect))
+                return new StageHit(StageHitKind.Cue, cue.Id);
+        }
+
+        var hitDisplay = HitDisplay(displays, pt);
+        return hitDisplay is null ? default : new StageHit(StageHitKind.Display, hitDisplay.Id);
     }
 }

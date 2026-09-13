@@ -123,6 +123,25 @@ public static class TimelineMath
         return next.Count > 0 ? next : timelines.ToList();
     }
 
+    public static bool CanRemoveTimeline(int count) => count > 1;
+
+    public static bool CanRemoveLayer(int count) => count > 1;
+
+    public static (List<Layer> Layers, List<Cue> Cues)? RemoveLayer(IReadOnlyList<Layer> layers, IReadOnlyList<Cue> cues, string id)
+    {
+        if (!CanRemoveLayer(layers.Count) || layers.All(l => l.Id != id)) return null;
+        return (layers.Where(l => l.Id != id).ToList(), cues.Where(c => c.LayerId != id).ToList());
+    }
+
+    public static int InsertLayerIndex(IReadOnlyList<Layer> layers, string? afterId)
+    {
+        if (afterId is null) return layers.Count;
+        var idx = -1;
+        for (var i = 0; i < layers.Count; i++)
+            if (layers[i].Id == afterId) idx = i;
+        return idx >= 0 ? idx + 1 : layers.Count;
+    }
+
     public static Show PurgeAssets(Show show, IEnumerable<string> ids)
     {
         var drop = ids.ToHashSet();

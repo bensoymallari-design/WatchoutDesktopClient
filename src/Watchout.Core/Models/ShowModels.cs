@@ -32,6 +32,21 @@ public enum SelectionKind
     None, Cue, Layer, Timeline, Asset, Display, Node, Variable, Device, CueSet, TweenPoint
 }
 
+public enum StageEditMode
+{
+    Cues,
+    Displays
+}
+
+public enum StageHitKind
+{
+    None,
+    Cue,
+    CueHandle,
+    Display,
+    DisplayHandle
+}
+
 public enum WindowId
 {
     Stage, Properties, Assets, Timelines, Timeline, Devices, Nodes, Variables, Cues, CueSets, Log

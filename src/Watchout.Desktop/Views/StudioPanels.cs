@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Watchout.Core;
 using Watchout.Core.Models;
 using Watchout.Desktop.Media;
 
@@ -92,36 +93,151 @@ public class AssetsPanel : UserControl
 
 public class TimelinesPanel : UserControl
 {
-    readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent };
-    string _fp = "";
+    readonly StackPanel _rows = new();
+    readonly Dictionary<string, TimelineRow> _byId = [];
+    string _ids = "";
 
     public TimelinesPanel()
     {
         var root = new DockPanel();
-        var add = new Button { Content = "Add timeline", Style = (Style)Application.Current.FindResource("Wo.Button"), Margin = new Thickness(8), HorizontalAlignment = HorizontalAlignment.Left };
-        add.Click += (_, _) => App.Session.AddTimeline();
-        DockPanel.SetDock(add, Dock.Bottom);
-        root.Children.Add(add);
-        root.Children.Add(_list);
-        Content = root;
-        _list.SelectionChanged += (_, _) =>
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 4, 8, 8) };
+        bar.Children.Add(Mini("Add timeline", () => App.Session.AddTimeline()));
+        bar.Children.Add(Mini("Delete", () => App.Session.DeleteTimeline()));
+        DockPanel.SetDock(bar, Dock.Bottom);
+        root.Children.Add(bar);
+        root.Children.Add(new ScrollViewer
         {
-            if (_list.SelectedItem is Timeline tl)
-                App.Session.SetActiveTimeline(tl.Id);
-        };
+            Content = _rows,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
+        Content = root;
+        ContextMenu = BuildMenu();
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
+    }
+
+    static ContextMenu BuildMenu()
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(Item("Add Timeline", () => App.Session.AddTimeline()));
+        menu.Items.Add(Item("Loop", () => App.Session.ToggleLoop()));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Delete Timeline", () => App.Session.DeleteTimeline(), true));
+        return menu;
+    }
+
+    static MenuItem Item(string header, Action click, bool danger = false)
+    {
+        var item = new MenuItem { Header = header };
+        if (danger) item.Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113));
+        item.Click += (_, _) => click();
+        return item;
+    }
+
+    static Button Mini(string label, Action click)
+    {
+        var b = new Button { Content = label, Style = (Style)Application.Current.FindResource("Wo.Button"), Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 8, 0) };
+        b.Click += (_, _) => click();
+        return b;
     }
 
     public void Reload()
     {
         var show = App.Session.Show;
-        var fp = show is null ? "" : string.Join("|", show.Timelines.Select(t => t.Id + t.Name + t.Loop));
-        if (fp == _fp && _list.Items.Count > 0) return;
-        _fp = fp;
-        _list.ItemsSource = show?.Timelines.ToList();
-        _list.DisplayMemberPath = "Name";
-        if (App.Session.ActiveTimeline is { } cur)
-            _list.SelectedItem = show?.Timelines.FirstOrDefault(t => t.Id == cur.Id);
+        var ids = show is null ? "" : string.Join("|", show.Timelines.Select(t => t.Id));
+        if (ids != _ids)
+        {
+            _ids = ids;
+            _rows.Children.Clear();
+            _byId.Clear();
+            if (show is not null)
+            {
+                foreach (var tl in show.Timelines)
+                {
+                    var row = new TimelineRow(tl);
+                    _byId[tl.Id] = row;
+                    _rows.Children.Add(row);
+                }
+            }
+        }
+        foreach (var tl in show?.Timelines ?? [])
+            if (_byId.TryGetValue(tl.Id, out var row)) row.Sync(tl);
+    }
+
+    sealed class TimelineRow : Border
+    {
+        readonly TextBlock _name = new() { FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        readonly TextBlock _clock = new() { FontFamily = new FontFamily("Consolas"), FontSize = 11, Margin = new Thickness(0, 2, 0, 0) };
+        readonly CheckBox _loop = new() { Content = "Loop", Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly string _id;
+        bool _syncing;
+
+        public TimelineRow(Timeline tl)
+        {
+            _id = tl.Id;
+            Margin = new Thickness(6, 4, 6, 0);
+            Padding = new Thickness(8, 6, 8, 6);
+            CornerRadius = new CornerRadius(3);
+            BorderThickness = new Thickness(1);
+            var root = new DockPanel();
+            var tools = new StackPanel { Orientation = Orientation.Horizontal };
+            tools.Children.Add(_loop);
+            tools.Children.Add(Icon("Play", () => App.Session.Play(_id)));
+            tools.Children.Add(Icon("Pause", () => App.Session.Pause(_id)));
+            tools.Children.Add(Icon("Stop", () => App.Session.Stop(_id)));
+            tools.Children.Add(Icon("Del", () => App.Session.DeleteTimeline(_id)));
+            DockPanel.SetDock(tools, Dock.Bottom);
+            var text = new StackPanel();
+            text.Children.Add(_name);
+            text.Children.Add(_clock);
+            root.Children.Add(tools);
+            root.Children.Add(text);
+            Child = root;
+            _loop.Click += (_, _) =>
+            {
+                if (_syncing) return;
+                App.Session.SetLoop(_id, _loop.IsChecked == true);
+            };
+            MouseLeftButtonDown += (_, _) =>
+            {
+                App.Session.SetActiveTimeline(_id);
+                App.Session.Select(SelectionKind.Timeline, _id);
+            };
+            Sync(tl);
+        }
+
+        static Button Icon(string label, Action click)
+        {
+            var b = new Button
+            {
+                Content = label,
+                Style = (Style)Application.Current.FindResource("Wo.Button"),
+                Padding = new Thickness(6, 1, 6, 1),
+                Margin = new Thickness(0, 4, 6, 0),
+                FontSize = 11,
+            };
+            b.Click += (_, e) =>
+            {
+                e.Handled = true;
+                click();
+            };
+            return b;
+        }
+
+        public void Sync(Timeline tl)
+        {
+            _syncing = true;
+            _name.Text = tl.Name;
+            _clock.Text = $"{TimeFormat.FormatPlayTime(tl.Playhead)}  ·  {tl.Playback.ToString().ToUpperInvariant()}";
+            _loop.IsChecked = tl.Loop;
+            var active = App.Session.ActiveTimelineId == tl.Id;
+            var selected = App.Session.Selection.Kind == SelectionKind.Timeline && App.Session.Selection.Ids.Contains(tl.Id);
+            Background = new SolidColorBrush(active || selected ? Color.FromRgb(42, 36, 24) : Color.FromRgb(22, 22, 22));
+            BorderBrush = new SolidColorBrush(active ? Color.FromRgb(245, 166, 35) : Color.FromRgb(48, 48, 48));
+            _name.Foreground = (Brush)Application.Current.FindResource("Wo.Text");
+            _clock.Foreground = (Brush)Application.Current.FindResource("Wo.Muted");
+            _syncing = false;
+        }
     }
 }
 
@@ -268,11 +384,23 @@ public class PropertiesPanel : UserControl
     public void Reload()
     {
         var s = App.Session;
-        var fp = s.Selection.Kind + string.Join(",", s.Selection.Ids);
+        var show = s.Show;
+        var extra = "";
+        if (show is not null && s.Selection.Ids.Count > 0)
+        {
+            extra = s.Selection.Kind switch
+            {
+                SelectionKind.Timeline when show.Timelines.FirstOrDefault(t => s.Selection.Ids.Contains(t.Id)) is { } tl => tl.Loop + tl.Name + tl.Duration + tl.Rate + tl.Enabled,
+                SelectionKind.Layer when s.ActiveTimeline?.Layers.FirstOrDefault(l => s.Selection.Ids.Contains(l.Id)) is { } layer => layer.Name + layer.Enabled + layer.Locked,
+                SelectionKind.Display when show.Displays.FirstOrDefault(d => s.Selection.Ids.Contains(d.Id)) is { } d => d.Name + d.Enabled + d.Blend,
+                SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a => a.Name + a.Notes,
+                _ => "",
+            };
+        }
+        var fp = s.Selection.Kind + string.Join(",", s.Selection.Ids) + extra;
         if (fp == _fp) return;
         _fp = fp;
         _root.Children.Clear();
-        var show = s.Show;
         if (show is null) return;
         if (s.Selection.Kind == SelectionKind.Cue)
         {
@@ -290,17 +418,43 @@ public class PropertiesPanel : UserControl
             Check("Muted", cue.Muted == true, v => s.UpdateCue(cue.Id, c => c.Muted = v));
             Check("Fade in", cue.FadeIn, v => s.UpdateCue(cue.Id, c => c.FadeIn = v));
             Check("Fade out", cue.FadeOut, v => s.UpdateCue(cue.Id, c => c.FadeOut = v));
+            ActionBtn("Delete cue", () => s.DeleteSelected());
         }
         else if (s.Selection.Kind == SelectionKind.Display)
         {
             var d = show.Displays.FirstOrDefault(x => s.Selection.Ids.Contains(x.Id));
             if (d is null) return;
+            _root.Children.Add(new TextBlock { Text = "Display canvas", Foreground = (Brush)FindResource("Wo.Amber"), Margin = new Thickness(0, 0, 0, 4) });
             Field("Name", d.Name, v => s.UpdateDisplay(d.Id, x => x.Name = v));
             Field("Width", d.Width.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Width = n); });
             Field("Height", d.Height.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Height = n); });
             Field("X", d.X.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.X = n); });
             Field("Y", d.Y.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Y = n); });
             Field("Channel", d.Channel.ToString(), v => { if (int.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Channel = n); });
+            Check("Enabled", d.Enabled, v => s.UpdateDisplay(d.Id, x => x.Enabled = v));
+            Check("Blend", d.Blend, v => s.UpdateDisplay(d.Id, x => x.Blend = v));
+            ActionBtn("Delete display", () => s.DeleteSelected());
+        }
+        else if (s.Selection.Kind == SelectionKind.Timeline)
+        {
+            var tl = show.Timelines.FirstOrDefault(t => s.Selection.Ids.Contains(t.Id)) ?? s.ActiveTimeline;
+            if (tl is null) return;
+            Field("Name", tl.Name, v => s.UpdateTimeline(tl.Id, t => t.Name = v));
+            Field("Duration ms", tl.Duration.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateTimeline(tl.Id, t => t.Duration = n); });
+            Field("Rate", tl.Rate.ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateTimeline(tl.Id, t => t.Rate = n); });
+            Check("Loop", tl.Loop, v => s.SetLoop(tl.Id, v));
+            Check("Enabled", tl.Enabled, v => s.UpdateTimeline(tl.Id, t => t.Enabled = v));
+            ActionBtn("Delete timeline", () => s.DeleteTimeline(tl.Id));
+        }
+        else if (s.Selection.Kind == SelectionKind.Layer)
+        {
+            var layer = show.Timelines.SelectMany(t => t.Layers).FirstOrDefault(l => s.Selection.Ids.Contains(l.Id));
+            if (layer is null) return;
+            Field("Name", layer.Name, v => s.UpdateLayer(layer.Id, l => l.Name = v));
+            Check("Enabled", layer.Enabled, v => s.UpdateLayer(layer.Id, l => l.Enabled = v));
+            Check("Locked", layer.Locked, v => s.UpdateLayer(layer.Id, l => l.Locked = v));
+            ActionBtn("Insert layer below", () => s.InsertLayer(layer.Id));
+            ActionBtn("Delete layer", () => s.DeleteLayer(layer.Id));
         }
         else if (s.Selection.Kind == SelectionKind.Asset)
         {
@@ -309,13 +463,14 @@ public class PropertiesPanel : UserControl
             _root.Children.Add(new TextBlock { Text = a.Name, Foreground = (Brush)FindResource("Wo.Text"), FontWeight = FontWeights.SemiBold });
             _root.Children.Add(new TextBlock { Text = a.Notes, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 0) });
             _root.Children.Add(new TextBlock { Text = $"{a.Width:0}×{a.Height:0}  ·  {a.Codec}", Foreground = (Brush)FindResource("Wo.Amber"), Margin = new Thickness(0, 8, 0, 0) });
+            ActionBtn("Delete asset", () => s.DeleteSelected());
         }
         else
         {
             _root.Children.Add(new TextBlock { Text = show.Name, Foreground = (Brush)FindResource("Wo.Text"), FontSize = 16, FontWeight = FontWeights.SemiBold });
             _root.Children.Add(new TextBlock
             {
-                Text = "Native DXVA H.264 Producer. Select a cue, display, or asset.",
+                Text = "Click a display on Stage to edit that canvas. Loop and Delete live on each timeline. Double-click a display (or Edit displays) when media covers it.",
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)FindResource("Wo.Muted"),
                 Margin = new Thickness(0, 8, 0, 0),
@@ -337,5 +492,12 @@ public class PropertiesPanel : UserControl
         var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 8, 0, 0) };
         box.Click += (_, _) => set(box.IsChecked == true);
         _root.Children.Add(box);
+    }
+
+    void ActionBtn(string label, Action click)
+    {
+        var b = new Button { Content = label, Style = (Style)Application.Current.FindResource("Wo.Button"), Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        b.Click += (_, _) => click();
+        _root.Children.Add(b);
     }
 }
