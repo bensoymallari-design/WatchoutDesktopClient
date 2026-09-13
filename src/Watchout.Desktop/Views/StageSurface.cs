@@ -147,8 +147,17 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
-            if (!_layers.TryGetValue(ev.Cue.Id, out var el))
+            if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset))
             {
+                if (el is not null)
+                {
+                    Children.Remove(el);
+                    _layers.Remove(ev.Cue.Id);
+                    if (_videos.Remove(ev.Cue.Id, out var dead))
+                    {
+                        try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
+                    }
+                }
                 el = BuildLayer(ev, asset, mapped, show);
                 if (el is null) continue;
                 _layers[ev.Cue.Id] = el;
@@ -225,7 +234,9 @@ public sealed class StageSurface : Canvas
             return new CaptureLayer { DeviceId = LiveSources.CaptureDeviceId(asset), Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         if (asset.Url.StartsWith("procedural:", StringComparison.Ordinal))
             return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
-        if (asset.Kind is AssetKind.Image or AssetKind.Ndi
+        if (LiveSources.IsNdi(asset))
+            return Placeholder(mapped, $"{asset.Name}\nNDI · pick this source in NDI Webcam Input, then Import NDI again", asset.Color);
+        if (asset.Kind is AssetKind.Image
             || asset.Url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase)
             || asset.Url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase)
             || asset.Url.StartsWith("data:", StringComparison.Ordinal))
@@ -265,6 +276,14 @@ public sealed class StageSurface : Canvas
         var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
         SyncVideo(video, ev, tl?.Playback ?? PlaybackState.Stop);
         return video;
+    }
+
+    static bool LayerFits(FrameworkElement el, Asset? asset)
+    {
+        if (LiveSources.IsCapture(asset)) return el is CaptureLayer;
+        if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
+        if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
+        return el is not CaptureLayer;
     }
 
     static void SyncVideo(MediaElement video, EvaluatedCue ev, PlaybackState playback)

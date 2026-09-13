@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Watchout.Core;
+using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Desktop.Media;
 
@@ -36,6 +37,7 @@ public class AssetsPanel : UserControl
             e.Handled = true;
         };
         var menu = new ContextMenu();
+        menu.Items.Add(Menu("Place on layer", PlaceHighlighted));
         menu.Items.Add(Menu("Delete asset", DeleteHighlighted));
         ContextMenu = menu;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
@@ -63,10 +65,24 @@ public class AssetsPanel : UserControl
         await MediaLibrary.ImportFilesAsync(files, App.Session);
     }
 
+    string? CurrentAssetId() =>
+        HighlightedId
+        ?? (App.Session.Selection.Kind == SelectionKind.Asset ? App.Session.Selection.Ids.FirstOrDefault() : null);
+
+    public void PlaceHighlighted()
+    {
+        var id = CurrentAssetId();
+        if (id is null)
+        {
+            App.Session.Log("Click the clip in Assets, then Place on layer — or drag it onto the timeline", "warn");
+            return;
+        }
+        App.Session.AddCueFromAsset(id);
+    }
+
     public void DeleteHighlighted()
     {
-        var id = HighlightedId
-                 ?? (App.Session.Selection.Kind == SelectionKind.Asset ? App.Session.Selection.Ids.FirstOrDefault() : null);
+        var id = CurrentAssetId();
         if (id is null)
         {
             App.Session.Log("Click the clip in Assets, then Delete", "warn");
@@ -79,7 +95,7 @@ public class AssetsPanel : UserControl
     public void Reload()
     {
         var show = App.Session.Show;
-        var fp = show is null ? "" : string.Join("|", show.Assets.Select(a => a.Id + a.Name + a.Notes + a.Optimized));
+        var fp = show is null ? "" : string.Join("|", show.Assets.Select(a => a.Id + a.Name + a.Notes + a.Optimized + a.Kind + a.Url + a.Codec));
         if (fp == _fingerprint)
         {
             foreach (var asset in show?.Assets ?? [])
@@ -191,7 +207,9 @@ public class AssetsPanel : UserControl
         public void Sync(Asset asset, string? highlightedId)
         {
             _name.Text = asset.Name;
-            _meta.Text = string.IsNullOrWhiteSpace(asset.Codec) ? asset.Kind.ToString() : asset.Codec;
+            _meta.Text = LiveSources.IsNdi(asset)
+                ? (LiveSources.IsCaptureUrl(asset.Url) ? "NDI · live — drag onto a layer" : "NDI — drag onto a layer")
+                : string.IsNullOrWhiteSpace(asset.Codec) ? asset.Kind.ToString() : asset.Codec;
             SyncHighlight(highlightedId);
         }
 
@@ -385,9 +403,11 @@ public class DevicesPanel : UserControl
         Content = new ScrollViewer { Content = _root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
         CaptureHub.Changed += () => Dispatcher.BeginInvoke(Reload);
+        NdiHub.Changed += () => Dispatcher.BeginInvoke(Reload);
         Loaded += async (_, _) =>
         {
             await CaptureHub.RefreshAsync();
+            _ = NdiHub.RefreshAsync();
             Reload();
         };
     }
@@ -396,12 +416,16 @@ public class DevicesPanel : UserControl
     {
         var show = App.Session.Show;
         var connected = show?.CaptureDevices.Select(d => d.Signal) ?? [];
+        var ndiCams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
+        var cards = CaptureHub.Devices.Where(d => !NdiNames.LooksLikeNdi(d.Name)).ToList();
         var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id))
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
                  + CaptureHub.Generation
                  + CaptureHub.LiveCount
+                 + NdiHub.Generation
                  + string.Join("|", CaptureHub.Devices.Select(d => d.Id))
+                 + string.Join("|", NdiHub.Sources.Select(s => s.Name + s.Address))
                  + string.Join("|", connected);
         if (fp == _fp && _root.Children.Count > 0) return;
         _fp = fp;
@@ -425,13 +449,87 @@ public class DevicesPanel : UserControl
         _root.Children.Add(Btn("Close outputs", () => App.Outputs.CloseAll()));
         _root.Children.Add(Btn("Test beep", Beep));
 
+        _root.Children.Add(Header("NDI"));
+        _root.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 4),
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            Text = "Import an NDI name into Assets, then drag that clip onto a timeline layer — same as a video. Picture still needs NDI Tools → NDI Webcam Input.",
+        });
+        if (NdiHub.Sources.Count == 0)
+        {
+            _root.Children.Add(new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Text = NdiHub.LastError is { } err
+                    ? $"No NDI names yet ({err}). Same network, source streaming, then Refresh NDI."
+                    : "No NDI names on the LAN yet. Start Resolume NDI or NDI Camera Pro, then Refresh NDI.",
+            });
+        }
+        foreach (var source in NdiHub.Sources)
+        {
+            var advert = source;
+            _root.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrEmpty(advert.Address) ? advert.Name : $"{advert.Name}  ·  {advert.Address}",
+                Margin = new Thickness(0, 8, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Text"),
+            });
+            _root.Children.Add(Btn($"Import {advert.Name} to Assets", () => ImportNdi(advert.Name)));
+            _root.Children.Add(Btn($"Place {advert.Name} on a layer", () => PlaceNdi(advert.Name)));
+        }
+        foreach (var cam in ndiCams)
+        {
+            var live = connected.Contains(cam.Id);
+            _root.Children.Add(new TextBlock
+            {
+                Text = $"{cam.Name}  ·  NDI Webcam{(live ? "  ·  bound" : "")}",
+                Margin = new Thickness(0, 8, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Text"),
+            });
+            var id = cam.Id;
+            var name = cam.Name;
+            _root.Children.Add(Btn($"Import {name} to Assets", () => App.Session.ImportNdi(name, id)));
+            _root.Children.Add(Btn($"Place {name} on a layer", () => App.Session.ConnectNdi(name, id)));
+        }
+        if (ndiCams.Count == 0)
+        {
+            _root.Children.Add(new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0),
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Text = "No NDI Webcam device yet. Install NDI Tools, open NDI Webcam Input, pick your source, then Refresh NDI.",
+            });
+        }
+        _root.Children.Add(Btn("Refresh NDI", () =>
+        {
+            _ = CaptureHub.RefreshAsync();
+            _ = NdiHub.RefreshAsync();
+        }));
+        _root.Children.Add(Btn("Import all NDI names to Assets", () =>
+        {
+            if (NdiHub.Sources.Count == 0 && ndiCams.Count == 0)
+            {
+                App.Session.Log("No NDI source yet. Refresh NDI, or open NDI Webcam Input.", "warn");
+                return;
+            }
+            foreach (var source in NdiHub.Sources)
+                ImportNdi(source.Name, announce: source == NdiHub.Sources[^1] && ndiCams.Count == 0);
+            foreach (var cam in ndiCams)
+                App.Session.ImportNdi(cam.Name, cam.Id, announce: cam == ndiCams[^1]);
+        }));
+
         _root.Children.Add(Header("CAPTURE CARDS"));
         _root.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards on this PC. Each connected card gets its own Stage display. NDI Webcam Input also appears here.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards on this PC. Each connected card gets its own Stage display.",
         });
         _root.Children.Add(new TextBlock
         {
@@ -442,7 +540,7 @@ public class DevicesPanel : UserControl
                 ? "No capture devices yet. Plug in the cards and press Refresh."
                 : $"{CaptureHub.LiveCount} live session(s) · {CaptureHub.Devices.Count} device(s) found. Connect all to run them together.",
         });
-        foreach (var device in CaptureHub.Devices)
+        foreach (var device in cards)
         {
             var live = connected.Contains(device.Id);
             _root.Children.Add(new TextBlock
@@ -456,7 +554,7 @@ public class DevicesPanel : UserControl
             _root.Children.Add(Btn(live ? $"Reconnect {device.Name}" : $"Connect {device.Name}", () => App.Session.ConnectCapture(id, name)));
         }
         _root.Children.Add(Btn("Connect all capture cards", () =>
-            App.Session.ConnectCaptures(CaptureHub.Devices.Select(d => (d.Id, d.Name)))));
+            App.Session.ConnectCaptures(cards.Select(d => (d.Id, d.Name)))));
         _root.Children.Add(Btn("Refresh capture cards", () => _ = CaptureHub.RefreshAsync()));
 
         _root.Children.Add(Header("CODEC"));
@@ -477,6 +575,18 @@ public class DevicesPanel : UserControl
         b.Click += (_, _) => click();
         return b;
     }
+
+    static string? WebcamId(string sourceName)
+    {
+        var devices = CaptureHub.Devices.Select(d => (d.Id, d.Name));
+        return NdiNames.MatchWebcam(sourceName, devices)?.Id;
+    }
+
+    static void ImportNdi(string sourceName, bool announce = true) =>
+        App.Session.ImportNdi(sourceName, WebcamId(sourceName), placeOnLayer: false, announce);
+
+    static void PlaceNdi(string sourceName) =>
+        App.Session.ConnectNdi(sourceName, WebcamId(sourceName));
 
     static void Beep()
     {

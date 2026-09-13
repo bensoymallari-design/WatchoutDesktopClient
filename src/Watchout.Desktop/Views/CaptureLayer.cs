@@ -8,7 +8,7 @@ public sealed class CaptureLayer : Grid
     readonly Image _image = new() { Stretch = Stretch.Fill };
     readonly TextBlock _status = new()
     {
-        Text = "NO SIGNAL\nStart Resolume or another HDMI/SDI source",
+        Text = "NO SIGNAL\nStart the live source",
         Foreground = Brushes.White,
         FontSize = 18,
         TextAlignment = TextAlignment.Center,

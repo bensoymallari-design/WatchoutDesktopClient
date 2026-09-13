@@ -111,9 +111,11 @@ public static class CaptureHub
     static string Classify(string name)
     {
         var n = name.ToLowerInvariant();
+        if (n.Contains("ndi"))
+            return "NDI";
         if (n.Contains("elgato") || n.Contains("blackmagic") || n.Contains("decklink") || n.Contains("intensity")
             || n.Contains("magewell") || n.Contains("cam link") || n.Contains("capture") || n.Contains("hdmi")
-            || n.Contains("sdi") || n.Contains("ndi"))
+            || n.Contains("sdi"))
             return "Capture card";
         return "Camera / video device";
     }

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using Microsoft.Win32;
 using Watchout.Core;
+using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Core.Persistence;
 using Watchout.Desktop.Interop;
@@ -185,6 +186,43 @@ public partial class MainWindow : Window
 
     void CloseOutputs_Click(object sender, RoutedEventArgs e) => App.Outputs.CloseAll();
 
+    async void RefreshNdi_Click(object sender, RoutedEventArgs e)
+    {
+        await CaptureHub.RefreshAsync();
+        await NdiHub.RefreshAsync();
+        var cams = CaptureHub.Devices.Count(d => NdiNames.LooksLikeNdi(d.Name));
+        App.Session.Log(NdiHub.Sources.Count == 0
+            ? $"NDI scan found no sources. {cams} NDI Webcam device(s). Start Resolume NDI or NDI Camera Pro, open NDI Webcam Input, then scan again."
+            : $"NDI: {NdiHub.Sources.Count} source(s) on the LAN, {cams} Webcam Input device(s). Import to Assets, then drag onto a layer.");
+    }
+
+    async void ImportNdi_Click(object sender, RoutedEventArgs e) => await ImportOrPlaceNdi(placeOnLayer: false);
+
+    async void ConnectNdi_Click(object sender, RoutedEventArgs e) => await ImportOrPlaceNdi(placeOnLayer: true);
+
+    async Task ImportOrPlaceNdi(bool placeOnLayer)
+    {
+        await CaptureHub.RefreshAsync();
+        await NdiHub.RefreshAsync();
+        var cams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
+        if (NdiHub.Sources.Count > 0)
+        {
+            foreach (var source in NdiHub.Sources)
+            {
+                var cam = NdiNames.MatchWebcam(source.Name, CaptureHub.Devices.Select(d => (d.Id, d.Name)));
+                App.Session.ImportNdi(source.Name, cam?.Id, placeOnLayer, announce: source == NdiHub.Sources[^1]);
+            }
+            return;
+        }
+        if (cams.Count > 0)
+        {
+            foreach (var cam in cams)
+                App.Session.ImportNdi(cam.Name, cam.Id, placeOnLayer, announce: cam == cams[^1]);
+            return;
+        }
+        App.Session.Log("No NDI source or NDI Webcam Input yet. Install NDI Tools, open Webcam Input, then Live → Refresh NDI.", "warn");
+    }
+
     async void RefreshCapture_Click(object sender, RoutedEventArgs e)
     {
         await CaptureHub.RefreshAsync();
@@ -218,10 +256,8 @@ public partial class MainWindow : Window
             $"{Brand.Name} {Brand.Version} — native .NET / WPF desktop.\n\n" +
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
-            "Live: many HDMI/SDI capture cards at once (Elgato, Blackmagic, Magewell, USB).\n" +
-            "Each card is a separate live layer on its own Stage display.\n" +
-            "Send Resolume (or any program) into each card — or Resolume NDI through\n" +
-            "NDI Webcam Input — then Live → Connect All Capture Cards.\n\n" +
+            "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
+            "Devices → NDI → Import to Assets, then drag onto the timeline. Picture via NDI Webcam Input.\n\n" +
             "HAP, Resolume DXV, ProRes, DNx: optional ffmpeg transcode to H.264 MP4\n" +
             "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.",
             $"About {Brand.Name}");
