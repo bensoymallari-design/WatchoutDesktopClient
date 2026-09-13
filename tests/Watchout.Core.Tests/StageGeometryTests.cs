@@ -1,0 +1,147 @@
+using Watchout.Core.Models;
+using Watchout.Core.Stage;
+using Xunit;
+
+namespace Watchout.Core.Tests;
+
+public class StageGeometryTests
+{
+    static Display Display(string id = "d1", double x = 0, double y = 0, double w = 1920, double h = 1080) => new()
+    {
+        Id = id, Name = id, X = x, Y = y, Width = w, Height = h, OutputType = OutputType.GPU,
+        Channel = 1, NodeId = "local", Enabled = true, BlendWidth = 128,
+    };
+
+    [Fact]
+    public void FitCoverMaps4kMediaOnto4kDisplayAt1To1()
+    {
+        var uhd = Display(w: 3840, h: 2160);
+        var fit = StageGeometry.FitTransform(new Asset { Width = 3840, Height = 2160 }, uhd, "cover");
+        Assert.Equal(100, fit.Scale.X);
+        Assert.Equal(100, fit.Scale.Y);
+    }
+
+    [Fact]
+    public void FitCoverStretchesOtherAspects()
+    {
+        var fit = StageGeometry.FitTransform(new Asset { Width = 1280, Height = 720 }, Display(), "cover");
+        Assert.Equal(0, fit.Position.X);
+        Assert.Equal(0, fit.Position.Y);
+        Assert.Equal(150, fit.Scale.X);
+        Assert.Equal(150, fit.Scale.Y);
+    }
+
+    [Fact]
+    public void FitContainLetterboxes()
+    {
+        var fit = StageGeometry.FitTransform(new Asset { Width = 1920, Height = 1920 }, Display(), "contain");
+        Assert.Equal(56.25, fit.Scale.X);
+        Assert.Equal(56.25, fit.Scale.Y);
+        Assert.Equal(420, fit.Position.X);
+        Assert.Equal(0, fit.Position.Y);
+    }
+
+    [Fact]
+    public void SnapMediaLeftEdgeToDisplayEdge()
+    {
+        var snapped = StageGeometry.SnapRect(new StageRect(8, 3, 1920, 1080), [0, 1920], [0, 1080], 12);
+        Assert.Equal(0, snapped.X);
+        Assert.Equal(0, snapped.Y);
+    }
+
+    [Fact]
+    public void SnapValuePicksNearestGuide()
+    {
+        Assert.Equal(0, StageGeometry.SnapValue(5, [0d, 1920], 8));
+        Assert.Equal(40, StageGeometry.SnapValue(40, [0d, 1920], 8));
+    }
+
+    [Fact]
+    public void HitDisplayPrefersTopmost()
+    {
+        var d1 = Display();
+        var d2 = Display("d2", 100, 100);
+        var hit = StageGeometry.HitDisplay([d1, d2], (150, 150));
+        Assert.Equal("d2", hit?.Id);
+    }
+
+    [Fact]
+    public void DisplayForCueUsesDisplayUnderOrigin()
+    {
+        var right = Display("right", 1920);
+        Assert.Equal("right", StageGeometry.DisplayForCue([Display(), right], new Cue { Position = new Vec3 { X = 1920 } }).Id);
+    }
+
+    [Fact]
+    public void DraggingDisplaySnapsFlushToNeighbor()
+    {
+        var left = Display("left");
+        var moving = Display("right", 1908, 6);
+        var guides = StageGeometry.DisplayMoveGuides([left, moving], moving.Id);
+        var snapped = StageGeometry.SnapRect(new StageRect(moving.X, moving.Y, moving.Width, moving.Height), guides.X, guides.Y, 16);
+        Assert.Equal(1920, snapped.X);
+        Assert.Equal(0, snapped.Y);
+    }
+
+    [Fact]
+    public void WallIsBoundingBox()
+    {
+        var row = Enumerable.Range(0, 4).Select(i => Display($"d{i}", i * 1920)).ToList();
+        var wall = StageGeometry.WallRect(row) ?? throw new InvalidOperationException("wall");
+        Assert.Equal(0, wall.X);
+        Assert.Equal(0, wall.Y);
+        Assert.Equal(7680, wall.W);
+        Assert.Equal(1080, wall.H);
+
+        var grid = new[]
+        {
+            Display("a"), Display("b", 1920), Display("c", 0, 1080), Display("d", 1920, 1080),
+        };
+        var g = StageGeometry.WallRect(grid) ?? throw new InvalidOperationException("grid");
+        Assert.Equal(3840, g.W);
+        Assert.Equal(2160, g.H);
+    }
+
+    [Fact]
+    public void FitCoverMapsClipAcrossFourWideWall()
+    {
+        var fit = StageGeometry.FitTransform(1920, 1080, 0, 0, 7680, 1080);
+        Assert.Equal(0, fit.Position.X);
+        Assert.Equal(400, fit.Scale.X);
+        Assert.Equal(100, fit.Scale.Y);
+    }
+
+    [Fact]
+    public void FitCoverMapsClipAcross2x2Wall()
+    {
+        var fit = StageGeometry.FitTransform(1920, 1080, 0, 0, 3840, 2160);
+        Assert.Equal(200, fit.Scale.X);
+        Assert.Equal(200, fit.Scale.Y);
+    }
+
+    [Fact]
+    public void EdgeDragGrowsRightSide()
+    {
+        var grown = StageGeometry.ResizeRect(new StageRect(0, 0, 1920, 1080), "e", 80, 0);
+        Assert.Equal(2000, grown.W);
+        Assert.Equal(0, grown.X);
+        Assert.Equal("e", StageGeometry.HitResizeHandle(new StageRect(0, 0, 1920, 1080), (1920, 540), 1));
+        var snapped = StageGeometry.SnapResizeRect(new StageRect(0, 0, 1908, 1080), "e", [0, 1920], [0, 1080], 16);
+        Assert.Equal(1920, snapped.W);
+        var transform = StageGeometry.RectToCueTransform(new StageRect(10, 20, 3840, 1080), new Asset { Width = 1920, Height = 1080 });
+        Assert.Equal(10, transform.Position.X);
+        Assert.Equal(200, transform.Scale.X);
+        Assert.Equal(100, transform.Scale.Y);
+    }
+
+    [Fact]
+    public void WestEdgeDragMovesXAndShrinksWidth()
+    {
+        var shrunk = StageGeometry.ResizeRect(new StageRect(80, 0, 1920, 1080), "w", -80, 0);
+        Assert.Equal(0, shrunk.X);
+        Assert.Equal(2000, shrunk.W);
+        var snapped = StageGeometry.SnapResizeRect(new StageRect(12, 0, 1908, 1080), "w", [0, 1920], [0, 1080], 16);
+        Assert.Equal(0, snapped.X);
+        Assert.Equal(1920, snapped.W);
+    }
+}

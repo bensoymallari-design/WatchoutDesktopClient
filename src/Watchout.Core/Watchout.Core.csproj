@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Watchout.Core</RootNamespace>
+    <AssemblyName>Watchout.Core</AssemblyName>
+    <Description>WATCHOUT Producer show model, timeline, stage geometry, and H.264/DXVA media policy.</Description>
+  </PropertyGroup>
+</Project>

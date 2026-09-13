@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.cache
+TestResults/
+artifacts/
+release/
+*.log
+.DS_Store
+.env*
+node_modules/

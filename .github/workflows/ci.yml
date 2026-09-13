@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Test core
+        run: dotnet test tests/Watchout.Core.Tests/Watchout.Core.Tests.csproj --nologo --configuration Release
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build WPF Producer
+        run: dotnet build src/Watchout.Desktop/Watchout.Desktop.csproj -c Release
+      - name: Publish win-x64
+        run: dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WatchoutProducer-win-x64
+          path: publish
