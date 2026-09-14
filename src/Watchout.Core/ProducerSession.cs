@@ -15,7 +15,9 @@ public sealed class ProducerSession
     public string? ShowPath { get; private set; }
     public Selection Selection { get; private set; } = new();
     public string? ActiveTimelineId { get; private set; }
-    public (double X, double Y, double Zoom) Camera { get; private set; } = (2880, 540, 0.18);
+    public (double X, double Y, double Zoom) Camera { get; private set; } = (960, 540, 0.4);
+    public double StageViewWidth { get; private set; } = 960;
+    public double StageViewHeight { get; private set; } = 540;
     public List<LogEntry> Logs { get; } = [];
     public List<RecentShow> Recents { get; private set; } = [];
     public List<WindowLayout> Windows { get; private set; } = WindowLayouts.DefaultLayout();
@@ -58,7 +60,6 @@ public sealed class ProducerSession
     public void OpenDemo()
     {
         LoadShow(ShowFactory.MakeDemoShow(), null);
-        Camera = (2880, 540, 0.18);
         Log("Opened LED wall demo. Import H.264 or connect a capture card (Resolume HDMI) in Devices.");
     }
 
@@ -189,6 +190,12 @@ public sealed class ProducerSession
         Clock?.Invoke();
     }
 
+    public void ReportStageView(double width, double height)
+    {
+        if (width > 1) StageViewWidth = width;
+        if (height > 1) StageViewHeight = height;
+    }
+
     public void SetCamera(double? x = null, double? y = null, double? zoom = null)
     {
         Camera = (x ?? Camera.X, y ?? Camera.Y, zoom ?? Camera.Zoom);
@@ -200,7 +207,25 @@ public sealed class ProducerSession
         if (Show is null) return;
         var wall = StageGeometry.WallRect(Show.Displays);
         if (wall is not { } w) return;
-        Camera = (w.X + w.W / 2, w.Y + w.H / 2, 0.18);
+        Camera = StageGeometry.FitCamera(w, StageViewWidth, StageViewHeight);
+        Changed?.Invoke();
+    }
+
+    public void FrameDisplay(string? displayId = null)
+    {
+        if (Show is null) return;
+        var display = displayId is not null
+            ? Show.Displays.FirstOrDefault(d => d.Id == displayId)
+            : Selection.Kind == SelectionKind.Display
+                ? Show.Displays.FirstOrDefault(d => Selection.Ids.Contains(d.Id))
+                : null;
+        display ??= Show.Displays.FirstOrDefault(d => d.Enabled) ?? Show.Displays.FirstOrDefault();
+        if (display is null)
+        {
+            FrameDisplays();
+            return;
+        }
+        Camera = StageGeometry.FitCamera(StageGeometry.DisplayRect(display), StageViewWidth, StageViewHeight, 36);
         Changed?.Invoke();
     }
 
