@@ -104,6 +104,20 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void FrameDisplaysCentersTheWallInTheStageView()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.ReportStageView(800, 450);
+        session.FrameDisplays();
+        Assert.Equal(960, session.Camera.X);
+        Assert.Equal(540, session.Camera.Y);
+        Assert.InRange(session.Camera.Zoom, 0.25, 0.5);
+        session.FrameDisplay(session.Show!.Displays[0].Id);
+        Assert.Equal(960, session.Camera.X);
+    }
+
+    [Fact]
     public void EvaluateCueAppliesFadeAndTween()
     {
         var cue = ShowFactory.EmptyCue(new Cue

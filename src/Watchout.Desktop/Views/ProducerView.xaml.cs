@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Watchout.Core;
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Views;
 
@@ -42,9 +43,12 @@ public partial class ProducerView : UserControl
             : $"{tl.Name}  ·  {TimeFormat.FormatPlayTime(tl.Playhead)}  ·  {(loop ? "LOOP" : "once")}  ·  {tl.Playback.ToString().ToUpperInvariant()}";
         LoopBox.IsChecked = loop;
         var displays = App.Session.StageEditMode == StageEditMode.Displays;
-        StageHint.Text = displays
-            ? "Stage  ·  click a display to edit the canvas — drag to move, handles to resize"
-            : "Stage  ·  click a display name, or double-click, to edit the canvas";
+        var show = App.Session.Show;
+        var zoom = App.Session.Camera.Zoom;
+        var n = show?.Displays.Count(d => d.Enabled) ?? 0;
+        var wall = show is null ? null : StageGeometry.WallRect(show.Displays);
+        var size = wall is { } w ? $"{w.W:0}×{w.H:0}" : "";
+        StageHint.Text = $"Stage  ·  zoom {zoom * 100:0}%  ·  {n} display(s) {size}  ·  drag empty Stage to pan · Fit wall to center";
         PaintMode(EditCuesBtn, !displays);
         PaintMode(EditDisplaysBtn, displays);
         _syncing = false;
@@ -72,8 +76,10 @@ public partial class ProducerView : UserControl
     void DeleteLayer_Click(object sender, RoutedEventArgs e) => App.Session.DeleteLayer();
     void EditCues_Click(object sender, RoutedEventArgs e) => App.Session.SetStageEditMode(StageEditMode.Cues);
     void EditDisplays_Click(object sender, RoutedEventArgs e) => App.Session.SetStageEditMode(StageEditMode.Displays);
-    void FitWall_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToWall();
-    void FitDisplay_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToDisplay();
+    void FrameWall_Click(object sender, RoutedEventArgs e) => Stage.FrameWall();
+    void FrameDisplay_Click(object sender, RoutedEventArgs e) => Stage.FrameSelectedDisplay();
+    void ZoomIn_Click(object sender, RoutedEventArgs e) => Stage.ZoomBy(1.15);
+    void ZoomOut_Click(object sender, RoutedEventArgs e) => Stage.ZoomBy(0.87);
     void Output_Click(object sender, RoutedEventArgs e)
     {
         var show = App.Session.Show;

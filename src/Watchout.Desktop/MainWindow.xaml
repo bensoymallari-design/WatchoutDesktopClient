@@ -29,9 +29,10 @@
         <MenuItem x:Name="ClickJumpItem" Header="Click Jumps Playhead" IsCheckable="True" IsChecked="True" Click="ClickJump_Click"/>
       </MenuItem>
       <MenuItem Header="_Stage">
-        <MenuItem Header="Fit to _Display" Click="FitDisplay_Click"/>
-        <MenuItem Header="Fit to _Wall" Click="FitWall_Click"/>
-        <MenuItem Header="Frame Displays" Click="Frame_Click"/>
+        <MenuItem Header="Frame _Wall in View" Click="Frame_Click"/>
+        <MenuItem Header="Frame Selected Display" Click="FrameDisplayView_Click"/>
+        <MenuItem Header="Fit Cue to _Display" Click="FitDisplay_Click"/>
+        <MenuItem Header="Fit Cue to Wall" Click="FitWall_Click"/>
         <MenuItem Header="Add Display" Click="AddDisplay_Click"/>
         <MenuItem Header="_Edit Cues" Click="EditCues_Click"/>
         <MenuItem Header="Edit _Displays / Canvas" Click="EditDisplays_Click"/>

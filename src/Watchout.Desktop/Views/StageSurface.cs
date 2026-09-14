@@ -30,6 +30,7 @@ public sealed class StageSurface : Canvas
     StageRect _resizeStart;
     string? _hoverDisplayId;
     bool _panning;
+    bool _panArmed;
     bool _dragArmed;
     bool _dropping;
     Point _panStart;
@@ -53,18 +54,16 @@ public sealed class StageSurface : Canvas
         Drop += OnDrop;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Refresh, DispatcherPriority.Render);
         App.Session.Clock += QueuePlaybackTick;
-        SizeChanged += (_, _) => Refresh();
+        SizeChanged += (_, _) =>
+        {
+            SyncViewSize();
+            Refresh();
+        };
         MouseWheel += OnWheel;
         MouseLeftButtonDown += OnLeftDown;
-        MouseLeftButtonUp += (_, _) =>
-        {
-            _dragCueId = null;
-            _dragDisplayId = null;
-            _resizeHandle = null;
-            _resizeDisplay = false;
-            _dragArmed = false;
-            ReleaseMouseCapture();
-        };
+        MouseLeftButtonUp += OnLeftUp;
+        MouseDown += OnAnyDown;
+        MouseUp += OnAnyUp;
         MouseMove += OnMove;
         MouseRightButtonDown += (_, e) =>
         {
@@ -74,7 +73,12 @@ public sealed class StageSurface : Canvas
             CaptureMouse();
         };
         MouseRightButtonUp += (_, _) => { _panning = false; ReleaseMouseCapture(); };
-        Loaded += (_, _) => Refresh();
+        Loaded += (_, _) =>
+        {
+            SyncViewSize();
+            if (Editing) App.Session.FrameDisplays();
+            Refresh();
+        };
         Unloaded += (_, _) =>
         {
             foreach (var v in _videos.Values) { try { v.Stop(); v.Close(); } catch { /* ignore */ } }
@@ -460,8 +464,74 @@ public sealed class StageSurface : Canvas
     void OnWheel(object sender, MouseWheelEventArgs e)
     {
         if (!Editing) return;
+        ZoomAt(e.GetPosition(this), e.Delta > 0 ? 1.12 : 0.9);
+        e.Handled = true;
+    }
+
+    public void SyncViewSize()
+    {
+        if (!Editing) return;
+        App.Session.ReportStageView(ActualWidth, ActualHeight);
+    }
+
+    public void FrameWall()
+    {
+        SyncViewSize();
+        App.Session.FrameDisplays();
+    }
+
+    public void FrameSelectedDisplay()
+    {
+        SyncViewSize();
+        App.Session.FrameDisplay();
+    }
+
+    public void ZoomBy(double factor) =>
+        ZoomAt(new Point(ActualWidth / 2, ActualHeight / 2), factor);
+
+    void ZoomAt(Point screen, double factor)
+    {
+        var show = App.Session.Show;
+        if (show is null) return;
+        SyncViewSize();
         var cam = App.Session.Camera;
-        App.Session.SetCamera(zoom: Math.Clamp(cam.Zoom * (e.Delta > 0 ? 1.12 : 0.9), 0.03, 2));
+        var oldZ = cam.Zoom <= 0 ? 0.18 : cam.Zoom;
+        var next = Math.Clamp(oldZ * factor, 0.03, 2);
+        var stage = ScreenToStage(screen, show);
+        var x = stage.X - (screen.X - ActualWidth / 2) / next;
+        var y = stage.Y - (screen.Y - ActualHeight / 2) / next;
+        App.Session.SetCamera(x, y, next);
+    }
+
+    void OnAnyDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!Editing || e.ChangedButton != MouseButton.Middle) return;
+        _panning = true;
+        _panArmed = false;
+        _panStart = e.GetPosition(this);
+        _panCam = App.Session.Camera;
+        CaptureMouse();
+        e.Handled = true;
+    }
+
+    void OnAnyUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
+        _panning = false;
+        ReleaseMouseCapture();
+    }
+
+    void OnLeftUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_panArmed && !_panning) App.Session.ClearSelection();
+        _dragCueId = null;
+        _dragDisplayId = null;
+        _resizeHandle = null;
+        _resizeDisplay = false;
+        _dragArmed = false;
+        _panArmed = false;
+        _panning = false;
+        ReleaseMouseCapture();
     }
 
     void OnLeftDown(object sender, MouseButtonEventArgs e)
@@ -521,7 +591,11 @@ public sealed class StageSurface : Canvas
                 CaptureMouse();
                 return;
             default:
-                App.Session.ClearSelection();
+                _panArmed = true;
+                _panning = false;
+                _panStart = e.GetPosition(this);
+                _panCam = App.Session.Camera;
+                CaptureMouse();
                 break;
         }
     }
@@ -538,11 +612,17 @@ public sealed class StageSurface : Canvas
         var show = App.Session.Show;
         if (show is null) return;
         var (_, _, scale) = Viewport(show);
-        if (_panning && Editing)
+        if ((_panning || _panArmed) && Editing)
         {
             var p = e.GetPosition(this);
+            if (_panArmed && !_panning)
+            {
+                if (Math.Abs(p.X - _panStart.X) < 4 && Math.Abs(p.Y - _panStart.Y) < 4) return;
+                _panning = true;
+            }
             var zoom = Math.Max(0.03, _panCam.Zoom);
             App.Session.SetCamera(_panCam.X - (p.X - _panStart.X) / zoom, _panCam.Y - (p.Y - _panStart.Y) / zoom, zoom);
+            Cursor = Cursors.SizeAll;
             return;
         }
         if (_resizeHandle is not null && _dragStart != default)
@@ -617,7 +697,7 @@ public sealed class StageSurface : Canvas
                     StageHitKind.DisplayHandle or StageHitKind.CueHandle => HandleCursor(hit.Handle),
                     StageHitKind.Cue => Cursors.SizeAll,
                     StageHitKind.Display => Cursors.Hand,
-                    _ => Cursors.Arrow,
+                    _ => Cursors.SizeAll,
                 };
             }
             return;

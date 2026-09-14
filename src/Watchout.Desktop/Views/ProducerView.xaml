@@ -19,15 +19,19 @@
     <DockPanel Grid.Row="0" Grid.Column="0" Background="#1C1C1C">
       <Border DockPanel.Dock="Top" Background="#2A2A2A" Padding="8,4" BorderBrush="#111" BorderThickness="0,0,0,1">
         <DockPanel>
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,12,0">
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="ZoomIn_Click" Content="+"/>
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="ZoomOut_Click" Content="−"/>
+            <Button x:Name="FitWallBtn" Style="{StaticResource Wo.Button}" Padding="8,2" Click="FrameWall_Click" Content="Fit wall"/>
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FrameDisplay_Click" Content="Fit display"/>
+          </StackPanel>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
             <Button x:Name="EditCuesBtn" Style="{StaticResource Wo.Button}" Padding="8,2" Click="EditCues_Click" Content="Edit cues"/>
             <Button x:Name="EditDisplaysBtn" Style="{StaticResource Wo.Button}" Padding="8,2" Click="EditDisplays_Click" Content="Edit displays"/>
-            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FitWall_Click" Content="Fit wall"/>
-            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FitDisplay_Click" Content="Fit display"/>
             <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="Output_Click" Content="Output"/>
             <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="OutputAll_Click" Content="Output all"/>
           </StackPanel>
-          <TextBlock x:Name="StageHint" Text="Stage  ·  click a display name, or double-click, to edit the canvas" Foreground="#FFE8B0" VerticalAlignment="Center"/>
+          <TextBlock x:Name="StageHint" Text="Stage  ·  Fit wall centers the layout · drag empty Stage to pan" Foreground="#FFE8B0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
         </DockPanel>
       </Border>
       <views:StageSurface x:Name="Stage" Editing="True" PlayAudio="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>

@@ -156,7 +156,16 @@ public partial class MainWindow : Window
     void ClickJump_Click(object sender, RoutedEventArgs e) => App.Session.SetClickJumpsToTime(ClickJumpItem.IsChecked == true);
     void FitDisplay_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToDisplay();
     void FitWall_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToWall();
-    void Frame_Click(object sender, RoutedEventArgs e) => App.Session.FrameDisplays();
+    void Frame_Click(object sender, RoutedEventArgs e)
+    {
+        if (Root.Content is ProducerView producer) producer.Stage.FrameWall();
+        else App.Session.FrameDisplays();
+    }
+    void FrameDisplayView_Click(object sender, RoutedEventArgs e)
+    {
+        if (Root.Content is ProducerView producer) producer.Stage.FrameSelectedDisplay();
+        else App.Session.FrameDisplay();
+    }
     void AddDisplay_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplay();
     void Grid31_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(3, 1, 1920, 1080);
     void Grid22_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(2, 2, 1920, 1080);

@@ -92,6 +92,18 @@ public static class StageGeometry
         return new StageRect(x, y, right - x, bottom - y);
     }
 
+    /// <summary>Camera center + zoom so <paramref name="world"/> fills the Stage view with padding.</summary>
+    public static (double X, double Y, double Zoom) FitCamera(StageRect world, double viewW, double viewH, double pad = 48)
+    {
+        viewW = Math.Max(64, viewW);
+        viewH = Math.Max(64, viewH);
+        var innerW = Math.Max(32, viewW - pad * 2);
+        var innerH = Math.Max(32, viewH - pad * 2);
+        var zoom = Math.Min(innerW / Math.Max(1, world.W), innerH / Math.Max(1, world.H));
+        zoom = Math.Clamp(zoom, 0.03, 2);
+        return (world.X + world.W / 2, world.Y + world.H / 2, zoom);
+    }
+
     public static (double X, double Y, double Width, double Height)? WallAsBox(IEnumerable<Display> displays)
     {
         var wall = WallRect(displays);

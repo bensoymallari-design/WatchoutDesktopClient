@@ -77,8 +77,15 @@ public class StageGeometryTests
     }
 
     [Fact]
-    public void SnapThresholdIsMagneticOnAZoomedOutWall()
+    public void FitCameraCentersAndZoomsTheWallIntoTheView()
     {
+        var wall = new StageRect(0, 0, 1920, 1080);
+        var cam = StageGeometry.FitCamera(wall, 800, 450, 48);
+        Assert.Equal(960, cam.X);
+        Assert.Equal(540, cam.Y);
+        Assert.InRange(cam.Zoom, 0.25, 0.4);
+        var display = StageGeometry.FitCamera(wall, 1920, 1080, 0);
+        Assert.Equal(1, display.Zoom, 3);
         Assert.True(StageGeometry.SnapThreshold(0.18) >= 200);
     }
 
