@@ -247,6 +247,7 @@ public class TimelinesPanel : UserControl
         Content = root;
         ContextMenu = BuildMenu();
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
+        App.Session.Clock += () => Dispatcher.BeginInvoke(SyncClocks);
     }
 
     static ContextMenu BuildMenu()
@@ -295,6 +296,13 @@ public class TimelinesPanel : UserControl
         }
         foreach (var tl in show?.Timelines ?? [])
             if (_byId.TryGetValue(tl.Id, out var row)) row.Sync(tl);
+    }
+
+    void SyncClocks()
+    {
+        var show = App.Session.Show;
+        foreach (var tl in show?.Timelines ?? [])
+            if (_byId.TryGetValue(tl.Id, out var row)) row.SyncClock(tl);
     }
 
     sealed class TimelineRow : Border
@@ -363,6 +371,7 @@ public class TimelinesPanel : UserControl
             _name.Text = tl.Name;
             _clock.Text = $"{TimeFormat.FormatPlayTime(tl.Playhead)}  ·  {tl.Playback.ToString().ToUpperInvariant()}";
             _loop.IsChecked = tl.Loop;
+            SyncClock(tl);
             var active = App.Session.ActiveTimelineId == tl.Id;
             var selected = App.Session.Selection.Kind == SelectionKind.Timeline && App.Session.Selection.Ids.Contains(tl.Id);
             Background = new SolidColorBrush(active || selected ? Color.FromRgb(42, 36, 24) : Color.FromRgb(22, 22, 22));
@@ -370,6 +379,11 @@ public class TimelinesPanel : UserControl
             _name.Foreground = (Brush)Application.Current.FindResource("Wo.Text");
             _clock.Foreground = (Brush)Application.Current.FindResource("Wo.Muted");
             _syncing = false;
+        }
+
+        public void SyncClock(Timeline tl)
+        {
+            _clock.Text = $"{TimeFormat.FormatPlayTime(tl.Playhead)}  ·  {tl.Playback.ToString().ToUpperInvariant()}";
         }
     }
 }

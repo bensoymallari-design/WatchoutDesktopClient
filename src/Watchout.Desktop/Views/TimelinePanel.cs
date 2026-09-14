@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Models;
 using Watchout.Core.Scheduling;
@@ -32,6 +33,7 @@ public sealed class TimelinePanel : FrameworkElement
         };
         Drop += OnDrop;
         App.Session.Changed += () => Dispatcher.BeginInvoke(InvalidateVisual);
+        App.Session.Clock += () => Dispatcher.BeginInvoke(InvalidateVisual, DispatcherPriority.Render);
         MouseLeftButtonDown += OnDown;
         MouseLeftButtonUp += (_, _) => { _dragId = null; ReleaseMouseCapture(); };
         MouseMove += OnMove;

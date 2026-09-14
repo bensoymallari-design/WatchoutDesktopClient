@@ -87,6 +87,23 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void TickUsesClockNotFullUiRebuild()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var changes = 0;
+        var clocks = 0;
+        session.Changed += () => changes++;
+        session.Clock += () => clocks++;
+        session.Play();
+        var afterPlay = changes;
+        session.Tick(16);
+        Assert.Equal(afterPlay, changes);
+        Assert.Equal(1, clocks);
+        Assert.True(session.ActiveTimeline!.Playhead > 0);
+    }
+
+    [Fact]
     public void EvaluateCueAppliesFadeAndTween()
     {
         var cue = ShowFactory.EmptyCue(new Cue
