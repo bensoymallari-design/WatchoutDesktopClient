@@ -460,7 +460,8 @@ public class DevicesPanel : UserControl
                  + NdiHub.Generation
                  + string.Join("|", CaptureHub.Devices.Select(d => d.Id))
                  + string.Join("|", NdiHub.Sources.Select(s => s.Name + s.Address))
-                 + string.Join("|", connected);
+                 + string.Join("|", connected)
+                 + string.Join("|", show?.CaptureDevices.Select(d => d.Signal + d.DisplayId) ?? []);
         if (fp == _fp && _root.Children.Count > 0) return;
         _fp = fp;
         _building = true;
@@ -599,7 +600,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards on this PC. Each connected card gets its own Stage display.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. Pick which Stage display each card fills — Display 1, Display 2, … — then Connect.",
         });
         _root.Children.Add(new TextBlock
         {
@@ -611,18 +612,7 @@ public class DevicesPanel : UserControl
                 : $"{CaptureHub.LiveCount} live session(s) · {CaptureHub.Devices.Count} device(s) found. Connect all to run them together.",
         });
         foreach (var device in cards)
-        {
-            var live = connected.Contains(device.Id);
-            _root.Children.Add(new TextBlock
-            {
-                Text = $"{device.Name}  ·  {device.Kind}{(live ? "  ·  live" : "")}",
-                Margin = new Thickness(0, 8, 0, 0),
-                Foreground = (Brush)FindResource("Wo.Text"),
-            });
-            var id = device.Id;
-            var name = device.Name;
-            _root.Children.Add(Btn(live ? $"Reconnect {device.Name}" : $"Connect {device.Name}", () => App.Session.ConnectCapture(id, name)));
-        }
+            _root.Children.Add(CaptureRow(device, show, connected.Contains(device.Id)));
         _root.Children.Add(Btn("Connect all capture cards", () =>
             App.Session.ConnectCaptures(cards.Select(d => (d.Id, d.Name)))));
         _root.Children.Add(Btn("Refresh capture cards", () => _ = CaptureHub.RefreshAsync()));
@@ -730,6 +720,55 @@ public class DevicesPanel : UserControl
         return row;
     }
 
+    UIElement CaptureRow(CaptureDeviceInfo device, Show? show, bool live)
+    {
+        var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var name = new TextBlock
+        {
+            Text = $"{device.Name}  ·  {device.Kind}{(live ? "  ·  live" : "")}",
+            Foreground = (Brush)FindResource("Wo.Text"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(name, 0);
+        var box = new ComboBox
+        {
+            MinWidth = 168,
+            Margin = new Thickness(8, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        box.Items.Add(Choice("Auto (next display)", LiveSources.AutoDisplayKey));
+        foreach (var display in show?.Displays ?? [])
+            box.Items.Add(Choice(LiveSources.DisplayChoiceLabel(display), display.Id));
+        var want = show is null ? LiveSources.AutoDisplayKey : LiveSources.CaptureDisplayKey(show, device.Id);
+        foreach (ComboBoxItem item in box.Items)
+            if (Equals(item.Tag, want)) box.SelectedItem = item;
+        if (box.SelectedItem is null) box.SelectedIndex = 0;
+        var deviceId = device.Id;
+        var deviceName = device.Name;
+        box.SelectionChanged += (_, _) =>
+        {
+            if (_building) return;
+            if (box.SelectedItem is not ComboBoxItem item || item.Tag is not string key) return;
+            App.Session.AssignCaptureToDisplay(deviceId, key, deviceName);
+        };
+        Grid.SetColumn(box, 1);
+        var connect = Btn(live ? "Reconnect" : "Connect", () =>
+        {
+            var key = box.SelectedItem is ComboBoxItem item ? item.Tag as string : LiveSources.AutoDisplayKey;
+            App.Session.ConnectCapture(deviceId, deviceName, displayId: LiveSources.IsAutoDisplay(key) ? null : key);
+        }, live ? "" : "amber", compact: true);
+        connect.Margin = new Thickness(0);
+        Grid.SetColumn(connect, 2);
+        row.Children.Add(name);
+        row.Children.Add(box);
+        row.Children.Add(connect);
+        return row;
+    }
+
     UIElement AudioRow(IReadOnlyList<AudioDevice> outputs, Show? show)
     {
         var selected = AudioAssign.Resolve(outputs, show?.AudioDevices.FirstOrDefault()?.Id);
@@ -832,6 +871,7 @@ public class PropertiesPanel : UserControl
 {
     readonly StackPanel _root = new() { Margin = new Thickness(10) };
     string _fp = "";
+    bool _building;
 
     public PropertiesPanel()
     {
@@ -850,7 +890,10 @@ public class PropertiesPanel : UserControl
             {
                 SelectionKind.Timeline when show.Timelines.FirstOrDefault(t => s.Selection.Ids.Contains(t.Id)) is { } tl => tl.Loop + tl.Name + tl.Duration + tl.Rate + tl.Enabled,
                 SelectionKind.Layer when s.ActiveTimeline?.Layers.FirstOrDefault(l => s.Selection.Ids.Contains(l.Id)) is { } layer => layer.Name + layer.Enabled + layer.Locked,
-                SelectionKind.Display when show.Displays.FirstOrDefault(d => s.Selection.Ids.Contains(d.Id)) is { } d => d.Name + d.Enabled + d.Blend,
+                SelectionKind.Display when show.Displays.FirstOrDefault(d => s.Selection.Ids.Contains(d.Id)) is { } d =>
+                    d.Name + d.Enabled + d.Blend + d.Width + d.Height
+                    + LiveSources.CaptureOnDisplay(show, d.Id)
+                    + string.Join("|", show.CaptureDevices.Select(c => c.Signal + c.DisplayId)),
                 SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a => a.Name + a.Notes,
                 _ => "",
             };
@@ -858,7 +901,10 @@ public class PropertiesPanel : UserControl
         var fp = s.Selection.Kind + string.Join(",", s.Selection.Ids) + extra;
         if (fp == _fp) return;
         _fp = fp;
+        _building = true;
         _root.Children.Clear();
+        try
+        {
         if (show is null) return;
         if (s.Selection.Kind == SelectionKind.Cue)
         {
@@ -891,6 +937,47 @@ public class PropertiesPanel : UserControl
             Field("Channel", d.Channel.ToString(), v => { if (int.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Channel = n); });
             Check("Enabled", d.Enabled, v => s.UpdateDisplay(d.Id, x => x.Enabled = v));
             Check("Blend", d.Blend, v => s.UpdateDisplay(d.Id, x => x.Blend = v));
+            _root.Children.Add(new TextBlock
+            {
+                Text = "Live capture",
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Margin = new Thickness(0, 12, 0, 2),
+            });
+            var capBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+            capBox.Items.Add(new ComboBoxItem { Content = "None", Tag = "" });
+            var seen = new HashSet<string>();
+            foreach (var card in CaptureHub.Devices.Where(c => !NdiNames.LooksLikeNdi(c.Name)))
+            {
+                seen.Add(card.Id);
+                capBox.Items.Add(new ComboBoxItem { Content = $"{card.Name}  ·  {card.Kind}", Tag = card.Id });
+            }
+            foreach (var rec in show.CaptureDevices.Where(c => c.Kind != "NDI"))
+            {
+                if (!seen.Add(rec.Signal)) continue;
+                capBox.Items.Add(new ComboBoxItem { Content = rec.Name, Tag = rec.Signal });
+            }
+            var current = LiveSources.CaptureOnDisplay(show, d.Id) ?? "";
+            foreach (ComboBoxItem item in capBox.Items)
+                if (Equals(item.Tag, current)) capBox.SelectedItem = item;
+            if (capBox.SelectedItem is null) capBox.SelectedIndex = 0;
+            var displayId = d.Id;
+            capBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (capBox.SelectedItem is not ComboBoxItem item || item.Tag is not string key || key.Length == 0) return;
+                var label = item.Content?.ToString() ?? key;
+                var name = label.Split("  ·  ")[0];
+                App.Session.AssignCaptureToDisplay(key, displayId, name);
+            };
+            _root.Children.Add(capBox);
+            _root.Children.Add(new TextBlock
+            {
+                Text = "Pick a capture card to fill this Stage display. Many cards can each target a different display.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Margin = new Thickness(0, 4, 0, 0),
+                FontSize = 11,
+            });
             ActionBtn("Delete display", () => s.DeleteSelected());
         }
         else if (s.Selection.Kind == SelectionKind.Timeline)
@@ -933,6 +1020,11 @@ public class PropertiesPanel : UserControl
                 Foreground = (Brush)FindResource("Wo.Muted"),
                 Margin = new Thickness(0, 8, 0, 0),
             });
+        }
+        }
+        finally
+        {
+            _building = false;
         }
     }
 

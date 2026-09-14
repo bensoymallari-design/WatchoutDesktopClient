@@ -263,6 +263,28 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void CaptureCardPinsToAChosenStageDisplay()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.AddDisplay();
+        var left = session.Show!.Displays[0];
+        var right = session.Show.Displays[1];
+        session.ConnectCapture("elgato-2", "Elgato 2", displayId: right.Id);
+        Assert.Equal(2, session.Show.Displays.Count);
+        var cue = LiveSources.CaptureCue(session.Show, "elgato-2");
+        Assert.NotNull(cue);
+        Assert.Equal(right.X, cue!.Position.X);
+        Assert.Equal(right.Id, session.Show.CaptureDevices.First(d => d.Signal == "elgato-2").DisplayId);
+
+        session.AssignCaptureToDisplay("elgato-2", left.Id);
+        cue = LiveSources.CaptureCue(session.Show, "elgato-2");
+        Assert.Equal(left.X, cue!.Position.X);
+        Assert.Equal(left.Id, LiveSources.CaptureDisplayKey(session.Show, "elgato-2"));
+        Assert.Equal("elgato-2", LiveSources.CaptureOnDisplay(session.Show, left.Id));
+    }
+
+    [Fact]
     public void FreeRunningCueStaysVisibleOutsideWindow()
     {
         var cue = ShowFactory.EmptyCue(new Cue

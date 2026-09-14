@@ -84,6 +84,62 @@ public static class LiveSources
 
     public static string? NextCaptureLayerId(Show show) => NextLiveLayerId(show);
 
+    public const string AutoDisplayKey = "auto";
+
+    public static bool IsAutoDisplay(string? key) =>
+        string.IsNullOrEmpty(key) || key == AutoDisplayKey;
+
+    public static string DisplayChoiceLabel(Display display) =>
+        $"{display.Name}  {display.Width:0}×{display.Height:0}";
+
+    public static Cue? CaptureCue(Show show, string deviceId)
+    {
+        var asset = show.Assets.FirstOrDefault(a => CaptureDeviceId(a) == deviceId);
+        if (asset is null) return null;
+        return show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.AssetId == asset.Id);
+    }
+
+    public static string CaptureDisplayKey(Show show, string deviceId)
+    {
+        var rec = show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId);
+        if (rec?.DisplayId is { Length: > 0 } id && show.Displays.Any(d => d.Id == id))
+            return id;
+        var cue = CaptureCue(show, deviceId);
+        if (cue is null) return AutoDisplayKey;
+        return StageGeometry.DisplayForCue(show.Displays, cue).Id;
+    }
+
+    public static string? CaptureOnDisplay(Show show, string displayId)
+    {
+        foreach (var rec in show.CaptureDevices.Where(d => d.Kind != "NDI"))
+            if (CaptureDisplayKey(show, rec.Signal) == displayId)
+                return rec.Signal;
+        foreach (var asset in show.Assets.Where(IsCapture))
+        {
+            var id = CaptureDeviceId(asset);
+            if (id is not null && CaptureDisplayKey(show, id) == displayId)
+                return id;
+        }
+        return null;
+    }
+
+    public static void FitCueToDisplay(Cue cue, Asset asset, Display display)
+    {
+        var fit = StageGeometry.FitTransform(asset, display);
+        cue.Position = fit.Position;
+        cue.Scale = fit.Scale;
+    }
+
+    public static Display ResolveCaptureDisplay(Show show, string? displayId)
+    {
+        if (!string.IsNullOrEmpty(displayId) && displayId != AutoDisplayKey)
+        {
+            var pinned = show.Displays.FirstOrDefault(d => d.Id == displayId);
+            if (pinned is not null) return pinned;
+        }
+        return EnsureDisplayForCapture(show);
+    }
+
     public static string? NextLiveLayerId(Show show)
     {
         var tl = show.Timelines.FirstOrDefault();

@@ -266,6 +266,7 @@ public sealed class CaptureDevice
     public string NodeId { get; set; } = "local-runner";
     public string Kind { get; set; } = "NDI";
     public string Signal { get; set; } = "WatchMe-CAPTURE";
+    public string? DisplayId { get; set; }
 }
 
 public sealed class ShowVariable

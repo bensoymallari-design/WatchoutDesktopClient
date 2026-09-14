@@ -863,7 +863,7 @@ public sealed class ProducerSession
         Changed?.Invoke();
     }
 
-    public Asset ConnectCapture(string deviceId, string name, int width = 1920, int height = 1080, bool announce = true)
+    public Asset ConnectCapture(string deviceId, string name, int width = 1920, int height = 1080, bool announce = true, string? displayId = null)
     {
         if (Show is null) NewShow();
         var existing = Show!.Assets.FirstOrDefault(a => LiveSources.CaptureDeviceId(a) == deviceId);
@@ -872,15 +872,17 @@ public sealed class ProducerSession
         ApplyImported(media);
         Mutate(show =>
         {
+            var prev = show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId);
             show.CaptureDevices = show.CaptureDevices
                 .Where(d => d.Signal != deviceId)
                 .Append(new CaptureDevice
                 {
-                    Id = Ids.New("cap"),
+                    Id = prev?.Id ?? Ids.New("cap"),
                     Name = name,
                     NodeId = "local-runner",
                     Kind = "HDMI",
                     Signal = deviceId,
+                    DisplayId = LiveSources.IsAutoDisplay(displayId) ? prev?.DisplayId : displayId,
                 })
                 .ToList();
         }, record: false);
@@ -888,21 +890,84 @@ public sealed class ProducerSession
         var displaysBefore = Show.Displays.Count;
         if (!hasCue)
         {
-            string? displayId = null;
+            string? targetId = null;
             string? layerId = null;
             Mutate(show =>
             {
-                displayId = LiveSources.EnsureDisplayForCapture(show).Id;
+                var target = LiveSources.ResolveCaptureDisplay(show, displayId ?? show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId)?.DisplayId);
+                targetId = target.Id;
                 layerId = LiveSources.NextCaptureLayerId(show);
+                var rec = show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId);
+                if (rec is not null) rec.DisplayId = target.Id;
             }, record: false);
-            AddCueFromAsset(media.Id, layerId, 0, displayId);
+            AddCueFromAsset(media.Id, layerId, 0, targetId);
         }
+        else if (!LiveSources.IsAutoDisplay(displayId))
+            AssignCaptureToDisplay(deviceId, displayId, name);
         if (announce)
         {
-            Log($"Live capture connected: {name} — play Resolume (or any HDMI/SDI source) into this card");
+            var dest = Show.Displays.FirstOrDefault(d => d.Id == (displayId ?? Show.CaptureDevices.FirstOrDefault(c => c.Signal == deviceId)?.DisplayId));
+            Log(dest is null
+                ? $"Live capture connected: {name} — play Resolume (or any HDMI/SDI source) into this card"
+                : $"Live capture {name} → {dest.Name} on Stage");
             if (Show.Displays.Count > displaysBefore) FrameDisplays();
         }
         return Show.Assets.First(a => a.Id == media.Id);
+    }
+
+    public void AssignCaptureToDisplay(string deviceId, string? displayKey, string? name = null)
+    {
+        if (Show is null) return;
+        name ??= Show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId)?.Name
+                 ?? Show.Assets.FirstOrDefault(a => LiveSources.CaptureDeviceId(a) == deviceId)?.Name
+                 ?? deviceId;
+        if (LiveSources.IsAutoDisplay(displayKey))
+        {
+            Mutate(show =>
+            {
+                var rec = show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId);
+                if (rec is not null) rec.DisplayId = null;
+            }, record: false);
+            return;
+        }
+        var display = Show.Displays.FirstOrDefault(d => d.Id == displayKey);
+        if (display is null)
+        {
+            Log("Pick a Stage display for that capture card", "warn");
+            return;
+        }
+        if (Show.Assets.All(a => LiveSources.CaptureDeviceId(a) != deviceId))
+        {
+            ConnectCapture(deviceId, name, displayId: display.Id);
+            return;
+        }
+        var asset = Show.Assets.First(a => LiveSources.CaptureDeviceId(a) == deviceId);
+        var cue = LiveSources.CaptureCue(Show, deviceId);
+        if (cue is null)
+        {
+            var layerId = LiveSources.NextCaptureLayerId(Show);
+            AddCueFromAsset(asset.Id, layerId, 0, display.Id);
+        }
+        else
+        {
+            UpdateCue(cue.Id, c => LiveSources.FitCueToDisplay(c, asset, display));
+        }
+        Mutate(show =>
+        {
+            var rec = show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId);
+            if (rec is not null) rec.DisplayId = display.Id;
+            else
+                show.CaptureDevices.Add(new CaptureDevice
+                {
+                    Id = Ids.New("cap"),
+                    Name = name,
+                    NodeId = "local-runner",
+                    Kind = "HDMI",
+                    Signal = deviceId,
+                    DisplayId = display.Id,
+                });
+        }, record: false);
+        Log($"{name} → {display.Name} on Stage");
     }
 
     public Asset ImportNdi(string sourceName, string? captureDeviceId = null, bool placeOnLayer = false, bool announce = true)
