@@ -526,8 +526,13 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Import an NDI name into Assets, then drag that clip onto a timeline layer — same as a video. Picture still needs NDI Tools → NDI Webcam Input.",
+            Text = "Click NDI in Assets (or Browse below) to pick which sources to import — same idea as Resolume. Then drag the clip onto a timeline layer. Picture still needs NDI Tools → NDI Webcam Input.",
         });
+        _root.Children.Add(Btn("Browse NDI sources", () =>
+        {
+            var owner = Window.GetWindow(this);
+            if (owner is not null) NdiPicker.Open(owner);
+        }, "go"));
         if (NdiHub.Sources.Count == 0)
         {
             _root.Children.Add(new TextBlock
@@ -580,18 +585,6 @@ public class DevicesPanel : UserControl
         {
             _ = CaptureHub.RefreshAsync();
             _ = NdiHub.RefreshAsync();
-        }));
-        _root.Children.Add(Btn("Import all NDI names to Assets", () =>
-        {
-            if (NdiHub.Sources.Count == 0 && ndiCams.Count == 0)
-            {
-                App.Session.Log("No NDI source yet. Refresh NDI, or open NDI Webcam Input.", "warn");
-                return;
-            }
-            foreach (var source in NdiHub.Sources)
-                ImportNdi(source.Name, announce: source == NdiHub.Sources[^1] && ndiCams.Count == 0);
-            foreach (var cam in ndiCams)
-                App.Session.ImportNdi(cam.Name, cam.Id, announce: cam == ndiCams[^1]);
         }));
 
         _root.Children.Add(Header("CAPTURE CARDS"));

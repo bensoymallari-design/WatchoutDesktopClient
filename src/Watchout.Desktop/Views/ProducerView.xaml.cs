@@ -116,6 +116,12 @@ public partial class ProducerView : UserControl
         button.BorderBrush = new SolidColorBrush(on ? Color.FromRgb(245, 166, 35) : Color.FromRgb(58, 58, 58));
     }
 
+    void Ndi_Click(object sender, RoutedEventArgs e)
+    {
+        var owner = Window.GetWindow(this);
+        if (owner is not null) NdiPicker.Open(owner);
+    }
+
     async void Import_Click(object sender, RoutedEventArgs e) => await MainWindow.ImportMediaAsync();
     void DeleteAsset_Click(object sender, RoutedEventArgs e) => DeleteHighlightedAsset();
     public void DeleteHighlightedAsset() => Assets.DeleteHighlighted();

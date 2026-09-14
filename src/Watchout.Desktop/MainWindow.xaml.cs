@@ -217,32 +217,9 @@ public partial class MainWindow : Window
             : $"NDI: {NdiHub.Sources.Count} source(s) on the LAN, {cams} Webcam Input device(s). Import to Assets, then drag onto a layer.");
     }
 
-    async void ImportNdi_Click(object sender, RoutedEventArgs e) => await ImportOrPlaceNdi(placeOnLayer: false);
+    void ImportNdi_Click(object sender, RoutedEventArgs e) => NdiPicker.Open(this);
 
-    async void ConnectNdi_Click(object sender, RoutedEventArgs e) => await ImportOrPlaceNdi(placeOnLayer: true);
-
-    async Task ImportOrPlaceNdi(bool placeOnLayer)
-    {
-        await CaptureHub.RefreshAsync();
-        await NdiHub.RefreshAsync();
-        var cams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
-        if (NdiHub.Sources.Count > 0)
-        {
-            foreach (var source in NdiHub.Sources)
-            {
-                var cam = NdiNames.MatchWebcam(source.Name, CaptureHub.Devices.Select(d => (d.Id, d.Name)));
-                App.Session.ImportNdi(source.Name, cam?.Id, placeOnLayer, announce: source == NdiHub.Sources[^1]);
-            }
-            return;
-        }
-        if (cams.Count > 0)
-        {
-            foreach (var cam in cams)
-                App.Session.ImportNdi(cam.Name, cam.Id, placeOnLayer, announce: cam == cams[^1]);
-            return;
-        }
-        App.Session.Log("No NDI source or NDI Webcam Input yet. Install NDI Tools, open Webcam Input, then Live → Refresh NDI.", "warn");
-    }
+    void ConnectNdi_Click(object sender, RoutedEventArgs e) => NdiPicker.Open(this, placeOnLayer: true);
 
     async void RefreshCapture_Click(object sender, RoutedEventArgs e)
     {
@@ -278,7 +255,8 @@ public partial class MainWindow : Window
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
             "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
-            "Devices → NDI → Import to Assets, then drag onto the timeline. Picture via NDI Webcam Input.\n\n" +
+            "Assets → NDI opens a source picker. Import the ones you want, then drag onto the timeline.\n" +
+            "Picture via NDI Webcam Input.\n\n" +
             "HAP, Resolume DXV, ProRes, DNx: optional ffmpeg transcode to H.264 MP4\n" +
             "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.",
             $"About {Brand.Name}");
