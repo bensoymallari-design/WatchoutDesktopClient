@@ -174,6 +174,11 @@ public partial class MainWindow : Window
     void Pause_Click(object sender, RoutedEventArgs e) => App.Session.Pause();
     void Stop_Click(object sender, RoutedEventArgs e) => App.Session.Stop();
     void Loop_Click(object sender, RoutedEventArgs e) => App.Session.SetLoop(null, LoopItem.IsChecked == true);
+    void FitMedia_Click(object sender, RoutedEventArgs e)
+    {
+        if (Root.Content is ProducerView producer) producer.FitTimelineToMedia();
+        else App.Session.FitTimelineToMedia();
+    }
     void AddTimeline_Click(object sender, RoutedEventArgs e) => App.Session.AddTimeline();
     void DeleteTimeline_Click(object sender, RoutedEventArgs e) => App.Session.DeleteTimeline();
     void AddLayer_Click(object sender, RoutedEventArgs e) => App.Session.AddLayer();

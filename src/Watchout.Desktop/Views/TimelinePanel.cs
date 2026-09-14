@@ -46,6 +46,16 @@ public sealed class TimelinePanel : FrameworkElement
 
     public void Reload() => InvalidateVisual();
 
+    public void FitToMedia()
+    {
+        if (!App.Session.FitTimelineToMedia()) return;
+        var tl = App.Session.ActiveTimeline;
+        if (tl is null || tl.Duration <= 0) return;
+        var width = ActualWidth > 80 ? ActualWidth : 800;
+        App.Session.TimelineZoom = TimelineMath.FitZoom(tl.Duration, width, HeadW);
+        InvalidateVisual();
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         var w = ActualWidth;

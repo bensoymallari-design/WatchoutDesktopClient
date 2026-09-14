@@ -45,6 +45,7 @@
         <MenuItem Header="Pause" Click="Pause_Click"/>
         <MenuItem Header="Stop" InputGestureText="Esc" Click="Stop_Click"/>
         <MenuItem x:Name="LoopItem" Header="Loop Play" IsCheckable="True" IsChecked="True" Click="Loop_Click"/>
+        <MenuItem Header="Fit to Media" Click="FitMedia_Click"/>
         <Separator/>
         <MenuItem Header="Add Timeline" Click="AddTimeline_Click"/>
         <MenuItem Header="Delete Timeline" Click="DeleteTimeline_Click"/>

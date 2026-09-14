@@ -51,6 +51,7 @@ public partial class ProducerView : UserControl
         StageHint.Text = $"Stage  ·  zoom {zoom * 100:0}%  ·  {n} display(s) {size}  ·  drag empty Stage to pan · Fit wall to center";
         PaintMode(EditCuesBtn, !displays);
         PaintMode(EditDisplaysBtn, displays);
+        PaintMode(FitMediaBtn, true);
         _syncing = false;
     }
 
@@ -64,6 +65,7 @@ public partial class ProducerView : UserControl
     async void Import_Click(object sender, RoutedEventArgs e) => await MainWindow.ImportMediaAsync();
     void DeleteAsset_Click(object sender, RoutedEventArgs e) => DeleteHighlightedAsset();
     public void DeleteHighlightedAsset() => Assets.DeleteHighlighted();
+    public void FitTimelineToMedia() => Timeline.FitToMedia();
     void Play_Click(object sender, RoutedEventArgs e) => App.Session.Play();
     void Pause_Click(object sender, RoutedEventArgs e) => App.Session.Pause();
     void Stop_Click(object sender, RoutedEventArgs e) => App.Session.Stop();
@@ -72,6 +74,7 @@ public partial class ProducerView : UserControl
         if (_syncing) return;
         App.Session.SetLoop(null, LoopBox.IsChecked == true);
     }
+    void FitMedia_Click(object sender, RoutedEventArgs e) => Timeline.FitToMedia();
     void AddLayer_Click(object sender, RoutedEventArgs e) => App.Session.AddLayer();
     void DeleteLayer_Click(object sender, RoutedEventArgs e) => App.Session.DeleteLayer();
     void EditCues_Click(object sender, RoutedEventArgs e) => App.Session.SetStageEditMode(StageEditMode.Cues);
