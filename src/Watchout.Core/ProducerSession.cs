@@ -26,6 +26,9 @@ public sealed class ProducerSession
     public StageEditMode StageEditMode { get; private set; } = StageEditMode.Cues;
     public double TimelineZoom { get; set; } = 0.012;
     public double TimelineScroll { get; set; }
+    public double TimelineLayerScroll { get; set; }
+    public double TimelineViewWidth { get; private set; } = 800;
+    public double TimelineViewHeight { get; private set; } = 200;
     public string? HoverCueId { get; set; }
     public HashSet<string> LiveOutputs { get; } = [];
 
@@ -34,6 +37,7 @@ public sealed class ProducerSession
 
     public event Action? Changed;
     public event Action? Clock;
+    public event Action? TimelineViewChanged;
 
     public Timeline? ActiveTimeline =>
         Show is null ? null : Show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? Show.Timelines.FirstOrDefault();
@@ -70,6 +74,9 @@ public sealed class ProducerSession
         View = "producer";
         ActiveTimelineId = show.Timelines.FirstOrDefault()?.Id;
         Selection = new Selection();
+        TimelineZoom = 0.012;
+        TimelineScroll = 0;
+        TimelineLayerScroll = 0;
         _history.Clear();
         _future.Clear();
         FrameDisplays();
@@ -118,7 +125,64 @@ public sealed class ProducerSession
     public void SetActiveTimeline(string id)
     {
         ActiveTimelineId = id;
+        ClampTimelineView();
         Changed?.Invoke();
+    }
+
+    public void ReportTimelineView(double width, double height)
+    {
+        var w = TimelineViewWidth;
+        var h = TimelineViewHeight;
+        if (width > 1) TimelineViewWidth = width;
+        if (height > 1) TimelineViewHeight = height;
+        ClampTimelineView();
+        if (Math.Abs(w - TimelineViewWidth) > 0.5 || Math.Abs(h - TimelineViewHeight) > 0.5)
+            TimelineViewChanged?.Invoke();
+    }
+
+    public double VisibleDurationMs() =>
+        TimelineMath.VisibleDurationMs(TimelineViewWidth, TimelineZoom);
+
+    public void SetTimelineScroll(double scroll)
+    {
+        var next = ActiveTimeline is null
+            ? 0
+            : TimelineMath.ClampScroll(scroll, ActiveTimeline.Duration, VisibleDurationMs());
+        if (Math.Abs(next - TimelineScroll) < 0.01) return;
+        TimelineScroll = next;
+        TimelineViewChanged?.Invoke();
+    }
+
+    public void SetTimelineLayerScroll(double scroll)
+    {
+        var lanesH = Math.Max(0, TimelineViewHeight - TimelineMath.RulerHeight);
+        var next = ActiveTimeline is null
+            ? 0
+            : TimelineMath.ClampLayerScroll(scroll, ActiveTimeline.Layers.Count, TimelineMath.LaneHeight, lanesH);
+        if (Math.Abs(next - TimelineLayerScroll) < 0.01) return;
+        TimelineLayerScroll = next;
+        TimelineViewChanged?.Invoke();
+    }
+
+    public void SetTimelineZoom(double zoom, double? keepMs = null, double? keepX = null)
+    {
+        TimelineZoom = Math.Clamp(zoom, 0.002, 0.2);
+        if (keepMs is double ms && keepX is double x && x > TimelineMath.HeaderWidth)
+            TimelineScroll = ms - (x - TimelineMath.HeaderWidth) / TimelineZoom;
+        ClampTimelineView();
+        TimelineViewChanged?.Invoke();
+    }
+
+    public void RevealTime(double startMs, double endMs)
+    {
+        ApplyRevealTime(startMs, endMs);
+        TimelineViewChanged?.Invoke();
+    }
+
+    public void RevealLayer(int index)
+    {
+        ApplyRevealLayer(index);
+        TimelineViewChanged?.Invoke();
     }
 
     public void SetPlayhead(string timelineId, double ms)
@@ -302,8 +366,27 @@ public sealed class ProducerSession
             tl.Cues.Add(cue);
             created = cue;
             Selection = new Selection { Kind = SelectionKind.Cue, Ids = [cue.Id] };
+            if (!live)
+            {
+                var end = TimelineMath.CueEnd(cue);
+                if (end > tl.Duration)
+                    tl.Duration = TimelineMath.ExtendDurationTo(tl.Duration, end);
+                ApplyRevealTime(cue.Start, end);
+            }
+            var layerIndex = tl.Layers.FindIndex(l => l.Id == layer.Id);
+            if (layerIndex >= 0) ApplyRevealLayer(layerIndex);
         });
         return created;
+    }
+
+    public Cue? AddCueAtEnd(string assetId, string? layerId = null)
+    {
+        var tl = ActiveTimeline;
+        if (tl is null) return null;
+        var cue = AddCueFromAsset(assetId, layerId, TimelineMath.ContentEnd(tl.Cues));
+        if (cue is not null)
+            Log($"Placed {cue.Name} at the end — Fit to media to frame the whole timeline");
+        return cue;
     }
 
     public Cue? DropAssetOnStage(string assetId, string? displayId, double x, double y)
@@ -624,6 +707,8 @@ public sealed class ProducerSession
             t.Duration = duration;
             if (t.Playhead > duration) t.Playhead = duration;
         });
+        TimelineScroll = 0;
+        ClampTimelineView();
         Log($"Fit to media — timeline length is {TimeFormat.FormatPlayTime(duration)}");
         return true;
     }
@@ -637,6 +722,7 @@ public sealed class ProducerSession
             var layer = ShowFactory.EmptyLayer($"Layer {tl.Layers.Count + 1}", tl.Layers.Count + 1);
             tl.Layers.Add(layer);
             Selection = new Selection { Kind = SelectionKind.Layer, Ids = [layer.Id] };
+            ApplyRevealLayer(tl.Layers.Count - 1);
         });
     }
 
@@ -651,6 +737,7 @@ public sealed class ProducerSession
             var layer = ShowFactory.EmptyLayer($"Layer {tl.Layers.Count + 1}", at + 1);
             tl.Layers.Insert(at, layer);
             Selection = new Selection { Kind = SelectionKind.Layer, Ids = [layer.Id] };
+            ApplyRevealLayer(at);
         });
     }
 
@@ -676,6 +763,7 @@ public sealed class ProducerSession
             live.Cues = next.Value.Cues;
             if (Selection.Kind == SelectionKind.Layer && Selection.Ids.Contains(id))
                 Selection = new Selection();
+            ClampTimelineView();
         });
         Log("Deleted layer");
     }
@@ -850,6 +938,29 @@ public sealed class ProducerSession
 
     IEnumerable<Cue> SelectedCues(Models.Show show) =>
         show.Timelines.SelectMany(t => t.Cues).Where(c => Selection.Kind == SelectionKind.Cue && Selection.Ids.Contains(c.Id));
+
+    void ApplyRevealTime(double startMs, double endMs) =>
+        TimelineScroll = TimelineMath.ScrollToShow(startMs, endMs, TimelineScroll, VisibleDurationMs());
+
+    void ApplyRevealLayer(int index)
+    {
+        var lanesH = Math.Max(0, TimelineViewHeight - TimelineMath.RulerHeight);
+        TimelineLayerScroll = TimelineMath.LayerScrollToShow(index, TimelineMath.LaneHeight, TimelineLayerScroll, lanesH);
+    }
+
+    void ClampTimelineView()
+    {
+        var tl = ActiveTimeline;
+        if (tl is null)
+        {
+            TimelineScroll = 0;
+            TimelineLayerScroll = 0;
+            return;
+        }
+        TimelineScroll = TimelineMath.ClampScroll(TimelineScroll, tl.Duration, VisibleDurationMs());
+        var lanesH = Math.Max(0, TimelineViewHeight - TimelineMath.RulerHeight);
+        TimelineLayerScroll = TimelineMath.ClampLayerScroll(TimelineLayerScroll, tl.Layers.Count, TimelineMath.LaneHeight, lanesH);
+    }
 
     void Mutate(Action<Models.Show> mutator, bool record = true)
     {

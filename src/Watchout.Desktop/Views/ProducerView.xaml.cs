@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Watchout.Core;
 using Watchout.Core.Models;
+using Watchout.Core.Scheduling;
 using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Views;
@@ -10,15 +12,25 @@ namespace Watchout.Desktop.Views;
 public partial class ProducerView : UserControl
 {
     bool _syncing;
+    bool _syncingScroll;
 
     public ProducerView()
     {
         InitializeComponent();
         Stage.Editing = true;
         Stage.PlayAudio = true;
-        App.Session.Changed += () => Dispatcher.BeginInvoke(SyncChrome);
+        App.Session.Changed += () => Dispatcher.BeginInvoke(() =>
+        {
+            SyncChrome();
+            SyncTimelineScroll();
+        });
         App.Session.Clock += () => Dispatcher.BeginInvoke(SyncChrome);
-        Loaded += (_, _) => SyncChrome();
+        App.Session.TimelineViewChanged += () => Dispatcher.BeginInvoke(SyncTimelineScroll);
+        Loaded += (_, _) =>
+        {
+            SyncChrome();
+            SyncTimelineScroll();
+        };
     }
 
     public void Reload()
@@ -31,6 +43,48 @@ public partial class ProducerView : UserControl
         Devices.Reload();
         Log.Reload();
         Stage.Refresh();
+        SyncTimelineScroll();
+    }
+
+    void SyncTimelineScroll()
+    {
+        _syncingScroll = true;
+        try
+        {
+            var s = App.Session;
+            var tl = s.ActiveTimeline;
+            var visibleMs = s.VisibleDurationMs();
+            var duration = tl?.Duration ?? 0;
+            TimelineHScroll.ViewportSize = visibleMs;
+            TimelineHScroll.Maximum = Math.Max(0, duration - visibleMs);
+            TimelineHScroll.SmallChange = Math.Max(1, visibleMs * 0.05);
+            TimelineHScroll.LargeChange = Math.Max(1, visibleMs * 0.8);
+            TimelineHScroll.Value = s.TimelineScroll;
+
+            var lanesH = Math.Max(1, s.TimelineViewHeight - TimelineMath.RulerHeight);
+            var contentH = (tl?.Layers.Count ?? 0) * TimelineMath.LaneHeight;
+            TimelineVScroll.ViewportSize = lanesH;
+            TimelineVScroll.Maximum = Math.Max(0, contentH - lanesH);
+            TimelineVScroll.SmallChange = TimelineMath.LaneHeight;
+            TimelineVScroll.LargeChange = lanesH;
+            TimelineVScroll.Value = s.TimelineLayerScroll;
+        }
+        finally
+        {
+            _syncingScroll = false;
+        }
+    }
+
+    void TimelineHScroll_Scroll(object sender, ScrollEventArgs e)
+    {
+        if (_syncingScroll) return;
+        App.Session.SetTimelineScroll(TimelineHScroll.Value);
+    }
+
+    void TimelineVScroll_Scroll(object sender, ScrollEventArgs e)
+    {
+        if (_syncingScroll) return;
+        App.Session.SetTimelineLayerScroll(TimelineVScroll.Value);
     }
 
     void SyncChrome()

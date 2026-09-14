@@ -39,6 +39,7 @@ public class AssetsPanel : UserControl
         };
         var menu = new ContextMenu();
         menu.Items.Add(Menu("Place on layer", PlaceHighlighted));
+        menu.Items.Add(Menu("Place at end of timeline", PlaceHighlightedAtEnd));
         menu.Items.Add(Menu("Delete asset", DeleteHighlighted));
         ContextMenu = menu;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
@@ -79,6 +80,17 @@ public class AssetsPanel : UserControl
             return;
         }
         App.Session.AddCueFromAsset(id);
+    }
+
+    public void PlaceHighlightedAtEnd()
+    {
+        var id = CurrentAssetId();
+        if (id is null)
+        {
+            App.Session.Log("Click the clip in Assets, then Place at end of timeline", "warn");
+            return;
+        }
+        App.Session.AddCueAtEnd(id);
     }
 
     public void DeleteHighlighted()
