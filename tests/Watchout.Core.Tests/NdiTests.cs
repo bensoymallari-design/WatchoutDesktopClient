@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using Watchout.Core;
 using Watchout.Core.Media;
@@ -30,6 +31,27 @@ public class NdiTests
         Assert.Equal("ndi", NdiNames.PreferredWebcam(devices)?.Id);
         Assert.Equal("ndi", NdiNames.MatchWebcam("SHOW-PC (Resolume)", devices)?.Id);
         Assert.Null(NdiNames.PreferredWebcam([("cam", "Integrated Camera")]));
+    }
+
+    [Fact]
+    public void FromRuntimeParsesUrlAndMachineName()
+    {
+        var a = NdiNames.FromRuntime("LOCALHOST (Qubit Jhon NDI)", "192.168.8.110:5961");
+        Assert.Equal("LOCALHOST (Qubit Jhon NDI)", a.Name);
+        Assert.Equal("192.168.8.110", a.Address);
+        Assert.Equal(5961, a.Port);
+        Assert.Equal("LOCALHOST", a.Host);
+    }
+
+    [Fact]
+    public void RuntimePathsPreferEnvThenNdi6RuntimeFolder()
+    {
+        var custom = Path.Combine("custom", "v6");
+        var dirs = NdiRuntimePaths.Candidates(
+            Path.Combine("pf"),
+            new Dictionary<string, string?> { ["NDI_RUNTIME_DIR_V6"] = custom });
+        Assert.Equal(Path.GetFullPath(Path.Combine(custom, "Processing.NDI.Lib.x64.dll")), dirs[0]);
+        Assert.Contains(dirs, p => p.EndsWith(Path.Combine("NDI", "NDI 6 Runtime", "v6", "Processing.NDI.Lib.x64.dll"), StringComparison.Ordinal));
     }
 
     [Fact]

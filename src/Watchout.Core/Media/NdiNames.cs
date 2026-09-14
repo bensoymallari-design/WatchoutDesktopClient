@@ -82,6 +82,32 @@ public static class NdiNames
         return PreferredWebcam(devices);
     }
 
+    public static NdiAdvert FromRuntime(string ndiName, string? url)
+    {
+        var name = FriendlyName(ndiName);
+        string? host = null;
+        string? address = null;
+        var port = 0;
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            var trimmed = url.Trim();
+            var colon = trimmed.LastIndexOf(':');
+            var left = colon > 0 ? trimmed[..colon] : trimmed;
+            if (colon > 0 && int.TryParse(trimmed[(colon + 1)..], out var parsed))
+                port = parsed;
+            if (IPAddress.TryParse(left.Trim('[', ']'), out _))
+                address = left.Trim('[', ']');
+            else
+                host = left;
+        }
+
+        var open = name.IndexOf(" (", StringComparison.Ordinal);
+        if (host is null && open > 0 && name.EndsWith(')'))
+            host = name[..open];
+
+        return new NdiAdvert(name, host, address, port);
+    }
+
     public static byte[] QueryPacket()
     {
         var buf = new List<byte>(64);

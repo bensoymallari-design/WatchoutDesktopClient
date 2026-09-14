@@ -56,8 +56,8 @@ public sealed class NdiPicker : Window
         intro.Children.Add(new TextBlock
         {
             Text = placeOnLayer
-                ? "Pick which NDI program to place on a timeline layer — same idea as Resolume. For picture, open NDI Tools → NDI Webcam Input and pick the same source."
-                : "Pick which NDI program to import into Assets — same idea as Resolume. Each Import adds that source as a clip you drag onto a timeline layer. For picture, open NDI Tools → NDI Webcam Input and pick the same source.",
+                ? "Pick which NDI program to place on a timeline layer. WatchMe uses the installed NDI Runtime (same DLL as WatchJhon) so local and LAN senders show up. For picture, open NDI Tools → NDI Webcam Input and pick the same source."
+                : "Pick which NDI program to import into Assets — same idea as Resolume. WatchMe uses the installed NDI Runtime (same DLL as WatchJhon) so local and LAN senders show up. Each Import adds that source as a clip you drag onto a timeline layer.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.FindResource("Wo.Muted"),
         });
@@ -134,7 +134,7 @@ public sealed class NdiPicker : Window
         if (_busy) return;
         _busy = true;
         _scan.IsEnabled = false;
-        _status.Text = "Scanning the network…";
+        _status.Text = "Scanning with NDI Runtime (same DLL WatchJhon uses)…";
         try
         {
             await CaptureHub.RefreshAsync();
@@ -157,10 +157,10 @@ public sealed class NdiPicker : Window
         _warn.Visibility = error is null ? Visibility.Collapsed : Visibility.Visible;
         _warnText.Text = error ?? "";
         _status.Text = choices.Count == 0
-            ? "No NDI names yet. Start Resolume NDI, OBS DistroAV, or NDI Camera Pro, then Scan again."
+            ? "No NDI senders answered this scan."
             : _placeOnLayer
-                ? $"{choices.Count} source(s) — place the ones you want on a layer."
-                : $"{choices.Count} source(s) — import the ones you want.";
+                ? $"{choices.Count} source(s) via {NdiHub.Engine} — place the ones you want on a layer."
+                : $"{choices.Count} source(s) via {NdiHub.Engine} — import the ones you want.";
         _rows.Children.Clear();
         var imported = App.Session.Show?.Assets
             .Where(LiveSources.IsNdi)
