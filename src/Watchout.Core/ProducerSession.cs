@@ -166,7 +166,7 @@ public sealed class ProducerSession
 
     public void SetTimelineZoom(double zoom, double? keepMs = null, double? keepX = null)
     {
-        TimelineZoom = Math.Clamp(zoom, 0.002, 0.2);
+        TimelineZoom = TimelineMath.ClampZoom(zoom);
         if (keepMs is double ms && keepX is double x && x > TimelineMath.HeaderWidth)
             TimelineScroll = ms - (x - TimelineMath.HeaderWidth) / TimelineZoom;
         ClampTimelineView();
