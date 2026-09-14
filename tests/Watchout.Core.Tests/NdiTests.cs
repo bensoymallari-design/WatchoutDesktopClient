@@ -74,6 +74,27 @@ public class NdiTests
     }
 
     [Fact]
+    public void CatalogListsLanSourcesAndWebcamWithoutDuplicates()
+    {
+        var lan = new NdiAdvert[]
+        {
+            new("SHOW-PC (Resolume Arena)", "SHOW-PC.local", "192.168.8.10"),
+            new("Qubit Jhon NDI", "localhost", "192.168.8.110"),
+        };
+        var devices = new (string Id, string Name)[]
+        {
+            ("cam", "Integrated Camera"),
+            ("ndi", "NDI Webcam Input"),
+        };
+        var choices = NdiCatalog.Choices(lan, devices);
+        Assert.Equal(3, choices.Count);
+        Assert.Contains(choices, c => c.Name == "SHOW-PC (Resolume Arena)" && c.Detail!.Contains("192.168.8.10"));
+        Assert.Contains(choices, c => c.Name == "Qubit Jhon NDI" && c.Detail!.Contains("192.168.8.110"));
+        Assert.Contains(choices, c => c.Name == "NDI Webcam Input" && c.WebcamId == "ndi");
+        Assert.DoesNotContain(choices, c => c.Name.Contains("Integrated"));
+    }
+
+    [Fact]
     public void ImportNdiAddsAnAssetYouPlaceOnALayerLikeAVideo()
     {
         var session = new ProducerSession();

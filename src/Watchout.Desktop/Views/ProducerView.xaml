@@ -55,8 +55,11 @@
       <DockPanel Background="#1C1C1C">
         <Border DockPanel.Dock="Top" Background="#2A2A2A" Padding="8,4">
           <DockPanel>
-            <Button DockPanel.Dock="Right" Style="{StaticResource Wo.Button}" Padding="8,2" Click="Import_Click" Content="Import"/>
-            <Button DockPanel.Dock="Right" Style="{StaticResource Wo.Button}" Padding="8,2" Click="DeleteAsset_Click" Content="Delete"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+              <Button Style="{StaticResource Wo.Go}" Padding="8,2" Margin="0,0,8,0" Click="Ndi_Click" Content="NDI"/>
+              <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="Import_Click" Content="Import"/>
+              <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="DeleteAsset_Click" Content="Delete"/>
+            </StackPanel>
             <TextBlock Text="Assets" Foreground="#D6D3D1" VerticalAlignment="Center"/>
           </DockPanel>
         </Border>

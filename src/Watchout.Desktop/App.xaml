@@ -53,6 +53,11 @@
       <Setter Property="Foreground" Value="#111"/>
       <Setter Property="BorderBrush" Value="#F5A623"/>
     </Style>
+    <Style x:Key="Wo.Go" TargetType="Button" BasedOn="{StaticResource Wo.Button}">
+      <Setter Property="Background" Value="#2E7D32"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="#388E3C"/>
+    </Style>
     <Style TargetType="TextBox">
       <Setter Property="Background" Value="#141414"/>
       <Setter Property="Foreground" Value="{StaticResource Wo.Text}"/>
