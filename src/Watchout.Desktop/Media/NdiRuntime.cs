@@ -17,6 +17,10 @@ public static class NdiRuntime
     static FindWaitFn? _findWait;
     static FindGetFn? _findGet;
     static FindDestroyFn? _findDestroy;
+    static RecvCreateFn? _recvCreate;
+    static RecvCaptureFn? _recvCapture;
+    static RecvFreeVideoFn? _recvFreeVideo;
+    static RecvDestroyFn? _recvDestroy;
     static bool _ready;
 
     public static IReadOnlyList<NdiAdvert> FindSources(TimeSpan wait)
@@ -62,7 +66,7 @@ public static class NdiRuntime
         {
             var src = Marshal.PtrToStructure<Source>(array + (nint)(i * (uint)size));
             var name = Marshal.PtrToStringUTF8(src.p_ndi_name);
-            if (string.IsNullOrWhiteSpace(name) || !seen.Add(name)) continue;
+            if (string.IsNullOrWhiteSpace(name) || !NdiNames.IsAdvertisedSource(name) || !seen.Add(name)) continue;
             var url = Marshal.PtrToStringUTF8(src.p_url_address);
             list.Add(NdiNames.FromRuntime(name, url));
         }
@@ -116,6 +120,10 @@ public static class NdiRuntime
             _findWait = Get<FindWaitFn>("NDIlib_find_wait_for_sources");
             _findGet = Get<FindGetFn>("NDIlib_find_get_current_sources");
             _findDestroy = Get<FindDestroyFn>("NDIlib_find_destroy");
+            _recvCreate = Get<RecvCreateFn>("NDIlib_recv_create_v3");
+            _recvCapture = Get<RecvCaptureFn>("NDIlib_recv_capture_v2");
+            _recvFreeVideo = Get<RecvFreeVideoFn>("NDIlib_recv_free_video_v2");
+            _recvDestroy = Get<RecvDestroyFn>("NDIlib_recv_destroy");
             if (!_initialize())
             {
                 LastError = "NDI Runtime loaded but this CPU is not supported.";
@@ -143,6 +151,52 @@ public static class NdiRuntime
         return Marshal.GetDelegateForFunctionPointer<T>(fn);
     }
 
+    public static nint CreateReceiver(string sourceName, out nint namePtr)
+    {
+        namePtr = 0;
+        lock (Gate)
+        {
+            if (!EnsureLoaded() || _recvCreate is null) return 0;
+            namePtr = Marshal.StringToCoTaskMemUTF8(sourceName);
+            var recvName = Marshal.StringToCoTaskMemUTF8("WatchMe");
+            var create = new RecvCreate
+            {
+                p_ndi_name = namePtr,
+                color_format = 0,
+                bandwidth = 100,
+                allow_video_fields = true,
+                p_ndi_recv_name = recvName,
+            };
+            var recv = _recvCreate(ref create);
+            Marshal.FreeCoTaskMem(recvName);
+            if (recv == 0)
+            {
+                Marshal.FreeCoTaskMem(namePtr);
+                namePtr = 0;
+                LastError = $"NDI could not connect to {sourceName}.";
+            }
+            return recv;
+        }
+    }
+
+    public static int CaptureVideo(nint recv, ref VideoFrame frame, uint timeoutMs) =>
+        _recvCapture is null || recv == 0 ? 0 : _recvCapture(recv, ref frame, 0, 0, timeoutMs);
+
+    public static void FreeVideo(nint recv, ref VideoFrame frame)
+    {
+        if (_recvFreeVideo is null || recv == 0) return;
+        _recvFreeVideo(recv, ref frame);
+    }
+
+    public static void DestroyReceiver(nint recv, nint namePtr)
+    {
+        lock (Gate)
+        {
+            if (recv != 0) _recvDestroy?.Invoke(recv);
+            if (namePtr != 0) Marshal.FreeCoTaskMem(namePtr);
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     struct FindCreate
     {
@@ -157,6 +211,35 @@ public static class NdiRuntime
     {
         public nint p_ndi_name;
         public nint p_url_address;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RecvCreate
+    {
+        public nint p_ndi_name;
+        public nint p_url_address;
+        public int color_format;
+        public int bandwidth;
+        [MarshalAs(UnmanagedType.U1)]
+        public bool allow_video_fields;
+        public nint p_ndi_recv_name;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct VideoFrame
+    {
+        public int xres;
+        public int yres;
+        public int FourCC;
+        public int frame_rate_N;
+        public int frame_rate_D;
+        public float picture_aspect_ratio;
+        public int frame_format_type;
+        public long timecode;
+        public nint p_data;
+        public int line_stride_in_bytes;
+        public nint p_metadata;
+        public long timestamp;
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -178,4 +261,16 @@ public static class NdiRuntime
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     delegate void FindDestroyFn(nint find);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    delegate nint RecvCreateFn(ref RecvCreate settings);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    delegate int RecvCaptureFn(nint recv, ref VideoFrame video, nint audio, nint metadata, uint timeoutMs);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    delegate void RecvFreeVideoFn(nint recv, ref VideoFrame video);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    delegate void RecvDestroyFn(nint recv);
 }

@@ -56,8 +56,8 @@ public sealed class NdiPicker : Window
         intro.Children.Add(new TextBlock
         {
             Text = placeOnLayer
-                ? "Pick which NDI program to place on a timeline layer. WatchMe uses the installed NDI Runtime (same DLL as WatchJhon) so local and LAN senders show up. For picture, open NDI Tools → NDI Webcam Input and pick the same source."
-                : "Pick which NDI program to import into Assets — same idea as Resolume. WatchMe uses the installed NDI Runtime (same DLL as WatchJhon) so local and LAN senders show up. Each Import adds that source as a clip you drag onto a timeline layer.",
+                ? "Pick which NDI program to place on a timeline layer. Picture comes from NDI Runtime — no Webcam Input needed."
+                : "Pick which NDI program to import into Assets — same idea as Resolume. Picture comes from NDI Runtime. Each Import adds that source as a clip you drag onto a timeline layer.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.FindResource("Wo.Muted"),
         });

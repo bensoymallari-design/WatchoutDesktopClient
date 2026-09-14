@@ -20,6 +20,18 @@ public static class NdiNames
     public static string? SourceNameFromUrl(string? url) =>
         IsNdiUrl(url) ? url![UrlPrefix.Length..] : null;
 
+    public static bool IsAdvertisedSource(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var n = FriendlyName(name);
+        if (n.Length < 2) return false;
+        if (n[0] == '_') return false;
+        if (n.Contains("_ndi._tcp", StringComparison.OrdinalIgnoreCase)) return false;
+        if (n.Equals("local", StringComparison.OrdinalIgnoreCase)) return false;
+        if (n.StartsWith("KeepAliveServer", StringComparison.OrdinalIgnoreCase)) return false;
+        return true;
+    }
+
     public static bool LooksLikeNdi(string? label) =>
         !string.IsNullOrEmpty(label) && label.Contains("ndi", StringComparison.OrdinalIgnoreCase);
 
@@ -155,7 +167,7 @@ public static class NdiNames
                 var ptr = rdataAt;
                 var instance = ReadName(packet, ref ptr);
                 var name = FriendlyName(instance);
-                if (!string.IsNullOrEmpty(name) && IsNdiInstance(instance, owner) && !names.ContainsKey(name))
+                if (!string.IsNullOrEmpty(name) && IsAdvertisedSource(name) && IsNdiInstance(instance, owner) && !names.ContainsKey(name))
                     names[name] = new NdiAdvert(name);
             }
             else if (type == 33 && rdlen >= 6)
@@ -193,7 +205,7 @@ public static class NdiNames
     static bool IsNdiInstance(string instance, string owner)
     {
         var blob = (instance + " " + owner).ToLowerInvariant();
-        return blob.Contains("_ndi._tcp") || blob.Contains("ndi");
+        return blob.Contains("_ndi._tcp") && IsAdvertisedSource(FriendlyName(instance));
     }
 
     static void WriteName(List<byte> buf, string name)

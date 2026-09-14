@@ -256,7 +256,7 @@ public partial class MainWindow : Window
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
             "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
             "Assets → NDI opens a source picker. Import the ones you want, then drag onto the timeline.\n" +
-            "Picture via NDI Webcam Input.\n\n" +
+            "Picture comes from the installed NDI Runtime DLL.\n\n" +
             "HAP, Resolume DXV, ProRes, DNx: optional ffmpeg transcode to H.264 MP4\n" +
             "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.",
             $"About {Brand.Name}");

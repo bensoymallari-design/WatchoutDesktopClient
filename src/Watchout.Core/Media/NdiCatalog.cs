@@ -14,7 +14,7 @@ public static class NdiCatalog
         foreach (var advert in lan)
         {
             var name = NdiNames.FriendlyName(advert.Name);
-            if (string.IsNullOrWhiteSpace(name) || !seen.Add(name)) continue;
+            if (!NdiNames.IsAdvertisedSource(name) || !seen.Add(name)) continue;
             var cam = NdiNames.MatchWebcam(name, devices);
             result.Add(new NdiChoice(name, Detail(advert), cam?.Id));
         }

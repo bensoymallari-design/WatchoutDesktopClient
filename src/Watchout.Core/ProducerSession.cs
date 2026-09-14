@@ -1009,7 +1009,7 @@ public sealed class ProducerSession
             }
             if (announce)
                 Log(captureDeviceId is null
-                    ? $"NDI {name} is on a timeline layer. Open NDI Webcam Input, pick this source, then Import NDI again for picture."
+                    ? $"NDI {name} is live on a timeline layer"
                     : $"NDI {name} is on a timeline layer. Press Space if you need the clock running.");
         }
         else
