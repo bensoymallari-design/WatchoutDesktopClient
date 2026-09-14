@@ -3,6 +3,7 @@ using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Core.Playback;
 using Watchout.Core.Persistence;
+using Watchout.Core.Scheduling;
 using Xunit;
 
 namespace Watchout.Core.Tests;
@@ -128,7 +129,66 @@ public class SessionAndShowTests
         session.AddCueFromAsset(media.Id);
         Assert.True(session.FitTimelineToMedia());
         Assert.Equal(12_500, session.ActiveTimeline!.Duration);
+        Assert.Equal(0, session.TimelineScroll);
         Assert.False(session.FitTimelineToMedia("missing"));
+    }
+
+    [Fact]
+    public void AddLayerScrollsTheLastLaneIntoView()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.ReportTimelineView(800, 80);
+        Assert.Equal(0, session.TimelineLayerScroll);
+        session.AddLayer();
+        var tl = session.ActiveTimeline!;
+        Assert.Equal(11, tl.Layers.Count);
+        var last = tl.Layers.Count - 1;
+        var top = last * TimelineMath.LaneHeight;
+        var visible = 80 - TimelineMath.RulerHeight;
+        Assert.True(session.TimelineLayerScroll > 0);
+        Assert.InRange(top, session.TimelineLayerScroll, session.TimelineLayerScroll + visible);
+        Assert.InRange(top + TimelineMath.LaneHeight, session.TimelineLayerScroll, session.TimelineLayerScroll + visible + 0.001);
+    }
+
+    [Fact]
+    public void AddCuePastTheEndExtendsDurationAndScrolls()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.ReportTimelineView(800, 200);
+        session.SetTimelineZoom(0.1);
+        session.UpdateTimeline(session.ActiveTimelineId!, t => t.Duration = 5_000);
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 30, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/tail.mp4", "/library/tail.mp4", probe, 1_000_000, true);
+        session.ApplyImported(media);
+        var cue = session.AddCueFromAsset(media.Id, start: 5_000);
+        Assert.NotNull(cue);
+        Assert.Equal(5_000, cue!.Start);
+        Assert.True(session.ActiveTimeline!.Duration >= 15_000);
+        Assert.True(session.TimelineScroll > 0);
+        var viewEnd = session.TimelineScroll + session.VisibleDurationMs();
+        Assert.InRange(cue.Start, session.TimelineScroll - 1, viewEnd);
+    }
+
+    [Fact]
+    public void PlaceAtEndStartsAfterTheLastClip()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.ReportTimelineView(800, 200);
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 8_000, Fps = 30, Codec = "h264" };
+        var first = MediaImport.FromProbe("/clips/a.mp4", "/library/a.mp4", probe, 1_000_000, true);
+        var second = MediaImport.FromProbe("/clips/b.mp4", "/library/b.mp4", probe, 1_000_000, true);
+        session.ApplyImported(first);
+        session.ApplyImported(second);
+        session.AddCueFromAsset(first.Id, start: 0);
+        var tail = session.AddCueAtEnd(second.Id);
+        Assert.NotNull(tail);
+        Assert.Equal(8_000, tail!.Start);
+        Assert.True(session.FitTimelineToMedia());
+        Assert.Equal(16_000, session.ActiveTimeline!.Duration);
+        Assert.Equal(0, session.TimelineScroll);
     }
 
     [Fact]

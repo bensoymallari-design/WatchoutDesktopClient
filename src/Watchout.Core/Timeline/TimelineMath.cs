@@ -7,6 +7,48 @@ public static class TimelineMath
     public static double CueEnd(Cue cue) => cue.Start + Math.Max(0, cue.Duration);
 
     public const double LiveLengthMs = 3_600_000;
+    public const double LaneHeight = 28;
+    public const double RulerHeight = 22;
+    public const double HeaderWidth = 120;
+
+    public static double VisibleDurationMs(double viewWidthPx, double zoom, double headerPx = HeaderWidth) =>
+        Math.Max(1, (Math.Max(headerPx + 1, viewWidthPx) - headerPx) / Math.Max(0.0001, zoom));
+
+    public static double ClampScroll(double scroll, double durationMs, double visibleMs)
+    {
+        var max = Math.Max(0, durationMs - Math.Max(1, visibleMs));
+        return Math.Clamp(scroll, 0, max);
+    }
+
+    public static double ScrollToShow(double startMs, double endMs, double scroll, double visibleMs)
+    {
+        visibleMs = Math.Max(1, visibleMs);
+        if (endMs < startMs) endMs = startMs;
+        if (endMs - startMs >= visibleMs) return Math.Max(0, startMs);
+        if (startMs < scroll) return Math.Max(0, startMs);
+        if (endMs > scroll + visibleMs) return Math.Max(0, endMs - visibleMs);
+        return scroll;
+    }
+
+    public static double ClampLayerScroll(double scroll, int layerCount, double laneH, double visibleH)
+    {
+        var content = Math.Max(0, layerCount * laneH);
+        var max = Math.Max(0, content - Math.Max(0, visibleH));
+        return Math.Clamp(scroll, 0, max);
+    }
+
+    public static double LayerScrollToShow(int layerIndex, double laneH, double scroll, double visibleH)
+    {
+        if (visibleH <= 0) return Math.Max(0, scroll);
+        var top = Math.Max(0, layerIndex) * laneH;
+        var bottom = top + laneH;
+        if (top < scroll) return top;
+        if (bottom > scroll + visibleH) return Math.Max(0, bottom - visibleH);
+        return scroll;
+    }
+
+    public static double ExtendDurationTo(double current, double needed) =>
+        Math.Max(Math.Max(1000, current), needed);
 
     /// <summary>End of the last finite clip (markers and day-long live cues are ignored).</summary>
     public static double ContentEnd(IEnumerable<Cue> cues)

@@ -151,6 +151,32 @@ public class TimelineMathTests
     }
 
     [Fact]
+    public void TimelineScrollClampsAndReveals()
+    {
+        Assert.Equal(0, TimelineMath.ClampScroll(-10, 10_000, 5_000));
+        Assert.Equal(5_000, TimelineMath.ClampScroll(9_000, 10_000, 5_000));
+        Assert.Equal(2_000, TimelineMath.ClampScroll(2_000, 10_000, 5_000));
+        Assert.Equal(0, TimelineMath.ClampScroll(100, 5_000, 8_000));
+        Assert.Equal(1_000, TimelineMath.ScrollToShow(1_000, 2_000, 3_000, 5_000));
+        Assert.Equal(1_000, TimelineMath.ScrollToShow(5_000, 6_000, 0, 5_000));
+        Assert.Equal(0, TimelineMath.ScrollToShow(100, 200, 0, 5_000));
+        Assert.Equal(4_000, TimelineMath.ScrollToShow(4_000, 20_000, 0, 5_000));
+        Assert.Equal(15_000, TimelineMath.ExtendDurationTo(10_000, 15_000));
+        Assert.Equal(10_000, TimelineMath.ExtendDurationTo(10_000, 4_000));
+        Assert.Equal(680, TimelineMath.VisibleDurationMs(800, 1, 120), 3);
+    }
+
+    [Fact]
+    public void LayerScrollRevealsTheLastLane()
+    {
+        Assert.Equal(0, TimelineMath.ClampLayerScroll(-10, 10, 28, 100));
+        Assert.Equal(180, TimelineMath.ClampLayerScroll(500, 10, 28, 100));
+        Assert.Equal(180, TimelineMath.LayerScrollToShow(9, 28, 0, 100));
+        Assert.Equal(0, TimelineMath.LayerScrollToShow(0, 28, 0, 100));
+        Assert.Equal(0, TimelineMath.LayerScrollToShow(0, 28, 40, 100));
+    }
+
+    [Fact]
     public void CueClickNeverSeeks()
     {
         Assert.False(TimelineMath.TimelineClickSeeksPlayhead("cue", true));
