@@ -123,6 +123,15 @@ public static class LiveSources
         return null;
     }
 
+    public static string? CaptureNameOnDisplay(Show show, string displayId)
+    {
+        var id = CaptureOnDisplay(show, displayId);
+        if (id is null) return null;
+        return show.CaptureDevices.FirstOrDefault(d => d.Signal == id)?.Name
+               ?? show.Assets.FirstOrDefault(a => CaptureDeviceId(a) == id)?.Name
+               ?? id;
+    }
+
     public static void FitCueToDisplay(Cue cue, Asset asset, Display display)
     {
         var fit = StageGeometry.FitTransform(asset, display);

@@ -263,6 +263,32 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void ConnectAllPinsEachCardToAnExistingStageDisplayInOrder()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.AddDisplay();
+        session.AddDisplay();
+        Assert.Equal(3, session.Show!.Displays.Count);
+
+        var count = session.ConnectCaptures([
+            ("cam-a", "DeckLink 1"),
+            ("cam-b", "DeckLink 2"),
+            ("cam-c", "DeckLink 3"),
+        ]);
+
+        Assert.Equal(3, count);
+        Assert.Equal(3, session.Show.Displays.Count);
+        Assert.Equal(session.Show.Displays[0].Id, session.Show.CaptureDevices.First(d => d.Signal == "cam-a").DisplayId);
+        Assert.Equal(session.Show.Displays[1].Id, session.Show.CaptureDevices.First(d => d.Signal == "cam-b").DisplayId);
+        Assert.Equal(session.Show.Displays[2].Id, session.Show.CaptureDevices.First(d => d.Signal == "cam-c").DisplayId);
+        Assert.Equal("cam-a", LiveSources.CaptureOnDisplay(session.Show, session.Show.Displays[0].Id));
+        Assert.Equal("cam-b", LiveSources.CaptureOnDisplay(session.Show, session.Show.Displays[1].Id));
+        Assert.Equal("cam-c", LiveSources.CaptureOnDisplay(session.Show, session.Show.Displays[2].Id));
+        Assert.Equal("DeckLink 1", LiveSources.CaptureNameOnDisplay(session.Show, session.Show.Displays[0].Id));
+    }
+
+    [Fact]
     public void CaptureCardPinsToAChosenStageDisplay()
     {
         var session = new ProducerSession();

@@ -1027,13 +1027,21 @@ public sealed class ProducerSession
     public int ConnectCaptures(IEnumerable<(string Id, string Name)> devices)
     {
         var list = devices.ToList();
+        if (list.Count == 0) return 0;
+        if (Show is null) NewShow();
+        var existing = Show!.Displays.Select(d => d.Id).ToList();
+        var i = 0;
         foreach (var device in list)
-            ConnectCapture(device.Id, device.Name, announce: false);
-        if (list.Count > 0) FrameDisplays();
+        {
+            var displayId = i < existing.Count ? existing[i] : null;
+            ConnectCapture(device.Id, device.Name, announce: false, displayId: displayId);
+            i++;
+        }
+        FrameDisplays();
         if (list.Count == 1)
             Log($"Live capture connected: {list[0].Name} — play Resolume (or any HDMI/SDI source) into this card");
-        else if (list.Count > 1)
-            Log($"Connected {list.Count} capture cards across {Show!.Displays.Count} display(s). Each card is its own live layer — map extra HDMI outputs in Devices.");
+        else
+            Log($"Connected {list.Count} capture cards across {Show.Displays.Count} display(s). Card 1 → Display 1, card 2 → Display 2, … — remap any card in Devices or click a Stage display.");
         return list.Count;
     }
 

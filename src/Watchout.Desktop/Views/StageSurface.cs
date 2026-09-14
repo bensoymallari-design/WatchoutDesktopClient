@@ -143,11 +143,14 @@ public sealed class StageSurface : Canvas
             SetZIndex(border, 0);
             Children.Add(border);
             _chrome.Add(border);
+            var cap = LiveSources.CaptureNameOnDisplay(show, display.Id);
             var label = new TextBlock
             {
-                Text = session.StageEditMode == StageEditMode.Displays || selected
-                    ? $"{display.Name}  {display.Width:0}×{display.Height:0}  ·  canvas"
-                    : $"{display.Name}  {display.Width:0}×{display.Height:0}",
+                Text = cap is null
+                    ? session.StageEditMode == StageEditMode.Displays || selected
+                        ? $"{display.Name}  {display.Width:0}×{display.Height:0}  ·  canvas"
+                        : $"{display.Name}  {display.Width:0}×{display.Height:0}"
+                    : $"{display.Name}  ·  {cap}",
                 Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
                 FontSize = 11,
                 IsHitTestVisible = false,

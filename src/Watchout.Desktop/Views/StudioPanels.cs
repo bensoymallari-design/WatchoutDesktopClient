@@ -600,7 +600,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. Pick which Stage display each card fills — Display 1, Display 2, … — then Connect.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. On each card pick Display 1, Display 2, … then Connect. Or click a Stage display and choose the card in Properties. Connect all maps card 1 → Display 1, card 2 → Display 2, and so on.",
         });
         _root.Children.Add(new TextBlock
         {
@@ -964,7 +964,12 @@ public class PropertiesPanel : UserControl
             capBox.SelectionChanged += (_, _) =>
             {
                 if (_building) return;
-                if (capBox.SelectedItem is not ComboBoxItem item || item.Tag is not string key || key.Length == 0) return;
+                if (capBox.SelectedItem is not ComboBoxItem item || item.Tag is not string key || key.Length == 0)
+                {
+                    _fp = "";
+                    Reload();
+                    return;
+                }
                 var label = item.Content?.ToString() ?? key;
                 var name = label.Split("  ·  ")[0];
                 App.Session.AssignCaptureToDisplay(key, displayId, name);
