@@ -213,8 +213,8 @@ public partial class MainWindow : Window
         await NdiHub.RefreshAsync();
         var cams = CaptureHub.Devices.Count(d => NdiNames.LooksLikeNdi(d.Name));
         App.Session.Log(NdiHub.Sources.Count == 0
-            ? $"NDI scan found no sources. {cams} NDI Webcam device(s). Start Resolume NDI or NDI Camera Pro, open NDI Webcam Input, then scan again."
-            : $"NDI: {NdiHub.Sources.Count} source(s) on the LAN, {cams} Webcam Input device(s). Import to Assets, then drag onto a layer.");
+            ? $"NDI scan found no sources. {cams} NDI Webcam device(s). {NdiHub.LastError ?? "Start Resolume NDI or DistroAV, then scan again."}"
+            : $"NDI: {NdiHub.Sources.Count} source(s) via {NdiHub.Engine}, {cams} Webcam Input device(s). Import the ones you want.");
     }
 
     void ImportNdi_Click(object sender, RoutedEventArgs e) => NdiPicker.Open(this);
