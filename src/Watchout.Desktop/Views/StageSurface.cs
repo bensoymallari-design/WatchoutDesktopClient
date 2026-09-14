@@ -16,7 +16,9 @@ public sealed class StageSurface : Canvas
 {
     readonly Dictionary<string, FrameworkElement> _layers = [];
     readonly Dictionary<string, MediaElement> _videos = [];
+    readonly HashSet<string> _playing = [];
     readonly List<UIElement> _chrome = [];
+    bool _clockQueued;
     Display? _viewDisplay;
     Point _dragStart;
     string? _dragCueId;
@@ -47,6 +49,7 @@ public sealed class StageSurface : Canvas
         DragLeave += (_, _) => { if (_hoverDisplayId is not null) { _hoverDisplayId = null; Refresh(); } };
         Drop += OnDrop;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Refresh, DispatcherPriority.Render);
+        App.Session.Clock += QueuePlaybackTick;
         SizeChanged += (_, _) => Refresh();
         MouseWheel += OnWheel;
         MouseLeftButtonDown += OnLeftDown;
@@ -73,10 +76,28 @@ public sealed class StageSurface : Canvas
         {
             foreach (var v in _videos.Values) { try { v.Stop(); v.Close(); } catch { /* ignore */ } }
             _videos.Clear();
+            _playing.Clear();
         };
     }
 
+    void QueuePlaybackTick()
+    {
+        if (_clockQueued) return;
+        _clockQueued = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _clockQueued = false;
+            TickPlayback();
+        }, DispatcherPriority.Render);
+    }
+
     public void Refresh()
+    {
+        DrawChrome();
+        TickPlayback();
+    }
+
+    void DrawChrome()
     {
         var session = App.Session;
         var show = session.Show;
@@ -84,6 +105,9 @@ public sealed class StageSurface : Canvas
         {
             Children.Clear();
             _layers.Clear();
+            _videos.Clear();
+            _playing.Clear();
+            _chrome.Clear();
             return;
         }
 
@@ -91,51 +115,83 @@ public sealed class StageSurface : Canvas
         foreach (var chrome in _chrome) Children.Remove(chrome);
         _chrome.Clear();
 
-        if (Editing)
+        if (!Editing) return;
+
+        foreach (var display in show.Displays.Where(d => d.Enabled))
         {
-            foreach (var display in show.Displays.Where(d => d.Enabled))
+            var r = Map(display.X, display.Y, display.Width, display.Height, originX, originY, scale);
+            var selected = session.Selection.Kind == SelectionKind.Display && session.Selection.Ids.Contains(display.Id);
+            var hover = display.Id == _hoverDisplayId;
+            var border = new Border
             {
-                var r = Map(display.X, display.Y, display.Width, display.Height, originX, originY, scale);
-                var selected = session.Selection.Kind == SelectionKind.Display && session.Selection.Ids.Contains(display.Id);
-                var hover = display.Id == _hoverDisplayId;
-                var border = new Border
-                {
-                    Width = Math.Max(2, r.Width),
-                    Height = Math.Max(2, r.Height),
-                    BorderBrush = new SolidColorBrush(hover ? Color.FromRgb(74, 222, 128) : selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(80, 80, 80)),
-                    BorderThickness = new Thickness(hover || selected ? 3 : 1),
-                    Background = new SolidColorBrush(hover ? Color.FromArgb(50, 74, 222, 128) : Color.FromArgb(28, 48, 48, 48)),
-                    IsHitTestVisible = false,
-                };
-                SetLeft(border, r.X);
-                SetTop(border, r.Y);
-                SetZIndex(border, 0);
-                Children.Add(border);
-                _chrome.Add(border);
-                var label = new TextBlock
-                {
-                    Text = session.StageEditMode == StageEditMode.Displays || selected
-                        ? $"{display.Name}  {display.Width:0}×{display.Height:0}  ·  canvas"
-                        : $"{display.Name}  {display.Width:0}×{display.Height:0}",
-                    Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
-                    FontSize = 11,
-                    IsHitTestVisible = false,
-                };
-                SetLeft(label, r.X + 6);
-                SetTop(label, r.Y + 4);
-                Children.Add(label);
-                _chrome.Add(label);
-                if (selected)
-                    DrawHandles(r, 30);
-            }
+                Width = Math.Max(2, r.Width),
+                Height = Math.Max(2, r.Height),
+                BorderBrush = new SolidColorBrush(hover ? Color.FromRgb(74, 222, 128) : selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(80, 80, 80)),
+                BorderThickness = new Thickness(hover || selected ? 3 : 1),
+                Background = new SolidColorBrush(hover ? Color.FromArgb(50, 74, 222, 128) : Color.FromArgb(28, 48, 48, 48)),
+                IsHitTestVisible = false,
+            };
+            SetLeft(border, r.X);
+            SetTop(border, r.Y);
+            SetZIndex(border, 0);
+            Children.Add(border);
+            _chrome.Add(border);
+            var label = new TextBlock
+            {
+                Text = session.StageEditMode == StageEditMode.Displays || selected
+                    ? $"{display.Name}  {display.Width:0}×{display.Height:0}  ·  canvas"
+                    : $"{display.Name}  {display.Width:0}×{display.Height:0}",
+                Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+                FontSize = 11,
+                IsHitTestVisible = false,
+            };
+            SetLeft(label, r.X + 6);
+            SetTop(label, r.Y + 4);
+            Children.Add(label);
+            _chrome.Add(label);
+            if (selected)
+                DrawHandles(r, 30);
         }
 
+        if (session.Selection.Kind != SelectionKind.Cue) return;
+        var live = PlaybackClock.VisibleMedia(show);
+        foreach (var ev in live.Where(e => session.Selection.Ids.Contains(e.Cue.Id)))
+        {
+            var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
+            var rect = StageGeometry.CueRect(ev, asset);
+            var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
+            var outline = new Rectangle
+            {
+                Width = Math.Max(1, mapped.Width),
+                Height = Math.Max(1, mapped.Height),
+                Stroke = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+                StrokeThickness = 2,
+                Fill = Brushes.Transparent,
+                IsHitTestVisible = false,
+            };
+            SetLeft(outline, mapped.X);
+            SetTop(outline, mapped.Y);
+            Children.Add(outline);
+            _chrome.Add(outline);
+            SetZIndex(outline, 20);
+            DrawHandles(mapped, 21);
+        }
+    }
+
+    void TickPlayback()
+    {
+        var session = App.Session;
+        var show = session.Show;
+        if (show is null) return;
+
+        var (originX, originY, scale) = Viewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();
         foreach (var stale in _layers.Keys.Where(id => !liveIds.Contains(id)).ToList())
         {
             Children.Remove(_layers[stale]);
             _layers.Remove(stale);
+            _playing.Remove(stale);
             if (_videos.Remove(stale, out var dead))
             {
                 try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -153,6 +209,7 @@ public sealed class StageSurface : Canvas
                 {
                     Children.Remove(el);
                     _layers.Remove(ev.Cue.Id);
+                    _playing.Remove(ev.Cue.Id);
                     if (_videos.Remove(ev.Cue.Id, out var dead))
                     {
                         try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -176,34 +233,17 @@ public sealed class StageSurface : Canvas
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
                 video.IsMuted = !PlayAudio || ev.Volume <= 0;
                 video.Volume = Math.Clamp(ev.Volume / 100.0, 0, 1);
-                SyncVideo(video, ev, tl?.Playback ?? PlaybackState.Stop);
+                SyncVideo(ev.Cue.Id, video, ev, tl?.Playback ?? PlaybackState.Stop);
             }
 
             el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
-            SetLeft(el, mapped.X);
-            SetTop(el, mapped.Y);
-            el.Width = Math.Max(1, mapped.Width);
-            el.Height = Math.Max(1, mapped.Height);
+            var w = Math.Max(1, mapped.Width);
+            var h = Math.Max(1, mapped.Height);
+            if (Math.Abs(GetLeft(el) - mapped.X) > 0.5) SetLeft(el, mapped.X);
+            if (Math.Abs(GetTop(el) - mapped.Y) > 0.5) SetTop(el, mapped.Y);
+            if (Math.Abs(el.Width - w) > 0.5) el.Width = w;
+            if (Math.Abs(el.Height - h) > 0.5) el.Height = h;
             SetZIndex(el, 10);
-
-            if (Editing && session.Selection.Kind == SelectionKind.Cue && session.Selection.Ids.Contains(ev.Cue.Id))
-            {
-                var outline = new Rectangle
-                {
-                    Width = el.Width,
-                    Height = el.Height,
-                    Stroke = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
-                    StrokeThickness = 2,
-                    Fill = Brushes.Transparent,
-                    IsHitTestVisible = false,
-                };
-                SetLeft(outline, mapped.X);
-                SetTop(outline, mapped.Y);
-                Children.Add(outline);
-                _chrome.Add(outline);
-                SetZIndex(outline, 20);
-                DrawHandles(mapped, 21);
-            }
         }
     }
 
@@ -256,7 +296,7 @@ public sealed class StageSurface : Canvas
             LoadedBehavior = MediaState.Manual,
             UnloadedBehavior = MediaState.Manual,
             Stretch = Stretch.Fill,
-            ScrubbingEnabled = true,
+            ScrubbingEnabled = false,
             Focusable = false,
             IsHitTestVisible = false,
             IsMuted = !PlayAudio || ev.Volume <= 0,
@@ -268,13 +308,13 @@ public sealed class StageSurface : Canvas
         {
             App.Session.Log($"{asset.Name} · Media Foundation / DXVA opened {System.IO.Path.GetFileName(file)}");
             var tlNow = App.Session.Show?.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
-            SyncVideo(video, ev, tlNow?.Playback ?? PlaybackState.Stop);
+            SyncVideo(ev.Cue.Id, video, ev, tlNow?.Playback ?? PlaybackState.Stop);
         };
         try { video.Source = MediaLibrary.LocalUri(file); }
         catch { return Placeholder(mapped, asset.Name, asset.Color); }
         _videos[ev.Cue.Id] = video;
         var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
-        SyncVideo(video, ev, tl?.Playback ?? PlaybackState.Stop);
+        SyncVideo(ev.Cue.Id, video, ev, tl?.Playback ?? PlaybackState.Stop);
         return video;
     }
 
@@ -286,7 +326,7 @@ public sealed class StageSurface : Canvas
         return el is not CaptureLayer;
     }
 
-    static void SyncVideo(MediaElement video, EvaluatedCue ev, PlaybackState playback)
+    void SyncVideo(string cueId, MediaElement video, EvaluatedCue ev, PlaybackState playback)
     {
         var target = TimeSpan.FromMilliseconds(Math.Max(0, ev.LocalTime));
         try
@@ -294,11 +334,12 @@ public sealed class StageSurface : Canvas
             if (playback == PlaybackState.Play)
             {
                 var drift = Math.Abs((video.Position - target).TotalMilliseconds);
-                if (drift > 120) video.Position = target;
-                video.Play();
+                if (drift > 400) video.Position = target;
+                if (_playing.Add(cueId)) video.Play();
             }
             else
             {
+                _playing.Remove(cueId);
                 video.Pause();
                 video.Position = target;
             }

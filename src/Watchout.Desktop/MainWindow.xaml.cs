@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/app.png"));
         App.Session.Changed += OnSessionChanged;
+        App.Session.Clock += OnClockTick;
         PreviewKeyDown += OnPreviewKey;
         OnSessionChanged();
         _ = FfmpegTools.DetectAsync().ContinueWith(t =>
@@ -47,6 +48,12 @@ public partial class MainWindow : Window
         SnapItem.IsChecked = s.Snap;
         ClickJumpItem.IsChecked = s.ClickJumpsToTime;
         LoopItem.IsChecked = s.ActiveTimeline?.Loop == true;
+    }
+
+    void OnClockTick()
+    {
+        if (App.Session.ActiveTimeline is { } tl)
+            StatusClock.Text = TimeFormat.FormatPlayTime(tl.Playhead);
     }
 
     void OnPreviewKey(object sender, KeyEventArgs e)

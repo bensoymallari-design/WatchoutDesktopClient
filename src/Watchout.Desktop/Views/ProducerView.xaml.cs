@@ -16,6 +16,7 @@ public partial class ProducerView : UserControl
         Stage.Editing = true;
         Stage.PlayAudio = true;
         App.Session.Changed += () => Dispatcher.BeginInvoke(SyncChrome);
+        App.Session.Clock += () => Dispatcher.BeginInvoke(SyncChrome);
         Loaded += (_, _) => SyncChrome();
     }
 

@@ -31,6 +31,7 @@ public sealed class ProducerSession
     readonly List<string> _future = [];
 
     public event Action? Changed;
+    public event Action? Clock;
 
     public Timeline? ActiveTimeline =>
         Show is null ? null : Show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? Show.Timelines.FirstOrDefault();
@@ -185,7 +186,7 @@ public sealed class ProducerSession
         if (Show is null) return;
         if (Show.Timelines.All(t => t.Playback != PlaybackState.Play)) return;
         PlaybackClock.Tick(Show, dtMs);
-        Changed?.Invoke();
+        Clock?.Invoke();
     }
 
     public void SetCamera(double? x = null, double? y = null, double? zoom = null)
