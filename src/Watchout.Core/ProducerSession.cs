@@ -634,8 +634,49 @@ public sealed class ProducerSession
         Mutate(show => show.Displays = ScreenAssign.LayoutDisplaysOnScreens(show.Displays, screens, includePrimary));
         FrameDisplays();
         Log(includePrimary
-            ? "Mapped every monitor, including the Producer laptop, onto the Stage."
-            : "Mapped HDMI / extra monitors onto the Stage. Laptop stays the Producer.");
+            ? "Copied every monitor, including the Producer laptop, onto the Stage."
+            : "Assigned extra screens (MCTRL / NovaStar / HDMI) onto the Stage and copied their size and layout.");
+    }
+
+    public void AssignDisplayScreen(string displayId, string? key)
+    {
+        string? name = null;
+        Mutate(show =>
+        {
+            var d = show.Displays.FirstOrDefault(x => x.Id == displayId);
+            if (d is null) return;
+            ScreenAssign.ApplyAssignment(d, key);
+            name = d.Name;
+        });
+        if (name is not null)
+            Log(ScreenAssign.IsAutoKey(key)
+                ? $"{name} uses {ScreenAssign.AutoChoiceLabel(Show?.Displays.FirstOrDefault(d => d.Id == displayId)?.Channel ?? 1)}"
+                : $"{name} is pinned to a specific screen — Output sends it there");
+    }
+
+    public void CopyScreenSizeToDisplay(string? displayId, OutputScreen screen)
+    {
+        displayId ??= Selection.Kind == SelectionKind.Display ? Selection.Ids.FirstOrDefault() : null;
+        displayId ??= Show?.Displays.FirstOrDefault()?.Id;
+        if (displayId is null)
+        {
+            Log("Select a Display on Stage first, then Use size to copy that controller onto it", "warn");
+            return;
+        }
+        string? name = null;
+        var w = ScreenAssign.ScreenWidth(screen);
+        var h = ScreenAssign.ScreenHeight(screen);
+        Mutate(show =>
+        {
+            var d = show.Displays.FirstOrDefault(x => x.Id == displayId);
+            if (d is null) return;
+            ScreenAssign.CopyScreenSize(d, screen);
+            d.ScreenId = screen.Id;
+            name = d.Name;
+        });
+        FrameDisplays();
+        if (name is not null)
+            Log($"Copied {screen.Label} {w}×{h} onto {name}");
     }
 
     public void AddTimeline()

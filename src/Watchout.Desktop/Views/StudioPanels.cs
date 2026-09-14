@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 using Watchout.Desktop.Media;
 
 namespace Watchout.Desktop.Views;
@@ -425,6 +426,7 @@ public class DevicesPanel : UserControl
 {
     readonly StackPanel _root = new() { Margin = new Thickness(10) };
     string _fp = "";
+    bool _building;
 
     public DevicesPanel()
     {
@@ -446,9 +448,10 @@ public class DevicesPanel : UserControl
         var connected = show?.CaptureDevices.Select(d => d.Signal) ?? [];
         var ndiCams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
         var cards = CaptureHub.Devices.Where(d => !NdiNames.LooksLikeNdi(d.Name)).ToList();
-        var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id))
+        var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id + s.Width + s.Height))
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
+                 + string.Join("|", show?.Displays.Select(d => d.Id + d.Name + d.ScreenId + d.Channel + d.Width + d.Height + d.Enabled) ?? [])
                  + CaptureHub.Generation
                  + CaptureHub.LiveCount
                  + NdiHub.Generation
@@ -457,25 +460,72 @@ public class DevicesPanel : UserControl
                  + string.Join("|", connected);
         if (fp == _fp && _root.Children.Count > 0) return;
         _fp = fp;
+        _building = true;
         _root.Children.Clear();
-        _root.Children.Add(Header("SCREENS"));
-        foreach (var screen in Interop.Monitors.List())
+        try
         {
-            _root.Children.Add(new TextBlock
-            {
-                Text = $"{screen.Label}  {screen.Width}×{screen.Height}{(screen.IsPrimary ? "  ·  Producer" : "  ·  HDMI")}",
-                Margin = new Thickness(0, 4, 0, 0),
-                Foreground = (Brush)FindResource("Wo.Text"),
-            });
-        }
-        _root.Children.Add(Btn("Map extra monitors to Stage", () => App.Session.MapScreens(Interop.Monitors.List())));
-        _root.Children.Add(Btn("Include laptop in Stage", () => App.Session.MapScreens(Interop.Monitors.List(), true)));
-        _root.Children.Add(Btn("Output all displays", () =>
+        var screens = Interop.Monitors.List();
+        var extras = ScreenAssign.OutputPool(screens);
+        _root.Children.Add(Header("DISPLAYS"));
+        var displayBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 2, 0, 8) };
+        displayBar.Children.Add(Btn("Assign screens", () => App.Session.MapScreens(screens), "go", compact: true));
+        displayBar.Children.Add(Btn("Output all", () =>
         {
             if (App.Session.Show is { } s) App.Outputs.OpenAll(s.Displays);
-        }));
-        _root.Children.Add(Btn("Close outputs", () => App.Outputs.CloseAll()));
-        _root.Children.Add(Btn("Test beep", Beep));
+        }, "go", compact: true));
+        displayBar.Children.Add(Btn("Stop all", () => App.Outputs.CloseAll(), "stop", compact: true));
+        _root.Children.Add(displayBar);
+        foreach (var display in show?.Displays ?? [])
+            _root.Children.Add(DisplayRow(display, screens));
+
+        _root.Children.Add(Header("MONITORS"));
+        var monitorBar = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
+        var find = Btn("Find screens", () =>
+        {
+            _fp = "";
+            var n = Interop.Monitors.List().Count;
+            App.Session.Log(n <= 1
+                ? "Only the Producer screen is visible. Win+P → Extend, then Find screens again for MCTRL / NovaStar / HDMI."
+                : $"{n} OS screens — pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
+            Reload();
+        }, "go", compact: true);
+        find.HorizontalAlignment = HorizontalAlignment.Right;
+        find.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(find, Dock.Right);
+        monitorBar.Children.Add(find);
+        monitorBar.Children.Add(new TextBlock
+        {
+            Text = $"{screens.Count} screen(s)",
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        _root.Children.Add(monitorBar);
+        foreach (var screen in screens)
+            _root.Children.Add(MonitorRow(screen, show));
+        _root.Children.Add(new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0),
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            Text = extras.Count == 0
+                ? "Only one OS screen detected. Extend HDMI / MCTRL4K / NovaStar (Win+P), then Find screens."
+                : "Controllers and TVs show up as OS screens. Assign screens copies their size and desktop layout onto the Stage. On each Display row pick which controller it uses. Select a Display, then Use size or Output here.",
+        });
+
+        _root.Children.Add(Header("AUDIO"));
+        var audioRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+        var beep = Btn("Test beep", Beep, "amber", compact: true);
+        beep.HorizontalAlignment = HorizontalAlignment.Right;
+        DockPanel.SetDock(beep, Dock.Right);
+        audioRow.Children.Add(beep);
+        audioRow.Children.Add(new TextBlock
+        {
+            Text = "Windows default speaker",
+            Foreground = (Brush)FindResource("Wo.Text"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        _root.Children.Add(audioRow);
+        _root.Children.Add(Btn("Include laptop in Stage", () => App.Session.MapScreens(screens, true)));
 
         _root.Children.Add(Header("NDI"));
         _root.Children.Add(new TextBlock
@@ -593,13 +643,126 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = "Outputs decode H.264 with Windows Media Foundation / DXVA. Import MP4/MOV/H.264 directly. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture plays frames from the card, not a file.",
         });
+        }
+        finally
+        {
+            _building = false;
+        }
+    }
+
+    UIElement DisplayRow(Display display, IReadOnlyList<OutputScreen> screens)
+    {
+        var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var name = new TextBlock
+        {
+            Text = $"{display.Name}  {display.Width:0}×{display.Height:0}",
+            Foreground = (Brush)FindResource("Wo.Text"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = Cursors.Hand,
+        };
+        var displayId = display.Id;
+        name.MouseLeftButtonDown += (_, _) => App.Session.Select(SelectionKind.Display, displayId);
+        Grid.SetColumn(name, 0);
+        var box = new ComboBox
+        {
+            MinWidth = 168,
+            Margin = new Thickness(8, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        box.Items.Add(new ComboBoxItem { Content = ScreenAssign.AutoChoiceLabel(display.Channel), Tag = ScreenAssign.AutoKey(display.Channel) });
+        foreach (var screen in screens)
+            box.Items.Add(new ComboBoxItem { Content = ScreenAssign.ScreenChoiceLabel(screen), Tag = screen.Id });
+        var want = ScreenAssign.AssignmentKey(display);
+        foreach (ComboBoxItem item in box.Items)
+            if (Equals(item.Tag, want)) box.SelectedItem = item;
+        if (box.SelectedItem is null) box.SelectedIndex = 0;
+        box.SelectionChanged += (_, _) =>
+        {
+            if (_building) return;
+            if (box.SelectedItem is ComboBoxItem item)
+                App.Session.AssignDisplayScreen(displayId, item.Tag as string);
+        };
+        Grid.SetColumn(box, 1);
+        var output = Btn("Output", () =>
+        {
+            var live = App.Session.Show?.Displays.FirstOrDefault(d => d.Id == displayId);
+            if (live is not null) App.Outputs.Open(live);
+        }, "amber", compact: true);
+        output.Margin = new Thickness(0);
+        Grid.SetColumn(output, 2);
+        row.Children.Add(name);
+        row.Children.Add(box);
+        row.Children.Add(output);
+        return row;
+    }
+
+    UIElement MonitorRow(OutputScreen screen, Show? show)
+    {
+        var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var label = new TextBlock
+        {
+            Text = $"{screen.Label}{(screen.IsPrimary ? " · Producer" : "")}  {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}",
+            Foreground = (Brush)FindResource("Wo.Text"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(label, 0);
+        var useSize = Btn("Use size", () => App.Session.CopyScreenSizeToDisplay(null, screen), "go", compact: true);
+        useSize.Margin = new Thickness(8, 0, 8, 0);
+        Grid.SetColumn(useSize, 1);
+        var here = Btn("Output here", () =>
+        {
+            var id = App.Session.Selection.Kind == SelectionKind.Display
+                ? App.Session.Selection.Ids.FirstOrDefault()
+                : show?.Displays.FirstOrDefault()?.Id;
+            var display = show?.Displays.FirstOrDefault(d => d.Id == id) ?? show?.Displays.FirstOrDefault();
+            if (display is null)
+            {
+                App.Session.Log("Add a Display on Stage first, then Output here", "warn");
+                return;
+            }
+            App.Session.AssignDisplayScreen(display.Id, screen.Id);
+            App.Outputs.Open(display, screen);
+        }, "amber", compact: true);
+        here.Margin = new Thickness(0);
+        Grid.SetColumn(here, 2);
+        row.Children.Add(label);
+        row.Children.Add(useSize);
+        row.Children.Add(here);
+        return row;
     }
 
     static UIElement Header(string text) => new TextBlock { Text = text, Foreground = (Brush)Application.Current.FindResource("Wo.Amber"), Margin = new Thickness(0, 12, 0, 4), FontSize = 11 };
 
-    static Button Btn(string label, Action click)
+    static Button Btn(string label, Action click, string kind = "", bool compact = false)
     {
-        var b = new Button { Content = label, Style = (Style)Application.Current.FindResource("Wo.Button"), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        var primary = kind is "amber" or "primary";
+        var b = new Button
+        {
+            Content = label,
+            Style = (Style)Application.Current.FindResource(primary ? "Wo.Primary" : "Wo.Button"),
+            Margin = compact ? new Thickness(0, 0, 8, 0) : new Thickness(0, 6, 0, 0),
+            Padding = compact ? new Thickness(10, 4, 10, 4) : new Thickness(10, 6, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        if (kind == "go")
+        {
+            b.Background = new SolidColorBrush(Color.FromRgb(46, 125, 50));
+            b.Foreground = Brushes.White;
+            b.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 142, 60));
+        }
+        else if (kind == "stop")
+        {
+            b.Background = new SolidColorBrush(Color.FromRgb(90, 40, 40));
+            b.Foreground = Brushes.White;
+            b.BorderBrush = new SolidColorBrush(Color.FromRgb(120, 50, 50));
+        }
         b.Click += (_, _) => click();
         return b;
     }
