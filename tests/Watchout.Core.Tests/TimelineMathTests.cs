@@ -164,6 +164,12 @@ public class TimelineMathTests
         Assert.Equal(15_000, TimelineMath.ExtendDurationTo(10_000, 15_000));
         Assert.Equal(10_000, TimelineMath.ExtendDurationTo(10_000, 4_000));
         Assert.Equal(680, TimelineMath.VisibleDurationMs(800, 1, 120), 3);
+        Assert.Equal((120, 60), TimelineMath.ClipCueBar(80, 100, 120, 800));
+        Assert.Equal((200, 100), TimelineMath.ClipCueBar(200, 100, 120, 800));
+        Assert.Null(TimelineMath.ClipCueBar(0, 50, 120, 800));
+        Assert.Equal((790, 10), TimelineMath.ClipCueBar(790, 50, 120, 800));
+        Assert.True(TimelineMath.FitZoom(917_271, 1000, 120) < 0.002);
+        Assert.InRange(TimelineMath.FitZoom(917_271, 1000, 120), 0.0008, 0.0012);
     }
 
     [Fact]

@@ -72,10 +72,54 @@ public sealed class TimelinePanel : FrameworkElement
         var scroll = App.Session.TimelineScroll;
         var layerScroll = App.Session.TimelineLayerScroll;
         var xOf = (double ms) => HeadW + (ms - scroll) * zoom;
+        var timeW = Math.Max(0, w - HeadW);
+        var lanesH = Math.Max(0, h - RulerH);
+        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(58, 58, 58)), 1);
+        var lanePen = new Pen(new SolidColorBrush(Color.FromRgb(40, 40, 40)), 1);
+        var step = NiceStep(80 / zoom);
 
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(32, 32, 32)), null, new Rect(0, 0, HeadW, h));
-        dc.PushClip(new RectangleGeometry(new Rect(0, RulerH, w, Math.Max(0, h - RulerH))));
+
+        dc.PushClip(new RectangleGeometry(new Rect(HeadW, RulerH, timeW, lanesH)));
+        for (double t = 0; t <= tl.Duration; t += step)
+        {
+            var gx = xOf(t);
+            if (gx < HeadW || gx > w) continue;
+            dc.DrawLine(gridPen, new Point(gx, RulerH), new Point(gx, h));
+        }
         var y = RulerH - layerScroll;
+        foreach (var layer in tl.Layers)
+        {
+            if (y + LaneH >= RulerH && y <= h)
+            {
+                dc.DrawLine(lanePen, new Point(HeadW, y + LaneH), new Point(w, y + LaneH));
+                foreach (var cue in tl.Cues.Where(c => c.LayerId == layer.Id))
+                {
+                    var x = xOf(cue.Start);
+                    var cw = Math.Max(4, cue.Duration * zoom);
+                    if (TimelineMath.ClipCueBar(x, cw, HeadW, w) is not { } bar) continue;
+                    var selected = App.Session.Selection.Kind == SelectionKind.Cue && App.Session.Selection.Ids.Contains(cue.Id);
+                    var fill = BrushFrom(cue.Color);
+                    dc.DrawRectangle(fill, new Pen(selected ? new SolidColorBrush(Color.FromRgb(245, 166, 35)) : Brushes.Transparent, 2),
+                        new Rect(bar.X, y + 3, bar.W, LaneH - 6));
+                    var titleX = bar.X + 4;
+                    var titleW = bar.W - 8;
+                    if (titleW > 8)
+                    {
+                        var title = new FormattedText(cue.Name, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                            new Typeface("Segoe UI"), 11, Brushes.White, 1.25);
+                        title.MaxTextWidth = titleW;
+                        title.MaxTextHeight = 16;
+                        dc.DrawText(title, new Point(titleX, y + 6));
+                    }
+                }
+            }
+            y += LaneH;
+        }
+        dc.Pop();
+
+        dc.PushClip(new RectangleGeometry(new Rect(0, RulerH, HeadW, lanesH)));
+        y = RulerH - layerScroll;
         foreach (var layer in tl.Layers)
         {
             if (y + LaneH >= RulerH && y <= h)
@@ -93,43 +137,29 @@ public sealed class TimelinePanel : FrameworkElement
                 name.MaxTextWidth = HeadW - 12;
                 name.MaxTextHeight = LaneH - 4;
                 dc.DrawText(name, new Point(8, y + 6));
-                dc.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(40, 40, 40)), 1), new Point(0, y + LaneH), new Point(w, y + LaneH));
-                foreach (var cue in tl.Cues.Where(c => c.LayerId == layer.Id))
-                {
-                    var x = xOf(cue.Start);
-                    var cw = Math.Max(4, cue.Duration * zoom);
-                    if (x > w || x + cw < HeadW)
-                        continue;
-                    var selected = App.Session.Selection.Kind == SelectionKind.Cue && App.Session.Selection.Ids.Contains(cue.Id);
-                    var fill = BrushFrom(cue.Color);
-                    dc.DrawRectangle(fill, new Pen(selected ? new SolidColorBrush(Color.FromRgb(245, 166, 35)) : Brushes.Transparent, 2),
-                        new Rect(x, y + 3, cw, LaneH - 6));
-                    var title = new FormattedText(cue.Name, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        new Typeface("Segoe UI"), 11, Brushes.White, 1.25);
-                    title.MaxTextWidth = Math.Max(10, cw - 8);
-                    title.MaxTextHeight = 16;
-                    dc.DrawText(title, new Point(x + 4, y + 6));
-                }
+                dc.DrawLine(lanePen, new Point(0, y + LaneH), new Point(HeadW, y + LaneH));
             }
             y += LaneH;
         }
         dc.Pop();
 
-        dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(28, 28, 28)), null, new Rect(HeadW, 0, w - HeadW, RulerH));
+        dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(28, 28, 28)), null, new Rect(HeadW, 0, timeW, RulerH));
         dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(26, 26, 26)), null, new Rect(0, 0, HeadW, RulerH));
-        var step = NiceStep(80 / zoom);
+        dc.PushClip(new RectangleGeometry(new Rect(HeadW, 0, timeW, RulerH)));
         for (double t = 0; t <= tl.Duration; t += step)
         {
             var x = xOf(t);
             if (x < HeadW || x > w) continue;
-            dc.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(70, 70, 70)), 1), new Point(x, 0), new Point(x, h));
+            dc.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(70, 70, 70)), 1), new Point(x, 0), new Point(x, RulerH));
             var label = new FormattedText(TimeFormat.FormatMs(t)[3..], System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 new Typeface("Segoe UI"), 10, new SolidColorBrush(Color.FromRgb(160, 160, 160)), 1.25);
             dc.DrawText(label, new Point(x + 4, 4));
         }
+        dc.Pop();
 
         var px = xOf(tl.Playhead);
-        dc.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(245, 166, 35)), 1.5), new Point(px, 0), new Point(px, h));
+        if (px >= HeadW && px <= w)
+            dc.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(245, 166, 35)), 1.5), new Point(px, 0), new Point(px, h));
     }
 
     static double NiceStep(double raw)

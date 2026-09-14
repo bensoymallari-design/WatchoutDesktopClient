@@ -10,6 +10,20 @@ public static class TimelineMath
     public const double LaneHeight = 28;
     public const double RulerHeight = 22;
     public const double HeaderWidth = 120;
+    public const double MinZoom = 0.0002;
+    public const double MaxZoom = 0.2;
+
+    public static double ClampZoom(double zoom) => Math.Clamp(zoom, MinZoom, MaxZoom);
+
+    /// <summary>Visible portion of a cue bar after clipping to the time column.</summary>
+    public static (double X, double W)? ClipCueBar(double x, double width, double left, double right)
+    {
+        var end = x + Math.Max(0, width);
+        if (end <= left || x >= right) return null;
+        var nx = Math.Max(x, left);
+        var nw = Math.Min(end, right) - nx;
+        return nw > 0 ? (nx, nw) : null;
+    }
 
     public static double VisibleDurationMs(double viewWidthPx, double zoom, double headerPx = HeaderWidth) =>
         Math.Max(1, (Math.Max(headerPx + 1, viewWidthPx) - headerPx) / Math.Max(0.0001, zoom));
@@ -66,8 +80,8 @@ public static class TimelineMath
     public static double FitDuration(double contentEndMs) =>
         Math.Max(1000, Math.Ceiling(contentEndMs));
 
-    public static double FitZoom(double durationMs, double viewWidthPx, double headerPx = 120) =>
-        Math.Clamp((viewWidthPx - headerPx) / Math.Max(1, durationMs), 0.002, 0.2);
+    public static double FitZoom(double durationMs, double viewWidthPx, double headerPx = HeaderWidth) =>
+        ClampZoom((viewWidthPx - headerPx) / Math.Max(1, durationMs));
 
     public static bool CuesOverlap(Cue a, Cue b) => a.Start < CueEnd(b) && b.Start < CueEnd(a);
 
