@@ -38,6 +38,36 @@ public static class StageGeometry
         return null;
     }
 
+    public static Display? NearestDisplay(IReadOnlyList<Display> displays, (double X, double Y) pt, double maxDist = double.PositiveInfinity)
+    {
+        var inside = HitDisplay(displays, pt);
+        if (inside is not null) return inside;
+        Display? best = null;
+        var bestDist = maxDist;
+        foreach (var d in displays.Where(x => x.Enabled))
+        {
+            var r = DisplayRect(d);
+            var cx = Math.Clamp(pt.X, r.X, r.X + r.W);
+            var cy = Math.Clamp(pt.Y, r.Y, r.Y + r.H);
+            var dx = pt.X - cx;
+            var dy = pt.Y - cy;
+            var dist = Math.Sqrt(dx * dx + dy * dy);
+            if (dist <= bestDist)
+            {
+                bestDist = dist;
+                best = d;
+            }
+        }
+        return best;
+    }
+
+    public static Display? DropTarget(IReadOnlyList<Display> displays, (double X, double Y) pt, bool snap, double snapDist)
+    {
+        var hit = HitDisplay(displays, pt);
+        if (hit is not null) return hit;
+        return snap ? NearestDisplay(displays, pt, snapDist) : null;
+    }
+
     public static EvaluatedCue? HitCue(IReadOnlyList<EvaluatedCue> cues, IReadOnlyList<Asset> assets, (double X, double Y) pt)
     {
         var byId = assets.ToDictionary(a => a.Id);
@@ -281,7 +311,7 @@ public static class StageGeometry
         return (x, y);
     }
 
-    public static double SnapThreshold(double zoom) => Math.Max(6, 10 / Math.Max(0.05, zoom));
+    public static double SnapThreshold(double zoom) => Math.Max(32, 48 / Math.Max(0.04, zoom));
 
     public static Display DisplayForCue(IReadOnlyList<Display> displays, Cue cue)
     {

@@ -14,10 +14,13 @@ public static class StudioDrag
             id = custom;
             return true;
         }
-        if (data.GetDataPresent(DataFormats.UnicodeText) && data.GetData(DataFormats.UnicodeText) is string text && text.StartsWith("asset:", StringComparison.Ordinal))
+        foreach (var format in new[] { DataFormats.UnicodeText, DataFormats.Text, DataFormats.StringFormat })
         {
-            id = text["asset:".Length..];
-            return !string.IsNullOrWhiteSpace(id);
+            if (data.GetDataPresent(format) && data.GetData(format) is string text && text.StartsWith("asset:", StringComparison.Ordinal))
+            {
+                id = text["asset:".Length..];
+                return !string.IsNullOrWhiteSpace(id);
+            }
         }
         if (!string.IsNullOrWhiteSpace(AssetId))
         {

@@ -66,6 +66,23 @@ public class StageGeometryTests
     }
 
     [Fact]
+    public void DropSnapsOntoNearestDisplayWhenJustOutside()
+    {
+        var wall = Display("wall", 0, 0, 6720, 1344);
+        Assert.Equal("wall", StageGeometry.HitDisplay([wall], (100, 100))?.Id);
+        Assert.Null(StageGeometry.HitDisplay([wall], (-40, 80)));
+        Assert.Equal("wall", StageGeometry.DropTarget([wall], (-40, 80), snap: true, snapDist: 120)?.Id);
+        Assert.Null(StageGeometry.DropTarget([wall], (-4000, 80), snap: true, snapDist: 120));
+        Assert.Null(StageGeometry.DropTarget([wall], (-40, 80), snap: false, snapDist: 120));
+    }
+
+    [Fact]
+    public void SnapThresholdIsMagneticOnAZoomedOutWall()
+    {
+        Assert.True(StageGeometry.SnapThreshold(0.18) >= 200);
+    }
+
+    [Fact]
     public void DisplayForCueUsesDisplayUnderOrigin()
     {
         var right = Display("right", 1920);

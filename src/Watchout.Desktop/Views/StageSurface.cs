@@ -31,6 +31,7 @@ public sealed class StageSurface : Canvas
     string? _hoverDisplayId;
     bool _panning;
     bool _dragArmed;
+    bool _dropping;
     Point _panStart;
     (double X, double Y, double Zoom) _panCam;
 
@@ -45,8 +46,10 @@ public sealed class StageSurface : Canvas
         Focusable = true;
         Background = new SolidColorBrush(Color.FromRgb(17, 17, 17));
         AllowDrop = true;
+        PreviewDragOver += OnDragOver;
         DragOver += OnDragOver;
         DragLeave += (_, _) => { if (_hoverDisplayId is not null) { _hoverDisplayId = null; Refresh(); } };
+        PreviewDrop += OnDrop;
         Drop += OnDrop;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Refresh, DispatcherPriority.Render);
         App.Session.Clock += QueuePlaybackTick;
@@ -239,10 +242,10 @@ public sealed class StageSurface : Canvas
             el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
             var w = Math.Max(1, mapped.Width);
             var h = Math.Max(1, mapped.Height);
-            if (Math.Abs(GetLeft(el) - mapped.X) > 0.5) SetLeft(el, mapped.X);
-            if (Math.Abs(GetTop(el) - mapped.Y) > 0.5) SetTop(el, mapped.Y);
-            if (Math.Abs(el.Width - w) > 0.5) el.Width = w;
-            if (Math.Abs(el.Height - h) > 0.5) el.Height = h;
+            if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
+            if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
+            if (LayoutDiffers(el.Width, w)) el.Width = w;
+            if (LayoutDiffers(el.Height, h)) el.Height = h;
             SetZIndex(el, 10);
         }
     }
@@ -407,7 +410,7 @@ public sealed class StageSurface : Canvas
         var show = App.Session.Show;
         if (show is null) return;
         var stage = ScreenToStage(e.GetPosition(this), show);
-        var hit = StageGeometry.HitDisplay(show.Displays, stage)?.Id;
+        var hit = StageGeometry.DropTarget(show.Displays, stage, App.Session.Snap, DropSnapDistance(show))?.Id;
         if (hit == _hoverDisplayId) return;
         _hoverDisplayId = hit;
         Refresh();
@@ -415,25 +418,44 @@ public sealed class StageSurface : Canvas
 
     async void OnDrop(object sender, DragEventArgs e)
     {
-        if (!Editing) return;
-        e.Handled = true;
-        _hoverDisplayId = null;
-        var show = App.Session.Show;
-        if (show is null) return;
-        var stage = ScreenToStage(e.GetPosition(this), show);
-        var display = StageGeometry.HitDisplay(show.Displays, stage);
-        if (StudioDrag.TryAssetId(e.Data, out var assetId))
+        if (!Editing || _dropping) return;
+        _dropping = true;
+        try
         {
-            App.Session.DropAssetOnStage(assetId, display?.Id, stage.X, stage.Y);
-            StudioDrag.AssetId = null;
-            return;
+            e.Handled = true;
+            _hoverDisplayId = null;
+            var show = App.Session.Show;
+            if (show is null) return;
+            var stage = ScreenToStage(e.GetPosition(this), show);
+            var display = StageGeometry.DropTarget(show.Displays, stage, App.Session.Snap, DropSnapDistance(show));
+            if (StudioDrag.TryAssetId(e.Data, out var assetId))
+            {
+                App.Session.DropAssetOnStage(assetId, display?.Id, stage.X, stage.Y);
+                StudioDrag.AssetId = null;
+                return;
+            }
+            var files = StudioDrag.Files(e.Data);
+            if (files.Length == 0) return;
+            var ids = await MediaLibrary.ImportFilesAsync(files, App.Session);
+            foreach (var id in ids)
+                App.Session.DropAssetOnStage(id, display?.Id, stage.X, stage.Y);
         }
-        var files = StudioDrag.Files(e.Data);
-        if (files.Length == 0) return;
-        var ids = await MediaLibrary.ImportFilesAsync(files, App.Session);
-        foreach (var id in ids)
-            App.Session.DropAssetOnStage(id, display?.Id, stage.X, stage.Y);
+        finally
+        {
+            _dropping = false;
+            Refresh();
+        }
     }
+
+    double DropSnapDistance(Show show)
+    {
+        var magnet = StageGeometry.SnapThreshold(Viewport(show).Scale) * 6;
+        var smallest = show.Displays.Where(d => d.Enabled).Select(d => Math.Min(d.Width, d.Height)).DefaultIfEmpty(1920).Min();
+        return Math.Max(magnet, smallest * 0.35);
+    }
+
+    static bool LayoutDiffers(double current, double next) =>
+        double.IsNaN(current) || double.IsNaN(next) || Math.Abs(current - next) > 0.5;
 
     void OnWheel(object sender, MouseWheelEventArgs e)
     {
