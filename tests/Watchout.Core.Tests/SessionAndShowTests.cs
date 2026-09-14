@@ -364,4 +364,28 @@ public class SessionAndShowTests
         session.SetStageEditMode(StageEditMode.Cues);
         Assert.Equal(StageEditMode.Cues, session.StageEditMode);
     }
+
+    [Fact]
+    public void AssignDisplayScreenAndCopyControllerSize()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var id = session.Show!.Displays[0].Id;
+        session.AssignDisplayScreen(id, "mctrl4k");
+        Assert.Equal("mctrl4k", session.Show.Displays[0].ScreenId);
+        session.CopyScreenSizeToDisplay(id, new OutputScreen
+        {
+            Id = "mctrl4k",
+            Label = "MCTRL4K",
+            Width = 3840,
+            Height = 1080,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 1080,
+        });
+        Assert.Equal(3840, session.Show.Displays[0].Width);
+        Assert.Equal(1080, session.Show.Displays[0].Height);
+        session.AssignDisplayScreen(id, "auto:2");
+        Assert.Null(session.Show.Displays[0].ScreenId);
+        Assert.Equal(2, session.Show.Displays[0].Channel);
+    }
 }

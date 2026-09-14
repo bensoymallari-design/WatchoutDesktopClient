@@ -4,6 +4,8 @@ namespace Watchout.Core.Stage;
 
 public static class ScreenAssign
 {
+    public const string AutoPrefix = "auto:";
+
     public static IReadOnlyList<OutputScreen> OutputPool(IReadOnlyList<OutputScreen> screens, bool includePrimary = false)
     {
         var extras = screens.Where(s => !s.IsPrimary).ToList();
@@ -24,24 +26,75 @@ public static class ScreenAssign
         return pool[Math.Min(idx, pool.Count - 1)];
     }
 
+    public static string AutoKey(int channel) => $"{AutoPrefix}{Math.Max(1, channel)}";
+
+    public static bool IsAutoKey(string? key) =>
+        string.IsNullOrEmpty(key) || key.StartsWith(AutoPrefix, StringComparison.Ordinal);
+
+    public static string AssignmentKey(Display display) =>
+        string.IsNullOrEmpty(display.ScreenId) ? AutoKey(display.Channel) : display.ScreenId;
+
+    public static string AutoChoiceLabel(int channel) => $"Auto (channel {Math.Max(1, channel)})";
+
+    public static string ScreenChoiceLabel(OutputScreen screen) =>
+        screen.IsPrimary
+            ? $"{screen.Label} · Producer {ScreenWidth(screen)}×{ScreenHeight(screen)}"
+            : $"{screen.Label} {ScreenWidth(screen)}×{ScreenHeight(screen)}";
+
+    public static int ScreenWidth(OutputScreen screen) =>
+        screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;
+
+    public static int ScreenHeight(OutputScreen screen) =>
+        screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
+
+    public static void ApplyAssignment(Display display, string? key)
+    {
+        if (IsAutoKey(key))
+        {
+            display.ScreenId = null;
+            if (key is { Length: > 0 } && key.StartsWith(AutoPrefix, StringComparison.Ordinal)
+                && int.TryParse(key[AutoPrefix.Length..], out var ch) && ch > 0)
+                display.Channel = ch;
+            return;
+        }
+        display.ScreenId = key;
+    }
+
+    public static void CopyScreenSize(Display display, OutputScreen screen)
+    {
+        display.Width = ScreenWidth(screen);
+        display.Height = ScreenHeight(screen);
+    }
+
+    public static (int Left, int Top) LayoutOrigin(IReadOnlyList<OutputScreen> screens)
+    {
+        if (screens.Count == 0) return (0, 0);
+        return (screens.Min(s => s.Left), screens.Min(s => s.Top));
+    }
+
+    public static bool ScreensSpread(IReadOnlyList<OutputScreen> screens) =>
+        screens.Count > 1 && (screens.Max(s => s.Left) != screens.Min(s => s.Left) || screens.Max(s => s.Top) != screens.Min(s => s.Top));
+
     public static List<Display> LayoutDisplaysOnScreens(IReadOnlyList<Display> displays, IReadOnlyList<OutputScreen> screens, bool includePrimary = false)
     {
         var pool = OutputPool(screens, includePrimary);
         if (pool.Count == 0) return displays.ToList();
-        double x = 0;
+        var spread = ScreensSpread(pool);
+        var origin = LayoutOrigin(pool);
+        double packedX = 0;
         var mapped = new List<Display>();
         for (var i = 0; i < pool.Count; i++)
         {
             var screen = pool[i];
             var prev = i < displays.Count ? displays[i] : ShowFactory.EmptyDisplay(new Display { Name = screen.Label, Channel = i + 1 });
-            var width = screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;
-            var height = screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
+            var width = ScreenWidth(screen);
+            var height = ScreenHeight(screen);
             mapped.Add(new Display
             {
                 Id = prev.Id,
                 Name = string.IsNullOrEmpty(prev.Name) ? (screen.Label ?? $"Display {i + 1}") : prev.Name,
-                X = x,
-                Y = prev.Y,
+                X = spread ? screen.Left - origin.Left : packedX,
+                Y = spread ? screen.Top - origin.Top : prev.Y,
                 Z = prev.Z,
                 Width = width,
                 Height = height,
@@ -55,7 +108,7 @@ public static class ScreenAssign
                 Virtual = false,
                 ScreenId = screen.Id,
             });
-            x += width;
+            if (!spread) packedX += width;
         }
         mapped.AddRange(displays.Skip(pool.Count));
         return mapped;
