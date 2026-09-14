@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
@@ -53,7 +54,7 @@ public class AssetsPanel : UserControl
 
     static void OnDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = StudioDrag.Files(e.Data).Length > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = StudioDrag.IsMediaDrag(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
@@ -132,8 +133,11 @@ public class AssetsPanel : UserControl
 
     static void OnDrag(Asset asset, FrameworkElement source)
     {
-        DragDrop.DoDragDrop(source, StudioDrag.ForAsset(asset.Id), DragDropEffects.Copy);
-        StudioDrag.AssetId = null;
+        source.Dispatcher.BeginInvoke(() =>
+        {
+            try { DragDrop.DoDragDrop(source, StudioDrag.ForAsset(asset.Id), DragDropEffects.Copy); }
+            finally { StudioDrag.AssetId = null; }
+        }, DispatcherPriority.Input);
     }
 
     sealed class AssetRow : Border
@@ -183,20 +187,18 @@ public class AssetsPanel : UserControl
                 if (e.ClickCount >= 2)
                 {
                     App.Session.AddCueFromAsset(_id);
-                    return;
+                    e.Handled = true;
                 }
-                CaptureMouse();
             };
             MouseMove += (_, e) =>
             {
                 if (e.LeftButton != MouseButtonState.Pressed || _dragging) return;
                 var p = e.GetPosition(this);
-                if (Math.Abs(p.X - _press.X) < 8 && Math.Abs(p.Y - _press.Y) < 8) return;
+                if (Math.Abs(p.X - _press.X) < 6 && Math.Abs(p.Y - _press.Y) < 6) return;
                 _dragging = true;
-                ReleaseMouseCapture();
                 drag(_asset, this);
             };
-            MouseLeftButtonUp += (_, _) => { _dragging = false; ReleaseMouseCapture(); };
+            MouseLeftButtonUp += (_, _) => _dragging = false;
             MouseRightButtonDown += (_, e) =>
             {
                 pick(_id);
