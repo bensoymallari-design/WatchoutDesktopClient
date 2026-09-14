@@ -6,6 +6,27 @@ public static class TimelineMath
 {
     public static double CueEnd(Cue cue) => cue.Start + Math.Max(0, cue.Duration);
 
+    public const double LiveLengthMs = 3_600_000;
+
+    /// <summary>End of the last finite clip (markers and day-long live cues are ignored).</summary>
+    public static double ContentEnd(IEnumerable<Cue> cues)
+    {
+        double end = 0;
+        foreach (var cue in cues)
+        {
+            if (cue.Type == CueType.Marker) continue;
+            if (cue.Duration >= LiveLengthMs) continue;
+            end = Math.Max(end, CueEnd(cue));
+        }
+        return end;
+    }
+
+    public static double FitDuration(double contentEndMs) =>
+        Math.Max(1000, Math.Ceiling(contentEndMs));
+
+    public static double FitZoom(double durationMs, double viewWidthPx, double headerPx = 120) =>
+        Math.Clamp((viewWidthPx - headerPx) / Math.Max(1, durationMs), 0.002, 0.2);
+
     public static bool CuesOverlap(Cue a, Cue b) => a.Start < CueEnd(b) && b.Start < CueEnd(a);
 
     public static double OverlapMs(Cue a, Cue b) =>

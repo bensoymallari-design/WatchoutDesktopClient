@@ -57,6 +57,19 @@ public class TimelineMathTests
     }
 
     [Fact]
+    public void ContentEndUsesTheLongestClipAndSkipsLiveDayCues()
+    {
+        var shortClip = Cue("a", "l1", 0, 8_000);
+        var longClip = Cue("b", "l2", 2_000, 20_000);
+        var live = Cue("live", "l3", 0, 24 * 60 * 60 * 1000);
+        var marker = Cue("m", "l4", 50_000, 0);
+        marker.Type = CueType.Marker;
+        Assert.Equal(22_000, TimelineMath.ContentEnd([shortClip, longClip, live, marker]));
+        Assert.Equal(22_000, TimelineMath.FitDuration(22_000));
+        Assert.InRange(TimelineMath.FitZoom(22_000, 780, 120), 0.02, 0.04);
+    }
+
+    [Fact]
     public void FadeMultiplierRamps()
     {
         var a = Cue("a", "l1", 0, 2000, fadeIn: true, fadeOut: true, fadeInDur: 500, fadeOutDur: 500);

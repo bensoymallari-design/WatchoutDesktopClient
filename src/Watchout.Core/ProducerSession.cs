@@ -608,6 +608,26 @@ public sealed class ProducerSession
         SetLoop(tl.Id, !tl.Loop);
     }
 
+    public bool FitTimelineToMedia(string? timelineId = null)
+    {
+        var tl = timelineId is null ? ActiveTimeline : Show?.Timelines.FirstOrDefault(t => t.Id == timelineId);
+        if (tl is null) return false;
+        var end = TimelineMath.ContentEnd(tl.Cues);
+        if (end <= 0)
+        {
+            Log("No clips on this timeline to fit — drop media on a layer first", "warn");
+            return false;
+        }
+        var duration = TimelineMath.FitDuration(end);
+        UpdateTimeline(tl.Id, t =>
+        {
+            t.Duration = duration;
+            if (t.Playhead > duration) t.Playhead = duration;
+        });
+        Log($"Fit to media — timeline length is {TimeFormat.FormatPlayTime(duration)}");
+        return true;
+    }
+
     public void AddLayer()
     {
         Mutate(show =>

@@ -118,6 +118,20 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void FitTimelineToMediaUsesTheLongestClip()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 12_500, Fps = 30, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/long.mp4", "/library/long.mp4", probe, 1_000_000, true);
+        session.ApplyImported(media);
+        session.AddCueFromAsset(media.Id);
+        Assert.True(session.FitTimelineToMedia());
+        Assert.Equal(12_500, session.ActiveTimeline!.Duration);
+        Assert.False(session.FitTimelineToMedia("missing"));
+    }
+
+    [Fact]
     public void EvaluateCueAppliesFadeAndTween()
     {
         var cue = ShowFactory.EmptyCue(new Cue
