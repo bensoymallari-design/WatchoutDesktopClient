@@ -448,10 +448,13 @@ public class DevicesPanel : UserControl
         var connected = show?.CaptureDevices.Select(d => d.Signal) ?? [];
         var ndiCams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
         var cards = CaptureHub.Devices.Where(d => !NdiNames.LooksLikeNdi(d.Name)).ToList();
+        var audioOutputs = Interop.AudioOutputs.List();
         var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id + s.Width + s.Height))
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
                  + string.Join("|", show?.Displays.Select(d => d.Id + d.Name + d.ScreenId + d.Channel + d.Width + d.Height + d.Enabled) ?? [])
+                 + string.Join("|", audioOutputs.Select(d => d.Id + d.Name))
+                 + (show?.AudioDevices.FirstOrDefault()?.Id)
                  + CaptureHub.Generation
                  + CaptureHub.LiveCount
                  + NdiHub.Generation
@@ -513,18 +516,7 @@ public class DevicesPanel : UserControl
         });
 
         _root.Children.Add(Header("AUDIO"));
-        var audioRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-        var beep = Btn("Test beep", Beep, "amber", compact: true);
-        beep.HorizontalAlignment = HorizontalAlignment.Right;
-        DockPanel.SetDock(beep, Dock.Right);
-        audioRow.Children.Add(beep);
-        audioRow.Children.Add(new TextBlock
-        {
-            Text = "Windows default speaker",
-            Foreground = (Brush)FindResource("Wo.Text"),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        _root.Children.Add(audioRow);
+        _root.Children.Add(AudioRow(audioOutputs, show));
         _root.Children.Add(Btn("Include laptop in Stage", () => App.Session.MapScreens(screens, true)));
 
         _root.Children.Add(Header("NDI"));
@@ -668,13 +660,13 @@ public class DevicesPanel : UserControl
         Grid.SetColumn(name, 0);
         var box = new ComboBox
         {
-            MinWidth = 168,
+            MinWidth = 188,
             Margin = new Thickness(8, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        box.Items.Add(new ComboBoxItem { Content = ScreenAssign.AutoChoiceLabel(display.Channel), Tag = ScreenAssign.AutoKey(display.Channel) });
+        box.Items.Add(Choice(ScreenAssign.AutoChoiceLabel(display.Channel), ScreenAssign.AutoKey(display.Channel)));
         foreach (var screen in screens)
-            box.Items.Add(new ComboBoxItem { Content = ScreenAssign.ScreenChoiceLabel(screen), Tag = screen.Id });
+            box.Items.Add(Choice(ScreenAssign.ScreenChoiceLabel(screen), screen.Id));
         var want = ScreenAssign.AssignmentKey(display);
         foreach (ComboBoxItem item in box.Items)
             if (Equals(item.Tag, want)) box.SelectedItem = item;
@@ -738,6 +730,51 @@ public class DevicesPanel : UserControl
         return row;
     }
 
+    UIElement AudioRow(IReadOnlyList<AudioDevice> outputs, Show? show)
+    {
+        var selected = AudioAssign.Resolve(outputs, show?.AudioDevices.FirstOrDefault()?.Id);
+        var stack = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+        var row = new DockPanel();
+        var beep = Btn("Test beep", Beep, "amber", compact: true);
+        beep.HorizontalAlignment = HorizontalAlignment.Right;
+        beep.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(beep, Dock.Right);
+        row.Children.Add(beep);
+        var box = new ComboBox { MinHeight = 28, HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var device in outputs)
+            box.Items.Add(Choice(device.Name, device.Id));
+        foreach (ComboBoxItem item in box.Items)
+            if (Equals(item.Tag, selected.Id)) box.SelectedItem = item;
+        if (box.SelectedItem is null) box.SelectedIndex = 0;
+        box.SelectionChanged += (_, _) =>
+        {
+            if (_building) return;
+            if (box.SelectedItem is ComboBoxItem item && item.Tag is string id)
+                App.Session.SetAudioOutput(AudioAssign.Resolve(outputs, id));
+        };
+        row.Children.Add(box);
+        stack.Children.Add(row);
+        stack.Children.Add(new TextBlock
+        {
+            Text = AudioAssign.StatusLine(selected),
+            Foreground = (Brush)FindResource("Wo.Muted"),
+            Margin = new Thickness(0, 4, 0, 0),
+            FontSize = 11,
+        });
+        return stack;
+    }
+
+    ComboBoxItem Choice(string label, string key)
+    {
+        return new ComboBoxItem
+        {
+            Content = label,
+            Tag = key,
+            Foreground = (Brush)FindResource("Wo.Text"),
+            Background = new SolidColorBrush(Color.FromRgb(26, 26, 26)),
+        };
+    }
+
     static UIElement Header(string text) => new TextBlock { Text = text, Foreground = (Brush)Application.Current.FindResource("Wo.Amber"), Margin = new Thickness(0, 12, 0, 4), FontSize = 11 };
 
     static Button Btn(string label, Action click, string kind = "", bool compact = false)
@@ -781,7 +818,12 @@ public class DevicesPanel : UserControl
 
     static void Beep()
     {
-        try { System.Media.SystemSounds.Beep.Play(); App.Session.Log("WASAPI test beep"); }
+        var device = App.Session.ActiveAudioDevice;
+        try
+        {
+            System.Media.SystemSounds.Beep.Play();
+            App.Session.Log($"Test beep · {device.Name} · {AudioAssign.StatusLine(device)}");
+        }
         catch (Exception ex) { App.Session.Log(ex.Message, "error"); }
     }
 }

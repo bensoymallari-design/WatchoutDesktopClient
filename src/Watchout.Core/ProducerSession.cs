@@ -679,6 +679,28 @@ public sealed class ProducerSession
             Log($"Copied {screen.Label} {w}×{h} onto {name}");
     }
 
+    public AudioDevice ActiveAudioDevice =>
+        Show?.AudioDevices.FirstOrDefault() ?? AudioAssign.DefaultSpeaker();
+
+    public void SetAudioOutput(AudioDevice device)
+    {
+        Mutate(show =>
+        {
+            show.AudioDevices =
+            [
+                new AudioDevice
+                {
+                    Id = string.IsNullOrEmpty(device.Id) ? AudioAssign.DefaultId : device.Id,
+                    Name = string.IsNullOrEmpty(device.Name) ? "Windows default speaker" : device.Name,
+                    NodeId = "local-runner",
+                    Channels = device.Channels > 0 ? device.Channels : 2,
+                    Driver = string.IsNullOrEmpty(device.Driver) ? "WASAPI" : device.Driver,
+                },
+            ];
+        });
+        Log($"Audio → {ActiveAudioDevice.Name} · {AudioAssign.StatusLine(ActiveAudioDevice)}");
+    }
+
     public void AddTimeline()
     {
         Mutate(show =>
