@@ -1,5 +1,6 @@
 using Watchout.Core.Models;
 using Watchout.Core.Persistence;
+using Watchout.Core.Scheduling;
 
 namespace Watchout.Core.Playback;
 
@@ -37,8 +38,8 @@ public static class PlaybackClock
             .Where(c => !hidden.Contains(c.LayerId))
             .Select(c => Tweens.EvaluateCue(c, timeline.Playhead, others))
             .OfType<EvaluatedCue>()
-            .OrderBy(e => e.Z)
-            .ThenBy(e => e.Cue.LayerId)
+            .OrderBy(e => TimelineMath.LayerStackIndex(timeline.Layers, e.Cue.LayerId))
+            .ThenBy(e => e.Z)
             .ToList();
     }
 

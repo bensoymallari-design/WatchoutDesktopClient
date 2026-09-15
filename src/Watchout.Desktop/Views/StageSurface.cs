@@ -253,6 +253,7 @@ public sealed class StageSurface : Canvas
             }
         }
 
+        var z = 0;
         foreach (var ev in live)
         {
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
@@ -299,8 +300,11 @@ public sealed class StageSurface : Canvas
 
             ApplyLooks(el, ev);
             PlaceLayer(el, mapped);
-            SetZIndex(el, 10);
+            SetZIndex(el, 100 + z);
+            z++;
         }
+        foreach (var el in _layers.Values)
+            if (el is CaptureLayer feed) feed.SyncOverlay();
     }
 
     void DrawHandles(Rect mapped, int z)
@@ -327,8 +331,9 @@ public sealed class StageSurface : Canvas
     {
         var inner = BuildMedia(ev, asset, mapped, show);
         if (inner is null) return null;
-        // Media Foundation / DXVA goes black under Grid, ScaleTransform, OpacityMask, or Clip.
-        if (inner is MediaElement) return inner;
+        // Media Foundation / DXVA and live NDI/capture are HWND interop. Keep them
+        // direct Canvas children so ZIndex can stack NDI in front of playing H.264.
+        if (inner is MediaElement or CaptureLayer) return inner;
         return WrapLooks(inner, ev);
     }
 
@@ -865,7 +870,7 @@ public sealed class StageSurface : Canvas
     {
         el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
         var video = el is CueLookHost hostMedia ? hostMedia.Media as MediaElement : el as MediaElement;
-        if (video is not null)
+        if (video is not null || el is CaptureLayer)
         {
             el.Clip = null;
             el.OpacityMask = null;
