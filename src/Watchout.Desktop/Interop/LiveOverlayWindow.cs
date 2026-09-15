@@ -1,11 +1,14 @@
 using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
+using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Interop;
 
 /// <summary>
-/// Top-level layered popup that can sit above a DXVA MediaElement overlay.
-/// Child HWNDs inside the Output window stay under that plane on a fullscreen wall.
+/// Top-level layered popup above a DXVA MediaElement overlay.
+/// Resolume composites every layer into one GPU swap chain; WatchMe still has
+/// separate HWNDs, so this window must stay put — no per-frame SetWindowPos,
+/// hide/show, or 1px DIB recreate, or DWM flashes the wall.
 /// </summary>
 public sealed class LiveOverlayWindow : IDisposable
 {
@@ -18,9 +21,6 @@ public sealed class LiveOverlayWindow : IDisposable
     const int SwHide = 0;
     const int SwShowNoActivate = 4;
     const int UlwAlpha = 2;
-    const uint SwpNoActivate = 0x0010;
-    const uint SwpShowWindow = 0x0040;
-    static readonly IntPtr HwndTopmost = new(-1);
 
     IntPtr _hwnd;
     IntPtr _hdc;
@@ -29,21 +29,64 @@ public sealed class LiveOverlayWindow : IDisposable
     IntPtr _bits;
     int _w;
     int _h;
+    int _x = int.MinValue;
+    int _y = int.MinValue;
     bool _visible;
 
-    public void Present(WriteableBitmap? bmp, int x, int y, int width, int height, byte alpha, IntPtr owner)
+    public bool IsVisible => _visible;
+
+    public void Present(WriteableBitmap? bmp, int x, int y, int width, int height, byte alpha, bool bitsDirty)
     {
         if (bmp is null || width < 2 || height < 2 || alpha < 3)
-        {
-            Hide();
             return;
-        }
 
-        EnsureWindow(owner);
+        width = LiveComposite.Stick(width, _w);
+        height = LiveComposite.Stick(height, _h);
+        x = LiveComposite.Stick(x, _x);
+        y = LiveComposite.Stick(y, _y);
+
+        EnsureWindow();
         if (_hwnd == IntPtr.Zero) return;
         EnsureBuffer(width, height);
         if (_hdc == IntPtr.Zero || _dib == IntPtr.Zero) return;
 
+        if (bitsDirty)
+            Blit(bmp, width, height);
+
+        if (_visible && !bitsDirty && x == _x && y == _y && width == _w && height == _h)
+            return;
+
+        var dst = new NativePoint { X = x, Y = y };
+        var size = new NativeSize { Cx = width, Cy = height };
+        var src = new NativePoint { X = 0, Y = 0 };
+        var blend = new BlendFunction
+        {
+            BlendOp = 0,
+            BlendFlags = 0,
+            SourceConstantAlpha = alpha,
+            AlphaFormat = 0,
+        };
+        UpdateLayeredWindow(_hwnd, IntPtr.Zero, ref dst, ref size, _hdc, ref src, 0, ref blend, UlwAlpha);
+        _x = x;
+        _y = y;
+        if (!_visible)
+        {
+            ShowWindow(_hwnd, SwShowNoActivate);
+            _visible = true;
+        }
+    }
+
+    public void Hide()
+    {
+        if (_hwnd == IntPtr.Zero || !_visible) return;
+        ShowWindow(_hwnd, SwHide);
+        _visible = false;
+        _x = int.MinValue;
+        _y = int.MinValue;
+    }
+
+    void Blit(WriteableBitmap bmp, int width, int height)
+    {
         bmp.Lock();
         try
         {
@@ -65,43 +108,20 @@ public sealed class LiveOverlayWindow : IDisposable
         {
             bmp.Unlock();
         }
-
-        var dst = new NativePoint { X = x, Y = y };
-        var size = new NativeSize { Cx = width, Cy = height };
-        var src = new NativePoint { X = 0, Y = 0 };
-        var blend = new BlendFunction
-        {
-            BlendOp = 0,
-            BlendFlags = 0,
-            SourceConstantAlpha = alpha,
-            AlphaFormat = 0,
-        };
-        UpdateLayeredWindow(_hwnd, IntPtr.Zero, ref dst, ref size, _hdc, ref src, 0, ref blend, UlwAlpha);
-        SetWindowPos(_hwnd, HwndTopmost, x, y, width, height, SwpNoActivate | SwpShowWindow);
-        if (!_visible)
-        {
-            ShowWindow(_hwnd, SwShowNoActivate);
-            _visible = true;
-        }
     }
 
-    public void Hide()
-    {
-        if (_hwnd == IntPtr.Zero || !_visible) return;
-        ShowWindow(_hwnd, SwHide);
-        _visible = false;
-    }
-
-    void EnsureWindow(IntPtr owner)
+    void EnsureWindow()
     {
         if (_hwnd != IntPtr.Zero) return;
+        // Unowned TOPMOST so moving/restacking the Output HWND does not drag
+        // this picture under the DXVA overlay (that z-fight is the flicker).
         _hwnd = CreateWindowEx(
             WsExLayered | WsExNoActivate | WsExToolwindow | WsExTopmost | WsExTransparent,
             "Static",
             "",
             WsPopup,
             0, 0, 1, 1,
-            owner,
+            IntPtr.Zero,
             IntPtr.Zero,
             GetModuleHandle(null),
             IntPtr.Zero);
@@ -163,9 +183,6 @@ public sealed class LiveOverlayWindow : IDisposable
 
     [DllImport("user32.dll")]
     static extern bool ShowWindow(IntPtr hwnd, int nCmdShow);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref NativePoint pptDst, ref NativeSize psize,

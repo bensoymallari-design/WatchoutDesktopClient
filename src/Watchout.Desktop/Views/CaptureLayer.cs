@@ -24,12 +24,9 @@ public sealed class CaptureLayer : HwndHost
     const int WsClipSiblings = 0x04000000;
     const int WsExNoActivate = 0x08000000;
     const int WsExTransparent = 0x00000020;
-    const uint SwpNosize = 0x0001;
     const uint SwpNomove = 0x0002;
     const uint SwpNoActivate = 0x0010;
-    const uint SwpShowWindow = 0x0040;
     const uint SwpHideWindow = 0x0080;
-    static readonly IntPtr HwndTop = IntPtr.Zero;
     static readonly IntPtr HwndBottom = new(1);
 
     string? _deviceId;
@@ -40,8 +37,9 @@ public sealed class CaptureLayer : HwndHost
     readonly Action _onFrame;
     LiveOverlayWindow? _overlay;
     bool _output;
+    bool _wantOverlay;
     bool _syncing;
-    int _overlayX, _overlayY, _overlayW, _overlayH;
+    bool _childHidden;
 
     public CaptureLayer()
     {
@@ -53,7 +51,11 @@ public sealed class CaptureLayer : HwndHost
     void OnLoaded(object sender, RoutedEventArgs e)
     {
         _output = Window.GetWindow(this) is OutputWindow;
-        if (_output) LayoutUpdated += OnLayoutUpdated;
+        if (_output)
+        {
+            _wantOverlay = true;
+            LayoutUpdated += OnLayoutUpdated;
+        }
         Attach();
         SyncOverlay(forceBits: true);
     }
@@ -64,6 +66,8 @@ public sealed class CaptureLayer : HwndHost
         Detach();
         _overlay?.Dispose();
         _overlay = null;
+        _wantOverlay = false;
+        _childHidden = false;
     }
 
     void OnLayoutUpdated(object? sender, EventArgs e) => SyncOverlay(forceBits: false);
@@ -96,7 +100,26 @@ public sealed class CaptureLayer : HwndHost
         }
     }
 
-    public void SyncOverlay() => SyncOverlay(forceBits: true);
+    public void SetOutputOverlay(bool want)
+    {
+        _output = Window.GetWindow(this) is OutputWindow;
+        if (!_output)
+        {
+            _wantOverlay = false;
+            _overlay?.Hide();
+            return;
+        }
+        if (_wantOverlay == want)
+        {
+            SyncOverlay(forceBits: false);
+            return;
+        }
+        _wantOverlay = want;
+        if (!want) _overlay?.Hide();
+        else SyncOverlay(forceBits: true);
+    }
+
+    public void SyncOverlay() => SyncOverlay(forceBits: false);
 
     void SyncOverlay(bool forceBits)
     {
@@ -107,18 +130,9 @@ public sealed class CaptureLayer : HwndHost
             _overlay?.Hide();
             return;
         }
-
-        if (!LiveComposite.ScreenOverlayOnOutput(Panel.GetZIndex(this), VideoZs()))
-        {
-            _overlay?.Hide();
-            return;
-        }
-
-        if (!IsVisible || ActualWidth < 2 || ActualHeight < 2 || _bmp is null)
-        {
-            _overlay?.Hide();
-            return;
-        }
+        if (!_wantOverlay) return;
+        if (_bmp is null) return;
+        if (ActualWidth < 2 || ActualHeight < 2) return;
 
         Point tl;
         Point br;
@@ -136,35 +150,16 @@ public sealed class CaptureLayer : HwndHost
         var y = (int)Math.Round(Math.Min(tl.Y, br.Y));
         var w = (int)Math.Round(Math.Abs(br.X - tl.X));
         var h = (int)Math.Round(Math.Abs(br.Y - tl.Y));
-        if (!forceBits && _overlay is not null && x == _overlayX && y == _overlayY && w == _overlayW && h == _overlayH)
-            return;
-
-        var owner = Window.GetWindow(this) is { } win ? new WindowInteropHelper(win).Handle : IntPtr.Zero;
-        if (owner == IntPtr.Zero) return;
         var alpha = (byte)Math.Clamp(Opacity * 255, 0, 255);
         _syncing = true;
         try
         {
             _overlay ??= new LiveOverlayWindow();
-            _overlay.Present(_bmp, x, y, w, h, alpha, owner);
-            _overlayX = x;
-            _overlayY = y;
-            _overlayW = w;
-            _overlayH = h;
+            _overlay.Present(_bmp, x, y, w, h, alpha, forceBits);
         }
         finally
         {
             _syncing = false;
-        }
-    }
-
-    IEnumerable<int> VideoZs()
-    {
-        if (Parent is not Panel panel) yield break;
-        foreach (UIElement child in panel.Children)
-        {
-            if (child is MediaElement)
-                yield return Panel.GetZIndex(child);
         }
     }
 
@@ -189,6 +184,7 @@ public sealed class CaptureLayer : HwndHost
     {
         DestroyWindow(hwnd.Handle);
         _hwnd = IntPtr.Zero;
+        _childHidden = false;
     }
 
     protected override void OnWindowPositionChanged(Rect rc)
@@ -198,11 +194,13 @@ public sealed class CaptureLayer : HwndHost
         _output = Window.GetWindow(this) is OutputWindow;
         if (_output)
         {
-            SetWindowPos(_hwnd, HwndBottom, 0, 0, 1, 1, SwpNoActivate | SwpHideWindow);
-            SyncOverlay();
+            if (!_childHidden)
+            {
+                SetWindowPos(_hwnd, HwndBottom, 0, 0, 1, 1, SwpNoActivate | SwpHideWindow | SwpNomove);
+                _childHidden = true;
+            }
             return;
         }
-        SetWindowPos(_hwnd, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate | SwpShowWindow);
     }
 
     protected override IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -272,10 +270,7 @@ public sealed class CaptureLayer : HwndHost
             return;
         }
         if (_hwnd != IntPtr.Zero)
-        {
             InvalidateRect(_hwnd, IntPtr.Zero, false);
-            SetWindowPos(_hwnd, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate | SwpShowWindow);
-        }
     }
 
     void Paint(IntPtr hwnd)
@@ -287,11 +282,14 @@ public sealed class CaptureLayer : HwndHost
             GetClientRect(hwnd, out var rc);
             var dw = Math.Max(1, rc.Right - rc.Left);
             var dh = Math.Max(1, rc.Bottom - rc.Top);
-            var brush = CreateSolidBrush(0x00181008);
-            FillRect(hdc, ref rc, brush);
-            DeleteObject(brush);
             var bmp = _bmp;
-            if (bmp is null) return;
+            if (bmp is null)
+            {
+                var brush = CreateSolidBrush(0x00181008);
+                FillRect(hdc, ref rc, brush);
+                DeleteObject(brush);
+                return;
+            }
             bmp.Lock();
             try
             {
