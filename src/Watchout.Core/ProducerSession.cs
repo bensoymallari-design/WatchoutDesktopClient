@@ -38,6 +38,7 @@ public sealed class ProducerSession
     public event Action? Changed;
     public event Action? Clock;
     public event Action? TimelineViewChanged;
+    public event Action? LayoutChanged;
 
     public Timeline? ActiveTimeline =>
         Show is null ? null : Show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? Show.Timelines.FirstOrDefault();
@@ -262,8 +263,13 @@ public sealed class ProducerSession
 
     public void SetCamera(double? x = null, double? y = null, double? zoom = null)
     {
-        Camera = (x ?? Camera.X, y ?? Camera.Y, zoom ?? Camera.Zoom);
-        Changed?.Invoke();
+        var next = (x ?? Camera.X, y ?? Camera.Y, zoom ?? Camera.Zoom);
+        if (Math.Abs(next.Item1 - Camera.X) < 0.01
+            && Math.Abs(next.Item2 - Camera.Y) < 0.01
+            && Math.Abs(next.Item3 - Camera.Zoom) < 0.0001)
+            return;
+        Camera = next;
+        LayoutChanged?.Invoke();
     }
 
     public void FrameDisplays()
@@ -447,6 +453,27 @@ public sealed class ProducerSession
             if (cue is not null) patch(cue);
         }, record);
 
+    /// <summary>
+    /// Stage drag/resize: patch position/scale without rebuilding Devices, Timeline, or seeking video.
+    /// </summary>
+    public void LiveUpdateCue(string id, Action<Cue> patch)
+    {
+        if (Show is null) return;
+        var cue = Show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == id);
+        if (cue is null) return;
+        var x = cue.Position.X;
+        var y = cue.Position.Y;
+        var z = cue.Position.Z;
+        var sx = cue.Scale.X;
+        var sy = cue.Scale.Y;
+        patch(cue);
+        if (x == cue.Position.X && y == cue.Position.Y && z == cue.Position.Z
+            && sx == cue.Scale.X && sy == cue.Scale.Y)
+            return;
+        Show.ModifiedAt = DateTime.UtcNow.ToString("o");
+        LayoutChanged?.Invoke();
+    }
+
     public void MoveCues(IEnumerable<string> ids, double dStart, string? layerId = null)
     {
         var set = ids.ToHashSet();
@@ -628,6 +655,22 @@ public sealed class ProducerSession
             var d = show.Displays.FirstOrDefault(x => x.Id == id);
             if (d is not null) patch(d);
         }, record);
+
+    public void LiveUpdateDisplay(string id, Action<Display> patch)
+    {
+        if (Show is null) return;
+        var display = Show.Displays.FirstOrDefault(d => d.Id == id);
+        if (display is null) return;
+        var x = display.X;
+        var y = display.Y;
+        var w = display.Width;
+        var h = display.Height;
+        patch(display);
+        if (x == display.X && y == display.Y && w == display.Width && h == display.Height)
+            return;
+        Show.ModifiedAt = DateTime.UtcNow.ToString("o");
+        LayoutChanged?.Invoke();
+    }
 
     public void MapScreens(IReadOnlyList<OutputScreen> screens, bool includePrimary = false)
     {
