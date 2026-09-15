@@ -20,6 +20,7 @@ public sealed class StageSurface : Canvas
     readonly Dictionary<string, MediaElement> _videos = [];
     readonly HashSet<string> _playing = [];
     readonly HashSet<string> _primed = [];
+    readonly Dictionary<string, DateTime> _lastSeek = [];
     readonly List<UIElement> _chrome = [];
     bool _clockQueued;
     bool _visualQueued;
@@ -95,6 +96,7 @@ public sealed class StageSurface : Canvas
             _videos.Clear();
             _playing.Clear();
             _primed.Clear();
+            _lastSeek.Clear();
         };
     }
 
@@ -157,6 +159,7 @@ public sealed class StageSurface : Canvas
             _videos.Clear();
             _playing.Clear();
             _primed.Clear();
+            _lastSeek.Clear();
             _chrome.Clear();
             return;
         }
@@ -247,6 +250,7 @@ public sealed class StageSurface : Canvas
             _layers.Remove(stale);
             _playing.Remove(stale);
             _primed.Remove(stale);
+            _lastSeek.Remove(stale);
             if (_videos.Remove(stale, out var dead))
             {
                 try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -267,6 +271,7 @@ public sealed class StageSurface : Canvas
                     _layers.Remove(ev.Cue.Id);
                     _playing.Remove(ev.Cue.Id);
                     _primed.Remove(ev.Cue.Id);
+                    _lastSeek.Remove(ev.Cue.Id);
                     if (_videos.Remove(ev.Cue.Id, out var dead))
                     {
                         try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -292,15 +297,22 @@ public sealed class StageSurface : Canvas
             else if (syncMedia && media is MediaElement video)
             {
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
-                video.IsMuted = !PlayAudio || ev.Volume <= 0;
-                video.Volume = Math.Clamp(ev.Volume / 100.0, 0, 1);
-                try { video.SpeedRatio = CueLooks.SpeedRatio(ev.Speed); } catch { /* decoder not ready */ }
+                var muted = !PlayAudio || ev.Volume <= 0;
+                var vol = Math.Clamp(ev.Volume / 100.0, 0, 1);
+                if (video.IsMuted != muted) video.IsMuted = muted;
+                if (Math.Abs(video.Volume - vol) > 0.01) video.Volume = vol;
+                var speed = CueLooks.SpeedRatio(ev.Speed);
+                if (Math.Abs(video.SpeedRatio - speed) > 0.01)
+                {
+                    try { video.SpeedRatio = speed; } catch { /* decoder not ready */ }
+                }
                 SyncVideo(ev.Cue.Id, video, ev, tl?.Playback ?? PlaybackState.Stop);
             }
 
             ApplyLooks(el, ev);
             PlaceLayer(el, mapped);
-            SetZIndex(el, 100 + z);
+            var zIndex = 100 + z;
+            if (GetZIndex(el) != zIndex) SetZIndex(el, zIndex);
             z++;
         }
         var videoZs = VideoZs().ToArray();
@@ -427,12 +439,37 @@ public sealed class StageSurface : Canvas
         var target = TimeSpan.FromMilliseconds(Math.Max(0, ev.LocalTime));
         try
         {
+            var drift = Math.Abs((video.Position - target).TotalMilliseconds);
+            var sinceSeek = _lastSeek.TryGetValue(cueId, out var at)
+                ? (DateTime.UtcNow - at).TotalMilliseconds
+                : double.PositiveInfinity;
             if (playback == PlaybackState.Play)
             {
-                var drift = Math.Abs((video.Position - target).TotalMilliseconds);
-                if (drift > 400) video.Position = target;
-                if (_playing.Add(cueId)) video.Play();
-                _primed.Add(cueId);
+                if (_playing.Add(cueId))
+                {
+                    if (VideoSync.SeekOnPlayStart(drift))
+                    {
+                        video.Position = target;
+                        _lastSeek[cueId] = DateTime.UtcNow;
+                    }
+                    video.Play();
+                    _primed.Add(cueId);
+                    return;
+                }
+                if (VideoSync.ReseekWhilePlaying(drift, sinceSeek))
+                {
+                    video.Position = target;
+                    _lastSeek[cueId] = DateTime.UtcNow;
+                }
+                return;
+            }
+            if (playback == PlaybackState.Stop)
+            {
+                if (_playing.Remove(cueId))
+                {
+                    video.Stop();
+                    _lastSeek.Remove(cueId);
+                }
                 return;
             }
             if (_playing.Remove(cueId)) video.Pause();
@@ -441,7 +478,7 @@ public sealed class StageSurface : Canvas
                 video.Play();
                 video.Pause();
             }
-            if (Math.Abs((video.Position - target).TotalMilliseconds) > 80)
+            if (VideoSync.SeekWhileIdle(drift))
                 video.Position = target;
         }
         catch { /* decoder not ready */ }
@@ -565,7 +602,8 @@ public sealed class StageSurface : Canvas
         var h = Math.Max(1, mapped.Height);
         if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
         if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
-        el.RenderTransform = Transform.Identity;
+        if (el is not MediaElement and not CaptureLayer)
+            el.RenderTransform = Transform.Identity;
         if (LayoutDiffers(el.Width, w)) el.Width = w;
         if (LayoutDiffers(el.Height, h)) el.Height = h;
         if (el is CueLookHost host)
@@ -877,7 +915,8 @@ public sealed class StageSurface : Canvas
 
     static void ApplyLooks(FrameworkElement el, EvaluatedCue ev)
     {
-        el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
+        var opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
+        if (Math.Abs(el.Opacity - opacity) > 0.005) el.Opacity = opacity;
         var video = el is CueLookHost hostMedia ? hostMedia.Media as MediaElement : el as MediaElement;
         if (video is not null || el is CaptureLayer)
         {

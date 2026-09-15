@@ -22,6 +22,9 @@ public sealed class LiveOverlayWindow : IDisposable
     const int SwHide = 0;
     const int SwShowNoActivate = 4;
     const int UlwAlpha = 2;
+    const uint SwpNosize = 0x0001;
+    const uint SwpNozorder = 0x0004;
+    const uint SwpNoActivate = 0x0010;
     const int WmPaint = 0x000F;
     const int WmEraseBkgnd = 0x0014;
     const int NullBrush = 5;
@@ -109,8 +112,12 @@ public sealed class LiveOverlayWindow : IDisposable
         if (_hdc == IntPtr.Zero || _dib == IntPtr.Zero) return false;
         if (bitsDirty) Blit(bmp, width, height);
         if (!bitsDirty && !move) return true;
-        if (!bitsDirty && move && _visible && x == _x && y == _y && width == _w && height == _h)
+        if (!bitsDirty && move)
+        {
+            if (_visible && x == _x && y == _y) return true;
+            SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, SwpNosize | SwpNozorder | SwpNoActivate);
             return true;
+        }
 
         var size = new NativeSize { Cx = width, Cy = height };
         var src = new NativePoint { X = 0, Y = 0 };
@@ -237,6 +244,9 @@ public sealed class LiveOverlayWindow : IDisposable
 
     [DllImport("user32.dll")]
     static extern bool ShowWindow(IntPtr hwnd, int nCmdShow);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
     [DllImport("user32.dll", EntryPoint = "UpdateLayeredWindow", SetLastError = true)]
     static extern bool UpdateLayeredWindowMove(IntPtr hwnd, IntPtr hdcDst, ref NativePoint pptDst, ref NativeSize psize,
