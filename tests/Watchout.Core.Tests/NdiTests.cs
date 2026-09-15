@@ -3,6 +3,7 @@ using System.Text;
 using Watchout.Core;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 using Xunit;
 
 namespace Watchout.Core.Tests;
@@ -165,6 +166,57 @@ public class NdiTests
         Assert.Equal(placeholder.Id, bound.Id);
         Assert.Equal("Phone Cam", bound.Name);
         Assert.Equal("capture:ndi-cam", bound.Url);
+    }
+
+    [Fact]
+    public void KeepCueScalePreservesWallRectWhenNdiIs4k()
+    {
+        var keep = LivePicture.KeepCueScale(1920, 1080, 200, 200, 3840, 2160);
+        Assert.Equal(100, keep.ScaleX);
+        Assert.Equal(100, keep.ScaleY);
+        var pip = LivePicture.KeepCueScale(1920, 1080, 50, 50, 3840, 2160);
+        Assert.Equal(25, pip.ScaleX);
+        Assert.Equal(25, pip.ScaleY);
+    }
+
+    [Fact]
+    public void PickCaptureFormatPrefers4kOver1080()
+    {
+        var pick = LivePicture.PickCaptureFormat(
+        [
+            (1920, 1080, 60),
+            (3840, 2160, 60),
+            (1280, 720, 60),
+        ]);
+        Assert.Equal((3840, 2160, 60), pick);
+        Assert.True(LivePicture.FrameDue(50, 0, LivePicture.OutputBlitMs));
+        Assert.True(LivePicture.FrameDue(50, 40, LivePicture.OutputBlitMs));
+        Assert.False(LivePicture.FrameDue(44, 40, LivePicture.OutputBlitMs));
+        Assert.Equal(8, LivePicture.BlitMinMs(true));
+        Assert.Equal(16, LivePicture.BlitMinMs(false));
+    }
+
+    [Fact]
+    public void NoteLiveFrameSizeFits4kNdiOntoA4kDisplay()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.Show!.Displays[0].Width = 3840;
+        session.Show.Displays[0].Height = 2160;
+        var asset = session.ConnectNdi("SHOW-PC (Resolume)");
+        Assert.Equal(1920, asset.Width);
+        var cue = session.Show.Timelines.SelectMany(t => t.Cues).First(c => c.AssetId == asset.Id);
+        Assert.Equal(200, cue.Scale.X);
+        session.NoteLiveFrameSize("SHOW-PC (Resolume)", null, 3840, 2160);
+        Assert.Equal(3840, asset.Width);
+        Assert.Equal(2160, asset.Height);
+        Assert.Equal(100, cue.Scale.X);
+        Assert.Equal(100, cue.Scale.Y);
+        var rect = StageGeometry.CueRect(cue, asset);
+        Assert.Equal(3840, rect.W);
+        Assert.Equal(2160, rect.H);
+        session.NoteLiveFrameSize("SHOW-PC (Resolume)", null, 3840, 2160);
+        Assert.Equal(100, cue.Scale.X);
     }
 
     static byte[] PtrPacket(string instance)

@@ -28,6 +28,7 @@ public sealed class LiveOverlayWindow : IDisposable
     static readonly IntPtr HwndTopmost = new(-1);
     const int WmPaint = 0x000F;
     const int WmEraseBkgnd = 0x0014;
+    const int Halftone = 4;
     const int NullBrush = 5;
     const int ClassAlreadyExists = 1410;
 
@@ -160,9 +161,16 @@ public sealed class LiveOverlayWindow : IDisposable
                 BitCount = 32,
                 Compression = 0,
             };
+            var srcW = bmp.PixelWidth;
+            var srcH = bmp.PixelHeight;
+            if (srcW != width || srcH != height)
+            {
+                SetStretchBltMode(_hdc, Halftone);
+                SetBrushOrgEx(_hdc, 0, 0, IntPtr.Zero);
+            }
             StretchDIBits(
                 _hdc, 0, 0, width, height,
-                0, 0, bmp.PixelWidth, bmp.PixelHeight,
+                0, 0, srcW, srcH,
                 bmp.BackBuffer, ref info, 0, 0x00CC0020);
         }
         finally
@@ -275,6 +283,12 @@ public sealed class LiveOverlayWindow : IDisposable
 
     [DllImport("gdi32.dll")]
     static extern bool DeleteObject(IntPtr ho);
+
+    [DllImport("gdi32.dll")]
+    static extern int SetStretchBltMode(IntPtr hdc, int mode);
+
+    [DllImport("gdi32.dll")]
+    static extern bool SetBrushOrgEx(IntPtr hdc, int x, int y, IntPtr prev);
 
     [DllImport("gdi32.dll")]
     static extern IntPtr GetStockObject(int stock);

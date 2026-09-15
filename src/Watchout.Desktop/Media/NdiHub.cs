@@ -223,9 +223,17 @@ public static class NdiHub
             while (!token.IsCancellationRequested)
             {
                 var frame = new NdiRuntime.VideoFrame();
-                var kind = NdiRuntime.CaptureVideo(_recv, ref frame, 80);
+                var kind = NdiRuntime.CaptureVideo(_recv, ref frame, 16);
                 if (kind != VideoFrame)
                     continue;
+                while (true)
+                {
+                    var extra = new NdiRuntime.VideoFrame();
+                    if (NdiRuntime.CaptureVideo(_recv, ref extra, 0) != VideoFrame)
+                        break;
+                    NdiRuntime.FreeVideo(_recv, ref frame);
+                    frame = extra;
+                }
                 try
                 {
                     Pump(frame);
@@ -291,6 +299,8 @@ public static class NdiHub
                 }
             }
             var pixels = _scratch;
+            var fpsN = frame.frame_rate_N;
+            var fpsD = frame.frame_rate_D;
             _ui.BeginInvoke(() =>
             {
                 try
@@ -303,8 +313,10 @@ public static class NdiHub
                         if (!_logged)
                         {
                             _logged = true;
-                            App.Session.Log($"NDI {_name} {w}×{h} — live on Stage");
+                            var fps = fpsD > 0 ? Math.Round(fpsN / (double)fpsD) : 0;
+                            App.Session.Log($"NDI {_name} {w}×{h}" + (fps > 0 ? $" {fps:0}p" : "") + " — live on Stage and Output");
                         }
+                        App.Session.NoteLiveFrameSize(_name, null, w, h);
                     }
                     Bitmap.WritePixels(new Int32Rect(0, 0, w, h), pixels, row, 0);
                     Action[] listeners;
@@ -315,7 +327,7 @@ public static class NdiHub
                 {
                     Interlocked.Exchange(ref _uiBusy, 0);
                 }
-            }, DispatcherPriority.Background);
+            }, DispatcherPriority.Render);
         }
 
         static void UyvyToBgra(nint src, int stride, byte[] dst, int w, int h)
