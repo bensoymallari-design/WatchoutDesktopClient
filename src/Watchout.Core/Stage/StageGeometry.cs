@@ -138,7 +138,7 @@ public static class StageGeometry
 
     public static string? HitResizeHandle(StageRect rect, (double X, double Y) pt, double zoom)
     {
-        var pad = HandleHitPad(zoom);
+        var pad = Math.Min(HandleHitPad(zoom), Math.Max(8, Math.Min(rect.W, rect.H) / 4));
         var (x, y, w, h) = (rect.X, rect.Y, rect.W, rect.H);
         var nearL = Math.Abs(pt.X - x) <= pad;
         var nearR = Math.Abs(pt.X - (x + w)) <= pad;
@@ -386,6 +386,16 @@ public static class StageGeometry
                 return new StageHit(StageHitKind.DisplayHandle, selectedDisplay.Id, handle);
         }
 
+        // Orange handles stay live for the selected cue even in Edit displays —
+        // otherwise an overlay (NDI on layer 2) can only be resized, never moved.
+        // Alt still prefers the display under the clip.
+        if (!preferDisplay)
+        {
+            var selectedCue = HitSelectedCue(cueRects, selection, pt, zoom);
+            if (selectedCue.Kind != StageHitKind.None)
+                return selectedCue;
+        }
+
         if (editDisplays)
         {
             var display = HitDisplay(displays, pt);
@@ -398,17 +408,6 @@ public static class StageGeometry
                 return new StageHit(StageHitKind.Display, displays[i].Id);
         }
 
-        if (selection.Kind == SelectionKind.Cue)
-        {
-            var selected = cueRects.LastOrDefault(c => selection.Ids.Contains(c.Cue.Id));
-            if (selected.Cue is not null)
-            {
-                var handle = HitResizeHandle(selected.Rect, pt, zoom);
-                if (handle is not null)
-                    return new StageHit(StageHitKind.CueHandle, selected.Cue.Id, handle);
-            }
-        }
-
         for (var i = cueRects.Count - 1; i >= 0; i--)
         {
             var (cue, rect) = cueRects[i];
@@ -419,5 +418,22 @@ public static class StageGeometry
 
         var hitDisplay = HitDisplay(displays, pt);
         return hitDisplay is null ? default : new StageHit(StageHitKind.Display, hitDisplay.Id);
+    }
+
+    static StageHit HitSelectedCue(
+        IReadOnlyList<(Cue Cue, StageRect Rect)> cueRects,
+        Selection selection,
+        (double X, double Y) pt,
+        double zoom)
+    {
+        if (selection.Kind != SelectionKind.Cue) return default;
+        var selected = cueRects.LastOrDefault(c => selection.Ids.Contains(c.Cue.Id));
+        if (selected.Cue is null) return default;
+        var handle = HitResizeHandle(selected.Rect, pt, zoom);
+        if (handle is not null)
+            return new StageHit(StageHitKind.CueHandle, selected.Cue.Id, handle);
+        if (PointInRect(pt, selected.Rect))
+            return new StageHit(StageHitKind.Cue, selected.Cue.Id);
+        return default;
     }
 }

@@ -203,4 +203,44 @@ public class StageGeometryTests
         Assert.Equal(StageHitKind.DisplayHandle, handle.Kind);
         Assert.Equal("se", handle.Handle);
     }
+
+    [Fact]
+    public void SelectedOverlayStaysMovableWhileEditingDisplays()
+    {
+        var display = Display();
+        var bg = new Cue
+        {
+            Id = "bg",
+            Type = CueType.Media,
+            AssetId = "a",
+            Position = new Vec3(),
+            Scale = new Vec2 { X = 100, Y = 100 },
+        };
+        var ndi = new Cue
+        {
+            Id = "ndi",
+            Type = CueType.Media,
+            AssetId = "n",
+            Position = new Vec3 { X = 400, Y = 200 },
+            Scale = new Vec2 { X = 40, Y = 40 },
+        };
+        var assets = new List<Asset>
+        {
+            new() { Id = "a", Width = 1920, Height = 1080 },
+            new() { Id = "n", Width = 1920, Height = 1080 },
+        };
+        var rects = StageGeometry.CueRects([bg, ndi], assets);
+        var selected = new Selection { Kind = SelectionKind.Cue, Ids = ["ndi"] };
+
+        var overNdi = StageGeometry.HitEditTarget(StageEditMode.Displays, [display], rects, selected, (500, 300), 1);
+        Assert.Equal(StageHitKind.Cue, overNdi.Kind);
+        Assert.Equal("ndi", overNdi.Id);
+
+        var corner = StageGeometry.HitEditTarget(StageEditMode.Displays, [display], rects, selected, (400, 200), 1);
+        Assert.Equal(StageHitKind.CueHandle, corner.Kind);
+        Assert.Equal("nw", corner.Handle);
+
+        var wall = StageGeometry.HitEditTarget(StageEditMode.Displays, [display], rects, selected, (50, 50), 1);
+        Assert.Equal(StageHitKind.Display, wall.Kind);
+    }
 }

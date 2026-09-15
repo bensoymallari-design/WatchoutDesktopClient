@@ -132,6 +132,8 @@ public sealed class ProducerSession
     public void Select(SelectionKind kind, params string[] ids)
     {
         Selection = new Selection { Kind = kind, Ids = ids.ToList() };
+        if (kind == SelectionKind.Cue)
+            StageEditMode = StageEditMode.Cues;
         Changed?.Invoke();
     }
 
