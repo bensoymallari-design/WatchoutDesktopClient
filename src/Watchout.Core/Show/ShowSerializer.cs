@@ -69,6 +69,9 @@ public static class ShowSerializer
                 cue.Crop ??= new Crop();
                 cue.Anchor ??= new Vec2 { X = 0.5, Y = 0.5 };
                 cue.Tweens ??= [];
+                if (cue.Speed <= 0) cue.Speed = 100;
+                if (string.IsNullOrEmpty(cue.ChromaKeyColor)) cue.ChromaKeyColor = "#00FF00";
+                if (cue.ChromaKeyTolerance <= 0) cue.ChromaKeyTolerance = 28;
             }
         }
     }

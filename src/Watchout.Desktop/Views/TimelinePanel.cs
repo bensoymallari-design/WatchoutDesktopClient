@@ -302,6 +302,7 @@ public sealed class TimelinePanel : FrameworkElement
         else if (layer is not null)
         {
             App.Session.Select(SelectionKind.Layer, layer.Id);
+            menu.Items.Add(Menu("Add placeholder cue", () => App.Session.AddPlaceholderCue(layer.Id, msAt)));
             menu.Items.Add(Menu("Insert layer below", () => App.Session.InsertLayer(layer.Id)));
             menu.Items.Add(Menu("Add layer", () => App.Session.AddLayer()));
             menu.Items.Add(new Separator());

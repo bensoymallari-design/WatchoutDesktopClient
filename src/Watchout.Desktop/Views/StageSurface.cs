@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Watchout.Core.Media;
@@ -128,6 +130,7 @@ public sealed class StageSurface : Canvas
     {
         DrawChrome();
         TickPlayback(syncMedia: true);
+        ApplyOutputMask();
     }
 
     void DrawChrome()
@@ -239,7 +242,7 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
-            if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset))
+            if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset) || ChromaChanged(el, ev.Cue))
             {
                 if (el is not null)
                 {
@@ -256,26 +259,28 @@ public sealed class StageSurface : Canvas
                 _layers[ev.Cue.Id] = el;
                 Children.Add(el);
             }
-            else if (syncMedia && el is ProceduralLayer proc)
+            var media = el is CueLookHost host ? host.Media : el;
+            if (syncMedia && media is ProceduralLayer proc)
             {
                 proc.Kind = asset?.Url ?? proc.Kind;
                 proc.LocalTime = ev.LocalTime;
                 proc.InvalidateVisual();
             }
-            else if (el is CaptureLayer capture)
+            else if (media is CaptureLayer capture)
             {
                 capture.DeviceId = LiveSources.CaptureDeviceId(asset);
                 capture.NdiName = LiveSources.IsCapture(asset) ? null : LiveSources.NdiSourceName(asset);
             }
-            else if (syncMedia && el is MediaElement video)
+            else if (syncMedia && media is MediaElement video)
             {
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
                 video.IsMuted = !PlayAudio || ev.Volume <= 0;
                 video.Volume = Math.Clamp(ev.Volume / 100.0, 0, 1);
+                try { video.SpeedRatio = CueLooks.SpeedRatio(ev.Speed); } catch { /* decoder not ready */ }
                 SyncVideo(ev.Cue.Id, video, ev, tl?.Playback ?? PlaybackState.Stop);
             }
 
-            el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
+            ApplyLooks(el, ev);
             PlaceLayer(el, mapped);
             SetZIndex(el, 10);
         }
@@ -303,6 +308,12 @@ public sealed class StageSurface : Canvas
 
     FrameworkElement? BuildLayer(EvaluatedCue ev, Asset? asset, Rect mapped, Show show)
     {
+        var inner = BuildMedia(ev, asset, mapped, show);
+        return inner is null ? null : WrapLooks(inner, ev);
+    }
+
+    FrameworkElement? BuildMedia(EvaluatedCue ev, Asset? asset, Rect mapped, Show show)
+    {
         var native = LayerNativeSize(asset, mapped);
         if (asset is null) return Placeholder(native, ev.Cue.Name, ev.Cue.Color);
         if (LiveSources.IsCapture(asset))
@@ -320,6 +331,8 @@ public sealed class StageSurface : Canvas
         {
             var still = DemoArt.ForUrl(asset.Url, Math.Max(8, (int)asset.Width), Math.Max(8, (int)asset.Height)) ?? MediaLibrary.LoadStill(asset);
             if (still is null) return Placeholder(native, asset.Name, asset.Color);
+            if (ev.Cue.ChromaKeyEnabled && still is BitmapSource bmp)
+                still = MediaLibrary.ChromaKey(bmp, ev.Cue.ChromaKeyColor, ev.Cue.ChromaKeyTolerance) ?? still;
             return new Image { Source = still, Stretch = Stretch.Fill, Width = native.W, Height = native.H, IsHitTestVisible = false };
         }
         if (asset.Kind == AssetKind.Audio) return null;
@@ -364,6 +377,7 @@ public sealed class StageSurface : Canvas
 
     static bool LayerFits(FrameworkElement el, Asset? asset)
     {
+        if (el is CueLookHost host) return LayerFits(host.Media, asset);
         if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
@@ -593,6 +607,12 @@ public sealed class StageSurface : Canvas
 
     void OnLeftDown(object sender, MouseButtonEventArgs e)
     {
+        if (App.Session.PickingChroma)
+        {
+            PickChromaAt(e.GetPosition(this));
+            e.Handled = true;
+            return;
+        }
         if (!Editing) return;
         Focus();
         var show = App.Session.Show;
@@ -745,6 +765,11 @@ public sealed class StageSurface : Canvas
         }
         if (_dragCueId is null)
         {
+            if (App.Session.PickingChroma)
+            {
+                Cursor = Cursors.Cross;
+                return;
+            }
             if (Editing && e.LeftButton != MouseButtonState.Pressed)
             {
                 var stage = ScreenToStage(e.GetPosition(this), show);
@@ -787,9 +812,149 @@ public sealed class StageSurface : Canvas
         _ => Cursors.SizeAll,
     };
 
+    static string ChromaStamp(Cue cue) =>
+        cue.ChromaKeyEnabled ? $"{cue.ChromaKeyColor}|{cue.ChromaKeyTolerance:0}" : "";
+
+    static bool ChromaChanged(FrameworkElement el, Cue cue) =>
+        el is CueLookHost host && host.ChromaStamp != ChromaStamp(cue);
+
+    static FrameworkElement WrapLooks(FrameworkElement inner, EvaluatedCue ev)
+    {
+        inner.IsHitTestVisible = false;
+        var host = new CueLookHost(inner, ChromaStamp(ev.Cue))
+        {
+            Width = inner.Width,
+            Height = inner.Height,
+            IsHitTestVisible = false,
+        };
+        return host;
+    }
+
+    static void ApplyLooks(FrameworkElement el, EvaluatedCue ev)
+    {
+        el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
+        var w = Math.Max(1, el.Width > 1 && !double.IsNaN(el.Width) ? el.Width : 1920);
+        var h = Math.Max(1, el.Height > 1 && !double.IsNaN(el.Height) ? el.Height : 1080);
+        var crop = ev.Crop;
+        var cropped = crop.Top > 0.05 || crop.Bottom > 0.05 || crop.Left > 0.05 || crop.Right > 0.05;
+        if (cropped)
+        {
+            var box = CueLooks.CropBox(w, h, crop);
+            el.Clip = new RectangleGeometry(new Rect(box.X, box.Y, box.W, box.H));
+        }
+        else el.Clip = null;
+
+        if (ev.Wipe < 99.4)
+        {
+            var g = CueLooks.WipeGradient(ev.Wipe, ev.WipeAngle, ev.WipeFeather);
+            el.OpacityMask = new LinearGradientBrush(
+                [
+                    new GradientStop(Colors.White, 0),
+                    new GradientStop(Colors.White, g.Soft0),
+                    new GradientStop(Colors.Transparent, g.Soft1),
+                    new GradientStop(Colors.Transparent, 1),
+                ],
+                new Point(g.X1, g.Y1),
+                new Point(g.X2, g.Y2));
+        }
+        else el.OpacityMask = null;
+
+        if (el is CueLookHost host) host.PaintOverlays(ev);
+    }
+
+    void ApplyOutputMask()
+    {
+        if (ViewDisplay is not { MaskEnabled: true } display || string.IsNullOrEmpty(display.MaskUrl))
+        {
+            OpacityMask = null;
+            return;
+        }
+        var file = Codecs.TryFileUrl(display.MaskUrl) ?? display.MaskUrl;
+        if (!File.Exists(file))
+        {
+            OpacityMask = null;
+            return;
+        }
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = MediaLibrary.LocalUri(file);
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.EndInit();
+            bmp.Freeze();
+            OpacityMask = new ImageBrush(bmp)
+            {
+                Stretch = Stretch.Fill,
+                Opacity = display.MaskInvert ? 1 : 1,
+            };
+        }
+        catch
+        {
+            OpacityMask = null;
+        }
+    }
+
+    void PickChromaAt(Point p)
+    {
+        try
+        {
+            var w = Math.Max(1, (int)ActualWidth);
+            var h = Math.Max(1, (int)ActualHeight);
+            var bmp = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(this);
+            var x = Math.Clamp((int)p.X, 0, w - 1);
+            var y = Math.Clamp((int)p.Y, 0, h - 1);
+            var px = new byte[4];
+            bmp.CopyPixels(new Int32Rect(x, y, 1, 1), px, 4, 0);
+            App.Session.ApplyPickedChroma(CueLooks.ColorToHex(px[2], px[1], px[0]));
+        }
+        catch
+        {
+            App.Session.CancelPickChroma();
+        }
+    }
+
     (double X, double Y) ScreenToStage(Point p, Show show)
     {
         var (ox, oy, scale) = Viewport(show);
         return (ox + p.X / scale, oy + p.Y / scale);
+    }
+}
+
+sealed class CueLookHost : Grid
+{
+    public FrameworkElement Media { get; }
+    public string ChromaStamp { get; }
+    readonly Border _temperature = new() { IsHitTestVisible = false };
+    readonly Border _exposure = new() { IsHitTestVisible = false };
+
+    public CueLookHost(FrameworkElement media, string chromaStamp)
+    {
+        Media = media;
+        ChromaStamp = chromaStamp;
+        Children.Add(media);
+        Children.Add(_temperature);
+        Children.Add(_exposure);
+    }
+
+    public void PaintOverlays(EvaluatedCue ev)
+    {
+        Paint(_temperature, CueLooks.TemperatureOverlay(ev.Temperature));
+        Paint(_exposure, CueLooks.ExposureOverlay(ev.Exposure));
+    }
+
+    static void Paint(Border border, (double R, double G, double B, double A) tone)
+    {
+        if (tone.A < 0.01)
+        {
+            border.Background = null;
+            return;
+        }
+        border.Background = new SolidColorBrush(Color.FromArgb(
+            (byte)Math.Clamp(tone.A * 255, 0, 255),
+            (byte)Math.Clamp(tone.R * 255, 0, 255),
+            (byte)Math.Clamp(tone.G * 255, 0, 255),
+            (byte)Math.Clamp(tone.B * 255, 0, 255)));
     }
 }

@@ -13,6 +13,7 @@ public partial class App : Application
 {
     public static ProducerSession Session { get; } = new();
     public static OutputManager Outputs { get; } = new();
+    public static AppSettings Settings { get; set; } = new();
 
     readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(1000.0 / 60) };
     DateTime _lastTick = DateTime.UtcNow;
@@ -22,6 +23,7 @@ public partial class App : Application
         base.OnStartup(e);
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
         LoadRecents();
+        LoadSettings();
         Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through Media Foundation / DXVA. HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
         _clock.Tick += OnClock;
         _clock.Start();
@@ -54,6 +56,25 @@ public partial class App : Application
         var path = Path.Combine(DataDir(), "recents.json");
         if (!File.Exists(path)) return;
         Session.SetRecents(ShowSerializer.LoadRecents(File.ReadAllText(path)));
+    }
+
+    static void LoadSettings()
+    {
+        var path = Path.Combine(DataDir(), "settings.json");
+        if (!File.Exists(path)) return;
+        try
+        {
+            Settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), ShowSerializer.Options) ?? new AppSettings();
+        }
+        catch
+        {
+            Settings = new AppSettings();
+        }
+    }
+
+    public static void PersistSettings()
+    {
+        File.WriteAllText(Path.Combine(DataDir(), "settings.json"), System.Text.Json.JsonSerializer.Serialize(Settings, ShowSerializer.Options));
     }
 
     public static void PersistRecents()

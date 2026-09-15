@@ -884,9 +884,13 @@ public class PropertiesPanel : UserControl
                 SelectionKind.Timeline when show.Timelines.FirstOrDefault(t => s.Selection.Ids.Contains(t.Id)) is { } tl => tl.Loop + tl.Name + tl.Duration + tl.Rate + tl.Enabled,
                 SelectionKind.Layer when s.ActiveTimeline?.Layers.FirstOrDefault(l => s.Selection.Ids.Contains(l.Id)) is { } layer => layer.Name + layer.Enabled + layer.Locked,
                 SelectionKind.Display when show.Displays.FirstOrDefault(d => s.Selection.Ids.Contains(d.Id)) is { } d =>
-                    d.Name + d.Enabled + d.Blend + d.Width + d.Height
+                    d.Name + d.Enabled + d.Blend + d.Width + d.Height + d.MaskEnabled + d.MaskUrl
                     + LiveSources.CaptureOnDisplay(show, d.Id)
                     + string.Join("|", show.CaptureDevices.Select(c => c.Signal + c.DisplayId)),
+                SelectionKind.Cue when show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => s.Selection.Ids.Contains(c.Id)) is { } cue =>
+                    cue.Name + cue.AssetId + cue.Speed + cue.WipeCompletion + cue.WipeAngle + cue.WipeFeather
+                    + cue.Temperature + cue.Exposure + cue.ChromaKeyEnabled + cue.ChromaKeyColor + s.PickingChroma
+                    + show.Prefs.MediaReplaceMode + show.Prefs.AutoStart,
                 SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a => a.Name + a.Notes,
                 _ => "",
             };
@@ -912,6 +916,51 @@ public class PropertiesPanel : UserControl
             Field("Y", cue.Position.Y.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.Y = n); });
             Field("Scale X %", cue.Scale.X.ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Scale.X = n); });
             Field("Scale Y %", cue.Scale.Y.ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Scale.Y = n); });
+            Field("Speed %", (cue.Speed <= 0 ? 100 : cue.Speed).ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Speed = Math.Max(1, n)); });
+            Field("Wipe %", cue.WipeCompletion.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.WipeCompletion = n); });
+            Field("Wipe angle", cue.WipeAngle.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.WipeAngle = n); });
+            Field("Wipe feather", cue.WipeFeather.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.WipeFeather = n); });
+            Field("Temperature", cue.Temperature.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Temperature = n); });
+            Field("Exposure EV", cue.Exposure.ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Exposure = n); });
+            Check("Chroma key", cue.ChromaKeyEnabled, v => s.UpdateCue(cue.Id, c => c.ChromaKeyEnabled = v));
+            Field("Key color", cue.ChromaKeyColor, v => s.UpdateCue(cue.Id, c => c.ChromaKeyColor = v));
+            Field("Key tolerance", cue.ChromaKeyTolerance.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.ChromaKeyTolerance = n); });
+            ActionBtn(s.PickingChroma ? "Click Stage for key color…" : "Pick key color on Stage", () => s.BeginPickChroma());
+            _root.Children.Add(new TextBlock
+            {
+                Text = "Media on this cue",
+                Foreground = (Brush)FindResource("Wo.Muted"),
+                Margin = new Thickness(0, 12, 0, 2),
+            });
+            var mediaBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+            mediaBox.Items.Add(new ComboBoxItem { Content = "Placeholder (empty)", Tag = "" });
+            foreach (var asset in show.Assets)
+                mediaBox.Items.Add(new ComboBoxItem { Content = asset.Name, Tag = asset.Id });
+            foreach (ComboBoxItem item in mediaBox.Items)
+                if (Equals(item.Tag, cue.AssetId ?? "")) mediaBox.SelectedItem = item;
+            if (mediaBox.SelectedItem is null) mediaBox.SelectedIndex = 0;
+            var cueId = cue.Id;
+            mediaBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (mediaBox.SelectedItem is ComboBoxItem item)
+                    s.ReplaceCueMedia(cueId, item.Tag as string);
+            };
+            _root.Children.Add(mediaBox);
+            var replaceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+            replaceBox.Items.Add(new ComboBoxItem { Content = "Replace: keep old size", Tag = MediaReplaceMode.KeepOldSize });
+            replaceBox.Items.Add(new ComboBoxItem { Content = "Replace: use new size", Tag = MediaReplaceMode.NewSize });
+            replaceBox.Items.Add(new ComboBoxItem { Content = "Replace: fit proportionally", Tag = MediaReplaceMode.FitProportionally });
+            foreach (ComboBoxItem item in replaceBox.Items)
+                if (Equals(item.Tag, show.Prefs.MediaReplaceMode)) replaceBox.SelectedItem = item;
+            if (replaceBox.SelectedItem is null) replaceBox.SelectedIndex = 0;
+            replaceBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (replaceBox.SelectedItem is ComboBoxItem item && item.Tag is MediaReplaceMode mode)
+                    s.SetMediaReplaceMode(mode);
+            };
+            _root.Children.Add(replaceBox);
             Check("Muted", cue.Muted == true, v => s.UpdateCue(cue.Id, c => c.Muted = v));
             Check("Fade in", cue.FadeIn, v => s.UpdateCue(cue.Id, c => c.FadeIn = v));
             Check("Fade out", cue.FadeOut, v => s.UpdateCue(cue.Id, c => c.FadeOut = v));
@@ -930,6 +979,14 @@ public class PropertiesPanel : UserControl
             Field("Channel", d.Channel.ToString(), v => { if (int.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Channel = n); });
             Check("Enabled", d.Enabled, v => s.UpdateDisplay(d.Id, x => x.Enabled = v));
             Check("Blend", d.Blend, v => s.UpdateDisplay(d.Id, x => x.Blend = v));
+            Check("Image mask", d.MaskEnabled, v => s.UpdateDisplay(d.Id, x => x.MaskEnabled = v));
+            Field("Mask image", d.MaskUrl ?? "", v => s.UpdateDisplay(d.Id, x => x.MaskUrl = string.IsNullOrWhiteSpace(v) ? null : v));
+            ActionBtn("Browse mask image…", () =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All files|*.*" };
+                if (dlg.ShowDialog() == true)
+                    s.UpdateDisplay(d.Id, x => { x.MaskUrl = dlg.FileName; x.MaskEnabled = true; });
+            });
             _root.Children.Add(new TextBlock
             {
                 Text = "Live capture",
@@ -1011,6 +1068,12 @@ public class PropertiesPanel : UserControl
         else
         {
             _root.Children.Add(new TextBlock { Text = show.Name, Foreground = (Brush)FindResource("Wo.Text"), FontSize = 16, FontWeight = FontWeights.SemiBold });
+            Check("Auto-start play when this show opens", show.Prefs.AutoStart, v => s.SetShowAutoStart(v));
+            Check("Open last show when WatchMe starts", App.Settings.AutoStartLastShow, v =>
+            {
+                App.Settings.AutoStartLastShow = v;
+                App.PersistSettings();
+            });
             _root.Children.Add(new TextBlock
             {
                 Text = "Click a display on Stage to edit that canvas. Loop and Delete live on each timeline. Double-click a display (or Edit displays) when media covers it.",

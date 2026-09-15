@@ -66,6 +66,9 @@ public static class ShowFactory
             BlendWidth = d.BlendWidth > 0 ? d.BlendWidth : 128,
             Virtual = d.Virtual,
             ScreenId = d.ScreenId,
+            MaskEnabled = d.MaskEnabled,
+            MaskInvert = d.MaskInvert,
+            MaskUrl = d.MaskUrl,
         };
     }
 
@@ -129,6 +132,15 @@ public static class ShowFactory
             FadeOutDuration = partial.FadeOutDuration > 0 ? partial.FadeOutDuration : 500,
             FadeCurve = partial.FadeCurve,
             Tweens = partial.Tweens ?? [],
+            Speed = partial.Speed > 0 ? partial.Speed : 100,
+            WipeCompletion = partial.WipeCompletion,
+            WipeAngle = partial.WipeAngle,
+            WipeFeather = partial.WipeFeather,
+            Temperature = partial.Temperature,
+            Exposure = partial.Exposure,
+            ChromaKeyEnabled = partial.ChromaKeyEnabled,
+            ChromaKeyColor = string.IsNullOrEmpty(partial.ChromaKeyColor) ? "#00FF00" : partial.ChromaKeyColor,
+            ChromaKeyTolerance = partial.ChromaKeyTolerance > 0 ? partial.ChromaKeyTolerance : 28,
             Control = partial.Control,
             Output = partial.Output,
             Variable = partial.Variable,
