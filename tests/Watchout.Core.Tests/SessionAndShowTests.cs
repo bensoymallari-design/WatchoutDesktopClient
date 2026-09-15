@@ -451,6 +451,17 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void SelectingACueLeavesDisplayCanvasAndEditsTheClip()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.SetStageEditMode(StageEditMode.Displays);
+        session.Select(SelectionKind.Cue, "overlay");
+        Assert.Equal(StageEditMode.Cues, session.StageEditMode);
+        Assert.Equal(SelectionKind.Cue, session.Selection.Kind);
+    }
+
+    [Fact]
     public void AssignDisplayScreenAndCopyControllerSize()
     {
         var session = new ProducerSession();
