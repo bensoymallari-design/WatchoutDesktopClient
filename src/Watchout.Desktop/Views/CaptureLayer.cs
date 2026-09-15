@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
+using Watchout.Core.Media;
 using Watchout.Core.Stage;
 using Watchout.Desktop.Interop;
 using Watchout.Desktop.Media;
@@ -308,7 +309,7 @@ public sealed class CaptureLayer : HwndHost
     void Redraw()
     {
         var now = Environment.TickCount64;
-        var bits = now - _lastBitsMs >= 33;
+        var bits = LivePicture.FrameDue(now, _lastBitsMs, LivePicture.BlitMinMs(_output));
         if (_output)
         {
             if (bits) _lastBitsMs = now;

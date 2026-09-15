@@ -1628,6 +1628,41 @@ public sealed class ProducerSession
         return list.Count;
     }
 
+    public void NoteLiveFrameSize(string? ndiName, string? deviceId, int width, int height)
+    {
+        if (Show is null || width < 2 || height < 2) return;
+        if (!Show.Assets.Any(a => LiveFrameMatches(a, ndiName, deviceId)
+                                 && ((int)a.Width != width || (int)a.Height != height)))
+            return;
+        Mutate(show =>
+        {
+            foreach (var asset in show.Assets.Where(a => LiveFrameMatches(a, ndiName, deviceId)))
+            {
+                if ((int)asset.Width == width && (int)asset.Height == height) continue;
+                var oldW = asset.Width > 0 ? asset.Width : 1920;
+                var oldH = asset.Height > 0 ? asset.Height : 1080;
+                foreach (var cue in show.Timelines.SelectMany(t => t.Cues).Where(c => c.AssetId == asset.Id))
+                {
+                    var keep = LivePicture.KeepCueScale(oldW, oldH, cue.Scale.X, cue.Scale.Y, width, height);
+                    cue.Scale = new Vec2 { X = keep.ScaleX, Y = keep.ScaleY };
+                }
+                asset.Width = width;
+                asset.Height = height;
+            }
+        }, record: false);
+    }
+
+    static bool LiveFrameMatches(Asset asset, string? ndiName, string? deviceId)
+    {
+        if (!string.IsNullOrEmpty(deviceId) && LiveSources.CaptureDeviceId(asset) == deviceId)
+            return true;
+        if (string.IsNullOrEmpty(ndiName)) return false;
+        var source = LiveSources.NdiSourceName(asset);
+        if (source is not null && string.Equals(source, ndiName, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return string.Equals(asset.Name, NdiNames.FriendlyName(ndiName), StringComparison.OrdinalIgnoreCase);
+    }
+
     public void UpdateAsset(string id, Action<Asset> patch) =>
         Mutate(show =>
         {

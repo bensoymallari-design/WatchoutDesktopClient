@@ -162,9 +162,9 @@ public static class NdiRuntime
             var create = new RecvCreate
             {
                 p_ndi_name = namePtr,
-                color_format = 0,
-                bandwidth = 100,
-                allow_video_fields = true,
+                color_format = LivePicture.NdiColorBgra,
+                bandwidth = LivePicture.NdiHighestBandwidth,
+                allow_video_fields = false,
                 p_ndi_recv_name = recvName,
             };
             var recv = _recvCreate(ref create);
@@ -213,7 +213,7 @@ public static class NdiRuntime
         public nint p_url_address;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 8)]
     struct RecvCreate
     {
         public nint p_ndi_name;
@@ -225,7 +225,7 @@ public static class NdiRuntime
         public nint p_ndi_recv_name;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 8)]
     public struct VideoFrame
     {
         public int xres;

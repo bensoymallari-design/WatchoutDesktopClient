@@ -6,6 +6,7 @@ using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
+using Watchout.Core.Media;
 
 namespace Watchout.Desktop.Media;
 
@@ -208,13 +209,21 @@ public static class CaptureHub
         {
             try
             {
-                var formats = source.SupportedFormats
-                    .Where(f => f.VideoFormat.Width >= 1280)
-                    .OrderByDescending(f => f.VideoFormat.Width * f.VideoFormat.Height)
-                    .ThenByDescending(f => f.FrameRate.Numerator / (double)Math.Max(1, f.FrameRate.Denominator))
+                var listed = source.SupportedFormats
+                    .Select(f => (
+                        Format: f,
+                        W: (int)f.VideoFormat.Width,
+                        H: (int)f.VideoFormat.Height,
+                        Fps: f.FrameRate.Numerator / (double)Math.Max(1, f.FrameRate.Denominator)))
                     .ToList();
-                var pick = formats.FirstOrDefault(f => f.VideoFormat.Width <= 1920) ?? formats.FirstOrDefault();
-                if (pick is not null) await source.SetFormatAsync(pick);
+                var pick = LivePicture.PickCaptureFormat(listed.Select(f => (f.W, f.H, f.Fps)));
+                if (pick is null) return;
+                var match = listed
+                    .Where(f => f.W == pick.Value.W && f.H == pick.Value.H)
+                    .OrderBy(f => Math.Abs(f.Fps - pick.Value.Fps))
+                    .Select(f => f.Format)
+                    .FirstOrDefault();
+                if (match is not null) await source.SetFormatAsync(match);
             }
             catch
             {
@@ -263,8 +272,9 @@ public static class CaptureHub
                             if (!_logged)
                             {
                                 _logged = true;
-                                App.Session.Log($"Capture signal {w}×{h} — live on Stage");
+                                App.Session.Log($"Capture signal {w}×{h} — live on Stage and Output");
                             }
+                            App.Session.NoteLiveFrameSize(null, _id, w, h);
                         }
                         Bitmap.WritePixels(new Int32Rect(0, 0, w, h), _scratch, w * 4, 0);
                         Action[] listeners;
@@ -275,7 +285,7 @@ public static class CaptureHub
                     {
                         Interlocked.Exchange(ref _uiBusy, 0);
                     }
-                }, DispatcherPriority.Background);
+                }, DispatcherPriority.Render);
             }
             catch
             {
