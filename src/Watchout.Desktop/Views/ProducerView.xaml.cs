@@ -24,6 +24,7 @@ public partial class ProducerView : UserControl
             SyncChrome();
             SyncTimelineScroll();
         });
+        App.Session.LayoutChanged += () => Dispatcher.BeginInvoke(SyncChrome);
         App.Session.Clock += () => Dispatcher.BeginInvoke(SyncChrome);
         App.Session.TimelineViewChanged += () => Dispatcher.BeginInvoke(SyncTimelineScroll);
         Loaded += (_, _) =>

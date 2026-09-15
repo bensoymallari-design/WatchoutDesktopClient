@@ -105,6 +105,43 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void LiveCueMoveUsesLayoutNotFullRebuild()
+    {
+        var session = new ProducerSession();
+        session.OpenDemo();
+        var cue = session.Show!.Timelines[0].Cues.First(c => c.Type == CueType.Media && c.AssetId is not null);
+        var changes = 0;
+        var layouts = 0;
+        session.Changed += () => changes++;
+        session.LayoutChanged += () => layouts++;
+
+        session.LiveUpdateCue(cue.Id, c => c.Position = new Vec3 { X = 120, Y = 40, Z = c.Position.Z });
+        Assert.Equal(0, changes);
+        Assert.Equal(1, layouts);
+        Assert.Equal(120, cue.Position.X);
+        Assert.Equal(40, cue.Position.Y);
+
+        session.LiveUpdateCue(cue.Id, c => c.Position = new Vec3 { X = 120, Y = 40, Z = c.Position.Z });
+        Assert.Equal(1, layouts);
+
+        session.LiveUpdateCue(cue.Id, c => c.Scale = new Vec2 { X = 200, Y = 100 });
+        Assert.Equal(0, changes);
+        Assert.Equal(2, layouts);
+        Assert.Equal(200, cue.Scale.X);
+
+        var display = session.Show.Displays[0];
+        session.LiveUpdateDisplay(display.Id, d => d.X = 64);
+        Assert.Equal(0, changes);
+        Assert.Equal(3, layouts);
+        Assert.Equal(64, display.X);
+
+        session.SetCamera(10, 20, 0.4);
+        Assert.Equal(0, changes);
+        Assert.Equal(4, layouts);
+        Assert.Equal(10, session.Camera.X);
+    }
+
+    [Fact]
     public void FrameDisplaysCentersTheWallInTheStageView()
     {
         var session = new ProducerSession();
