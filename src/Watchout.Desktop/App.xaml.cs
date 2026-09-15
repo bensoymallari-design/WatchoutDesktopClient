@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Watchout.Core;
+using Watchout.Core.Models;
 using Watchout.Core.Persistence;
 using Watchout.Desktop.Media;
 using Watchout.Desktop.Output;
@@ -25,9 +26,12 @@ public partial class App : Application
         LoadRecents();
         LoadSettings();
         Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through Media Foundation / DXVA. HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
+        if (Settings.GpuPreference != GpuPreference.Auto)
+            Session.Log($"GPU preference {Settings.GpuPreference} — pin WatchMe.exe in Windows Graphics settings. WPF cannot switch adapters itself.");
         _clock.Tick += OnClock;
         _clock.Start();
-        Session.Changed += () => Outputs.PushShow(Session.Show);
+        Session.Changed += () => Outputs.PushShow(Session.PlaybackShow);
+        Session.PlaybackChanged += () => Outputs.PushShow(Session.PlaybackShow);
         _ = CaptureHub.RefreshAsync();
     }
 
@@ -38,7 +42,7 @@ public partial class App : Application
         _lastTick = now;
         if (dt is <= 0 or > 250) dt = 1000.0 / 60;
         Session.Tick(dt);
-        Outputs.PushClock(Session.Show);
+        Outputs.PushClock(Session.PlaybackShow);
     }
 
     public static string DataDir()

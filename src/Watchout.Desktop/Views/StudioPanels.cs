@@ -452,7 +452,7 @@ public class DevicesPanel : UserControl
         var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id + s.Width + s.Height))
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
-                 + string.Join("|", show?.Displays.Select(d => d.Id + d.Name + d.ScreenId + d.Channel + d.Width + d.Height + d.Enabled) ?? [])
+                 + string.Join("|", show?.Displays.Select(d => d.Id + d.Name + d.ScreenId + d.Channel + d.Width + d.Height + d.Enabled + d.Role + d.KeyChannel) ?? [])
                  + string.Join("|", audioOutputs.Select(d => d.Id + d.Name))
                  + (show?.AudioDevices.FirstOrDefault()?.Id)
                  + CaptureHub.Generation
@@ -633,7 +633,7 @@ public class DevicesPanel : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var name = new TextBlock
         {
-            Text = $"{display.Name}  {display.Width:0}×{display.Height:0}",
+            Text = $"{display.Name}  {display.Width:0}×{display.Height:0}" + (display.Role == DisplayRole.Key ? $"  ·  KEY {Math.Max(1, display.KeyChannel)}" : ""),
             Foreground = (Brush)FindResource("Wo.Text"),
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = Cursors.Hand,
@@ -885,17 +885,20 @@ public class PropertiesPanel : UserControl
                 SelectionKind.Layer when s.ActiveTimeline?.Layers.FirstOrDefault(l => s.Selection.Ids.Contains(l.Id)) is { } layer => layer.Name + layer.Enabled + layer.Locked,
                 SelectionKind.Display when show.Displays.FirstOrDefault(d => s.Selection.Ids.Contains(d.Id)) is { } d =>
                     d.Name + d.Enabled + d.Blend + d.Width + d.Height + d.MaskEnabled + d.MaskUrl
+                    + d.Role + d.KeyChannel + d.ColorSpace
                     + LiveSources.CaptureOnDisplay(show, d.Id)
-                    + string.Join("|", show.CaptureDevices.Select(c => c.Signal + c.DisplayId)),
+                    + string.Join("|", show.CaptureDevices.Select(c => c.Signal + c.DisplayId))
+                    + string.Join("|", show.Nodes.Select(n => n.Id + n.MacAddress)),
                 SelectionKind.Cue when show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => s.Selection.Ids.Contains(c.Id)) is { } cue =>
                     cue.Name + cue.AssetId + cue.Speed + cue.WipeCompletion + cue.WipeAngle + cue.WipeFeather
                     + cue.Temperature + cue.Exposure + cue.ChromaKeyEnabled + cue.ChromaKeyColor + s.PickingChroma
                     + show.Prefs.MediaReplaceMode + show.Prefs.AutoStart,
-                SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a => a.Name + a.Notes,
+                SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a =>
+                    a.Name + a.Notes + a.ActiveRevisionId + a.Url + a.Revisions.Count,
                 _ => "",
             };
         }
-        var fp = s.Selection.Kind + string.Join(",", s.Selection.Ids) + extra;
+        var fp = s.Selection.Kind + string.Join(",", s.Selection.Ids) + extra + (show?.Prefs.ColorSpace) + (show?.Prefs.AutoStart) + s.BlindEdit;
         if (fp == _fp) return;
         _fp = fp;
         _building = true;
@@ -977,6 +980,47 @@ public class PropertiesPanel : UserControl
             Field("X", d.X.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.X = n); });
             Field("Y", d.Y.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Y = n); });
             Field("Channel", d.Channel.ToString(), v => { if (int.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.Channel = n); });
+            var roleBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+            roleBox.Items.Add(new ComboBoxItem { Content = "Fill (picture)", Tag = DisplayRole.Fill });
+            roleBox.Items.Add(new ComboBoxItem { Content = "Key (alpha / luminance out)", Tag = DisplayRole.Key });
+            foreach (ComboBoxItem item in roleBox.Items)
+                if (Equals(item.Tag, d.Role)) roleBox.SelectedItem = item;
+            if (roleBox.SelectedItem is null) roleBox.SelectedIndex = 0;
+            var dispId = d.Id;
+            roleBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (roleBox.SelectedItem is ComboBoxItem item && item.Tag is DisplayRole role)
+                    s.UpdateDisplay(dispId, x => x.Role = role);
+            };
+            _root.Children.Add(new TextBlock { Text = "Role", Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 2) });
+            _root.Children.Add(roleBox);
+            Field("Key channel", Math.Max(1, d.KeyChannel).ToString(), v =>
+            {
+                if (int.TryParse(v, out var n)) s.UpdateDisplay(d.Id, x => x.KeyChannel = Math.Clamp(n, 1, 4));
+            });
+            var colorBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+            colorBox.Items.Add(new ComboBoxItem { Content = "Rec.709", Tag = ColorSpaceTag.Rec709 });
+            colorBox.Items.Add(new ComboBoxItem { Content = "Rec.2020", Tag = ColorSpaceTag.Rec2020 });
+            colorBox.Items.Add(new ComboBoxItem { Content = "HLG", Tag = ColorSpaceTag.Hlg });
+            colorBox.Items.Add(new ComboBoxItem { Content = "PQ / HDR10", Tag = ColorSpaceTag.Pq });
+            foreach (ComboBoxItem item in colorBox.Items)
+                if (Equals(item.Tag, d.ColorSpace)) colorBox.SelectedItem = item;
+            if (colorBox.SelectedItem is null) colorBox.SelectedIndex = 0;
+            colorBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (colorBox.SelectedItem is ComboBoxItem item && item.Tag is ColorSpaceTag tag)
+                    s.UpdateDisplay(dispId, x => x.ColorSpace = tag);
+            };
+            _root.Children.Add(new TextBlock { Text = "Color space (tag — 8-bit WPF)", Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 2) });
+            _root.Children.Add(colorBox);
+            var node = show.Nodes.FirstOrDefault(n => n.Id == d.NodeId) ?? show.Nodes.FirstOrDefault(n => n.Services.Runner) ?? show.Nodes.FirstOrDefault();
+            if (node is not null)
+            {
+                Field("Wake MAC", node.MacAddress, v => s.UpdateNode(node.Id, n => n.MacAddress = v.Trim()));
+                ActionBtn("Wake on LAN", () => s.WakeNode(node.Id));
+            }
             Check("Enabled", d.Enabled, v => s.UpdateDisplay(d.Id, x => x.Enabled = v));
             Check("Blend", d.Blend, v => s.UpdateDisplay(d.Id, x => x.Blend = v));
             Check("Image mask", d.MaskEnabled, v => s.UpdateDisplay(d.Id, x => x.MaskEnabled = v));
@@ -1063,6 +1107,27 @@ public class PropertiesPanel : UserControl
             _root.Children.Add(new TextBlock { Text = a.Name, Foreground = (Brush)FindResource("Wo.Text"), FontWeight = FontWeights.SemiBold });
             _root.Children.Add(new TextBlock { Text = a.Notes, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 0) });
             _root.Children.Add(new TextBlock { Text = $"{a.Width:0}×{a.Height:0}  ·  {a.Codec}", Foreground = (Brush)FindResource("Wo.Amber"), Margin = new Thickness(0, 8, 0, 0) });
+            if (a.Kind == AssetKind.Composition)
+                _root.Children.Add(new TextBlock { Text = $"{a.Children.Count} grouped cue(s) — Assets → Ungroup to explode", TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 0) });
+            if (a.Revisions.Count > 0)
+            {
+                _root.Children.Add(new TextBlock { Text = "Revision", Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 12, 0, 2) });
+                var revBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+                foreach (var rev in a.Revisions)
+                    revBox.Items.Add(new ComboBoxItem { Content = string.IsNullOrEmpty(rev.Notes) ? rev.Id : rev.Notes, Tag = rev.Id });
+                foreach (ComboBoxItem item in revBox.Items)
+                    if (Equals(item.Tag, a.ActiveRevisionId)) revBox.SelectedItem = item;
+                if (revBox.SelectedItem is null && revBox.Items.Count > 0) revBox.SelectedIndex = revBox.Items.Count - 1;
+                var assetId = a.Id;
+                revBox.SelectionChanged += (_, _) =>
+                {
+                    if (_building) return;
+                    if (revBox.SelectedItem is ComboBoxItem item && item.Tag is string revId)
+                        s.ActivateRevision(assetId, revId);
+                };
+                _root.Children.Add(revBox);
+            }
+            ActionBtn("Create H.264 version", () => _ = MediaLibrary.CreateVersionAsync(a.Id, s));
             ActionBtn("Delete asset", () => s.DeleteAsset(a.Id));
         }
         else
@@ -1074,6 +1139,22 @@ public class PropertiesPanel : UserControl
                 App.Settings.AutoStartLastShow = v;
                 App.PersistSettings();
             });
+            var spaceBox = new ComboBox { Margin = new Thickness(0, 8, 0, 4) };
+            spaceBox.Items.Add(new ComboBoxItem { Content = "Rec.709", Tag = ColorSpaceTag.Rec709 });
+            spaceBox.Items.Add(new ComboBoxItem { Content = "Rec.2020", Tag = ColorSpaceTag.Rec2020 });
+            spaceBox.Items.Add(new ComboBoxItem { Content = "HLG", Tag = ColorSpaceTag.Hlg });
+            spaceBox.Items.Add(new ComboBoxItem { Content = "PQ / HDR10", Tag = ColorSpaceTag.Pq });
+            foreach (ComboBoxItem item in spaceBox.Items)
+                if (Equals(item.Tag, show.Prefs.ColorSpace)) spaceBox.SelectedItem = item;
+            if (spaceBox.SelectedItem is null) spaceBox.SelectedIndex = 0;
+            spaceBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (spaceBox.SelectedItem is ComboBoxItem item && item.Tag is ColorSpaceTag tag)
+                    s.SetColorSpace(tag);
+            };
+            _root.Children.Add(new TextBlock { Text = "Show color space (tag)", Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 12, 0, 2) });
+            _root.Children.Add(spaceBox);
             _root.Children.Add(new TextBlock
             {
                 Text = "Click a display on Stage to edit that canvas. Loop and Delete live on each timeline. Double-click a display (or Edit displays) when media covers it.",

@@ -45,6 +45,15 @@ public static class ShowSerializer
     public static Cue LoadCue(string json) =>
         JsonSerializer.Deserialize<Cue>(json, Options) ?? new Cue();
 
+    public static Models.Show Clone(Models.Show show) => Load(Save(show));
+
+    public static Cue CloneCue(Cue cue)
+    {
+        var copy = LoadCue(SaveCue(cue));
+        copy.Id = Ids.New("cue");
+        return copy;
+    }
+
     static void Normalize(Models.Show show)
     {
         show.Prefs ??= new ShowPrefs();
@@ -56,6 +65,17 @@ public static class ShowSerializer
         show.CaptureDevices ??= [];
         show.Variables ??= [];
         show.CueSets ??= [];
+        foreach (var asset in show.Assets)
+        {
+            asset.Revisions ??= [];
+            asset.Children ??= [];
+        }
+        foreach (var display in show.Displays)
+        {
+            if (display.KeyChannel <= 0) display.KeyChannel = 1;
+        }
+        foreach (var node in show.Nodes)
+            node.MacAddress ??= "";
         foreach (var tl in show.Timelines)
         {
             tl.Layers ??= [];
@@ -87,6 +107,7 @@ sealed class OutputTypeConverter : JsonConverter<OutputType>
             "SDI" => OutputType.SDI,
             "NDI" => OutputType.NDI,
             "VIRTUAL" => OutputType.Virtual,
+            "ST2110" or "2110" => OutputType.ST2110,
             _ => OutputType.GPU,
         };
     }
@@ -97,6 +118,7 @@ sealed class OutputTypeConverter : JsonConverter<OutputType>
             OutputType.SDI => "SDI",
             OutputType.NDI => "NDI",
             OutputType.Virtual => "Virtual",
+            OutputType.ST2110 => "ST2110",
             _ => "GPU",
         });
 }

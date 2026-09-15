@@ -13,11 +13,18 @@ public static class MediaImport
         var needsH264 = !native && Codecs.NeedsH264Transcode(probe.Codec, destPath);
         var canProxy = needsH264 && MediaPolicy.ShouldBuildFullProxy(bytes, probe.Width, probe.Height);
         var silent = kind == AssetKind.Video && !probe.HasAudio;
-        var notes = native
-            ? $"{Path.GetFileName(sourcePath)} · {MediaPolicy.LargeMediaNote(bytes, linked)} · {Codecs.PlaybackNote(probe.Codec, false, probe.Width, probe.Height)}{(silent ? " · no audio track" : "")}"
+        var downmix = kind == AssetKind.Audio && WavHeader.NeedsStereoDownmix(probe.Channels);
+        var ten = probe.BitDepth >= 10 ? " · 10-bit" : "";
+        var ch = probe.Channels > 0 ? $" · {probe.Channels} ch" : "";
+        var notes = native && !downmix
+            ? $"{Path.GetFileName(sourcePath)} · {MediaPolicy.LargeMediaNote(bytes, linked)} · {Codecs.PlaybackNote(probe.Codec, false, probe.Width, probe.Height)}{ch}{ten}{(silent ? " · no audio track" : "")}"
+            : downmix
+                ? $"{Path.GetFileName(sourcePath)} · {probe.Channels} channels (WAV allows up to {WavHeader.MaxChannels}) — downmix to stereo for Media Foundation"
             : canProxy
-                ? $"{Path.GetFileName(sourcePath)} · {MediaPolicy.LargeMediaNote(bytes, linked)} · GPU codec {probe.Codec} — transcoding to H.264 MP4 for DXVA (not WebM)"
-                : $"{Path.GetFileName(sourcePath)} · {MediaPolicy.LargeMediaNote(bytes, linked)} · {Codecs.PlaybackNote(probe.Codec, false, probe.Width, probe.Height)}{(silent ? " · no audio track" : "")}";
+                ? $"{Path.GetFileName(sourcePath)} · {MediaPolicy.LargeMediaNote(bytes, linked)} · GPU codec {probe.Codec} — transcoding to H.264 MP4 for DXVA (not WebM){ten}"
+                : $"{Path.GetFileName(sourcePath)} · {MediaPolicy.LargeMediaNote(bytes, linked)} · {Codecs.PlaybackNote(probe.Codec, false, probe.Width, probe.Height)}{ch}{(silent ? " · no audio track" : "")}";
+
+        if (downmix) native = false;
 
         return new ImportedMedia
         {
@@ -31,12 +38,15 @@ public static class MediaImport
             Url = ToFileUrl(destPath),
             Codec = string.IsNullOrEmpty(probe.Codec) ? Codecs.ExtOf(sourcePath).ToUpperInvariant() : probe.Codec,
             Color = Codecs.ColorFor(kind),
-            Optimized = native || !canProxy,
+            Optimized = !downmix && !(needsH264 && canProxy),
             Notes = notes,
             OriginalPath = destPath,
             ProxyVersion = native ? Codecs.ProxyVersion : null,
             Bytes = bytes,
             Linked = linked,
+            Channels = probe.Channels,
+            BitDepth = probe.BitDepth,
+            ColorSpace = probe.BitDepth >= 10 ? ColorSpaceTag.Rec2020 : ColorSpaceTag.Rec709,
         };
     }
 
@@ -63,6 +73,9 @@ public static class MediaImport
             Bytes = media.Bytes,
             Linked = media.Linked,
             PosterUrl = media.PosterUrl,
+            Channels = media.Channels,
+            BitDepth = media.BitDepth,
+            ColorSpace = media.ColorSpace,
         };
     }
 

@@ -1,6 +1,7 @@
 using Watchout.Core.Layout;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
+using Watchout.Core.Network;
 using Watchout.Core.Playback;
 using Watchout.Core.Persistence;
 using Watchout.Core.Stage;
@@ -39,8 +40,14 @@ public sealed class ProducerSession
     public event Action? Clock;
     public event Action? TimelineViewChanged;
     public event Action? LayoutChanged;
+    public event Action? PlaybackChanged;
 
     public bool PickingChroma { get; private set; }
+    public bool BlindEdit { get; private set; }
+
+    Models.Show? _playback;
+
+    public Models.Show? PlaybackShow => BlindEdit ? _playback ?? Show : Show;
 
     public Timeline? ActiveTimeline =>
         Show is null ? null : Show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? Show.Timelines.FirstOrDefault();
@@ -80,6 +87,8 @@ public sealed class ProducerSession
         TimelineZoom = 0.012;
         TimelineScroll = 0;
         TimelineLayerScroll = 0;
+        BlindEdit = false;
+        _playback = null;
         _history.Clear();
         _future.Clear();
         FrameDisplays();
@@ -94,6 +103,8 @@ public sealed class ProducerSession
         Show = null;
         ShowPath = null;
         View = "welcome";
+        BlindEdit = false;
+        _playback = null;
         Changed?.Invoke();
     }
 
@@ -253,9 +264,57 @@ public sealed class ProducerSession
     public void Tick(double dtMs)
     {
         if (Show is null) return;
-        if (Show.Timelines.All(t => t.Playback != PlaybackState.Play)) return;
-        PlaybackClock.Tick(Show, dtMs);
+        var livePlaying = Show.Timelines.Any(t => t.Playback == PlaybackState.Play);
+        var wallPlaying = BlindEdit && _playback is not null && _playback.Timelines.Any(t => t.Playback == PlaybackState.Play);
+        if (!livePlaying && !wallPlaying) return;
+        if (livePlaying) PlaybackClock.Tick(Show, dtMs);
+        if (wallPlaying) PlaybackClock.Tick(_playback!, dtMs);
         Clock?.Invoke();
+    }
+
+    public void SetBlindEdit(bool on)
+    {
+        if (Show is null) return;
+        if (on == BlindEdit) return;
+        if (on)
+        {
+            _playback = ShowSerializer.Clone(Show);
+            BlindEdit = true;
+            Log("Blind edit — Output holds that snapshot. Producer Stage is free to change. Take to Output when the wall should match.");
+        }
+        else
+        {
+            BlindEdit = false;
+            _playback = null;
+            Log("Live to Output — Stage edits go to the wall again.");
+        }
+        PlaybackChanged?.Invoke();
+        Changed?.Invoke();
+    }
+
+    public void TakeToOutput()
+    {
+        if (Show is null) return;
+        if (!BlindEdit)
+        {
+            Log("Take is for Blind edit — Output already follows Producer.");
+            return;
+        }
+        _playback = ShowSerializer.Clone(Show);
+        Log("Take to Output — wall now matches Producer.");
+        PlaybackChanged?.Invoke();
+        Changed?.Invoke();
+    }
+
+    public ImportReport ImportWatchout6(string path)
+    {
+        var report = Watchout6Importer.ImportFile(path);
+        if (report.Show is not null)
+            LoadShow(report.Show, report.NativeWatchMe ? path : null);
+        Log(report.Message, report.Ok ? "info" : "warn");
+        foreach (var note in report.Notes)
+            Log(note);
+        return report;
     }
 
     public void ReportStageView(double width, double height)
@@ -327,10 +386,17 @@ public sealed class ProducerSession
                 Bytes = media.Bytes,
                 Linked = media.Linked,
                 PosterUrl = media.PosterUrl,
+                Channels = media.Channels,
+                BitDepth = media.BitDepth,
+                ColorSpace = media.ColorSpace,
             };
             if (existing is null) show.Assets.Add(asset);
             else
             {
+                asset.Revisions = existing.Revisions ?? [];
+                asset.Children = existing.Children ?? [];
+                asset.Dynamic = existing.Dynamic;
+                asset.ActiveRevisionId = existing.ActiveRevisionId;
                 var i = show.Assets.IndexOf(existing);
                 show.Assets[i] = asset;
             }
@@ -695,6 +761,306 @@ public sealed class ProducerSession
             }
             Selection = new Selection { Kind = SelectionKind.Cue, Ids = copies };
         });
+    }
+
+    public void GroupSelectedCues()
+    {
+        if (Show is null) return;
+        var tl = ActiveTimeline;
+        if (tl is null) return;
+        var cues = tl.Cues.Where(c => Selection.Kind == SelectionKind.Cue && Selection.Ids.Contains(c.Id)).ToList();
+        if (cues.Count < 2)
+        {
+            Log("Select two or more cues on the same timeline, then Group", "warn");
+            return;
+        }
+
+        Mutate(show =>
+        {
+            var timeline = ActiveTimelineOf(show);
+            if (timeline is null) return;
+            var selected = timeline.Cues.Where(c => Selection.Ids.Contains(c.Id)).ToList();
+            if (selected.Count < 2) return;
+            var start = selected.Min(c => c.Start);
+            var end = selected.Max(c => c.Start + c.Duration);
+            var originX = selected.Min(c => c.Position.X);
+            var originY = selected.Min(c => c.Position.Y);
+            var children = new List<Cue>();
+            double maxR = 0, maxB = 0;
+            foreach (var cue in selected)
+            {
+                var child = ShowSerializer.LoadCue(ShowSerializer.SaveCue(cue));
+                child.Start -= start;
+                child.Position = new Vec3 { X = cue.Position.X - originX, Y = cue.Position.Y - originY, Z = cue.Position.Z };
+                children.Add(child);
+                var asset = show.Assets.FirstOrDefault(a => a.Id == cue.AssetId);
+                var rect = StageGeometry.CueRect(cue, asset);
+                maxR = Math.Max(maxR, rect.X + rect.W - originX);
+                maxB = Math.Max(maxB, rect.Y + rect.H - originY);
+            }
+
+            var group = ShowFactory.EmptyAsset(new Asset
+            {
+                Name = "Group",
+                Kind = AssetKind.Composition,
+                Codec = "Group",
+                Width = Math.Max(16, maxR),
+                Height = Math.Max(16, maxB),
+                Duration = Math.Max(1, end - start),
+                Color = "#a78bfa",
+                Notes = $"{children.Count} cues grouped — Ungroup to explode them back onto the timeline",
+                Children = children,
+            });
+            show.Assets.Add(group);
+            foreach (var cue in selected)
+                timeline.Cues.Remove(cue);
+            var parent = ShowFactory.EmptyCue(new Cue
+            {
+                Name = "Group",
+                Type = CueType.Media,
+                LayerId = selected[0].LayerId,
+                Start = start,
+                Duration = Math.Max(1, end - start),
+                AssetId = group.Id,
+                Color = "#a78bfa",
+                Position = new Vec3 { X = originX, Y = originY },
+            });
+            timeline.Cues.Add(parent);
+            Selection = new Selection { Kind = SelectionKind.Cue, Ids = [parent.Id] };
+        });
+        Log("Grouped selected cues into a composition. Ungroup restores the children.");
+    }
+
+    public void UngroupSelected()
+    {
+        if (Show is null) return;
+        var exploded = false;
+        Mutate(show =>
+        {
+            var timeline = ActiveTimelineOf(show);
+            if (timeline is null) return;
+            var parent = timeline.Cues.FirstOrDefault(c => Selection.Kind == SelectionKind.Cue && Selection.Ids.Contains(c.Id));
+            if (parent is null) return;
+            var asset = show.Assets.FirstOrDefault(a => a.Id == parent.AssetId);
+            if (asset is not { Kind: AssetKind.Composition } || asset.Children.Count == 0)
+                return;
+            var ids = new List<string>();
+            foreach (var child in asset.Children)
+            {
+                var copy = ShowSerializer.CloneCue(child);
+                copy.Start += parent.Start;
+                copy.Position = new Vec3
+                {
+                    X = parent.Position.X + child.Position.X * (parent.Scale.X / 100),
+                    Y = parent.Position.Y + child.Position.Y * (parent.Scale.Y / 100),
+                    Z = parent.Position.Z + child.Position.Z,
+                };
+                if (string.IsNullOrEmpty(copy.LayerId) || timeline.Layers.All(l => l.Id != copy.LayerId))
+                    copy.LayerId = parent.LayerId;
+                timeline.Cues.Add(copy);
+                ids.Add(copy.Id);
+            }
+            timeline.Cues.Remove(parent);
+            if (show.Timelines.SelectMany(t => t.Cues).All(c => c.AssetId != asset.Id))
+                show.Assets.Remove(asset);
+            Selection = new Selection { Kind = SelectionKind.Cue, Ids = ids };
+            exploded = true;
+        });
+        if (exploded) Log("Ungrouped composition — children are cues on the timeline again.");
+        else Log("Select a grouped composition cue, then Ungroup", "warn");
+    }
+
+    public bool WakeNode(string? nodeId = null)
+    {
+        if (Show is null) return false;
+        var node = nodeId is not null
+            ? Show.Nodes.FirstOrDefault(n => n.Id == nodeId)
+            : Selection.Kind == SelectionKind.Display
+                ? Show.Nodes.FirstOrDefault(n => n.Id == Show.Displays.FirstOrDefault(d => Selection.Ids.Contains(d.Id))?.NodeId)
+                : Show.Nodes.FirstOrDefault(n => n.Services.Runner);
+        node ??= Show.Nodes.FirstOrDefault();
+        if (node is null)
+        {
+            Log("No display node to wake", "warn");
+            return false;
+        }
+        if (!WakeOnLan.Send(node.MacAddress))
+        {
+            Log($"Wake on LAN needs a MAC on {node.Name} — set it in Properties", "warn");
+            return false;
+        }
+        Log($"Sent Wake-on-LAN magic packet to {node.Name} ({node.MacAddress})");
+        return true;
+    }
+
+    public void UpdateNode(string id, Action<ShowNode> patch) =>
+        Mutate(show =>
+        {
+            var n = show.Nodes.FirstOrDefault(x => x.Id == id);
+            if (n is not null) patch(n);
+        });
+
+    public void SetColorSpace(ColorSpaceTag space) =>
+        Mutate(show =>
+        {
+            show.Prefs.ColorSpace = space;
+        });
+
+    public void SetHdrPipeline(bool hdr, int bitDepth = 10) =>
+        Mutate(show =>
+        {
+            show.Prefs.HdrPipeline = hdr;
+            show.Prefs.BitDepth = hdr ? Math.Max(10, bitDepth) : 8;
+            if (hdr) show.Prefs.ColorSpace = ColorSpaceTag.Pq;
+        });
+
+    public void SetOptimizePreset(OptimizePreset preset) =>
+        Mutate(show => show.Prefs.OptimizePreset = preset);
+
+    public void SetNmosRegistry(string url) =>
+        Mutate(show => show.Prefs.NmosRegistry = url ?? "");
+
+    public void SetLtc(bool enabled, double fps = 30) =>
+        Mutate(show =>
+        {
+            show.Prefs.LtcEnabled = enabled;
+            show.Prefs.LtcFps = fps > 0 ? fps : 30;
+        });
+
+    public Asset ImportSt2110(string name, string sdp, string? nmosId = null, bool placeOnLayer = false)
+    {
+        if (Show is null) NewShow();
+        var media = LiveSources.St2110Asset(name, sdp, nmosId);
+        ApplyImported(media);
+        Mutate(show =>
+        {
+            show.CaptureDevices = show.CaptureDevices
+                .Where(d => d.Signal != media.Url)
+                .Append(new CaptureDevice
+                {
+                    Id = Ids.New("cap"),
+                    Name = media.Name,
+                    NodeId = show.Nodes.FirstOrDefault(n => n.Services.Runner)?.Id ?? "local-runner",
+                    Kind = "ST2110",
+                    Signal = media.Url,
+                })
+                .ToList();
+        }, record: false);
+        if (placeOnLayer)
+        {
+            var hasCue = Show!.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
+            if (!hasCue)
+            {
+                string? layerId = null;
+                Mutate(show => layerId = LiveSources.NextLiveLayerId(show), record: false);
+                AddCueFromAsset(media.Id, layerId, 0);
+            }
+        }
+        else
+            Select(SelectionKind.Asset, media.Id);
+        return Show!.Assets.First(a => a.Id == media.Id);
+    }
+
+    public int ImportNmosSenders(IEnumerable<NmosSender> senders, IReadOnlyDictionary<string, string>? sdpByHref = null)
+    {
+        var n = 0;
+        foreach (var sender in senders)
+        {
+            var sdp = "";
+            if (sdpByHref is not null && !string.IsNullOrEmpty(sender.ManifestHref) && sdpByHref.TryGetValue(sender.ManifestHref, out var body))
+                sdp = body;
+            if (string.IsNullOrWhiteSpace(sdp))
+                sdp = $"v=0\nm=video 5004 RTP/AVP 96\na=rtpmap:96 raw/90000\na=fmtp:96 width=1920; height=1080; exactframerate=60\n";
+            ImportSt2110(sender.Label, sdp, sender.Id);
+            n++;
+        }
+        if (n > 0) Log($"Imported {n} NMOS sender(s) as ST 2110 assets");
+        else Log("NMOS registry returned no senders", "warn");
+        return n;
+    }
+
+    public void ChaseLtc(LtcStamp stamp)
+    {
+        var tl = ActiveTimeline;
+        if (tl is null) return;
+        SetPlayhead(tl.Id, stamp.Milliseconds);
+        Log($"LTC chase {stamp.Hours:00}:{stamp.Minutes:00}:{stamp.Seconds:00}:{stamp.Frames:00}");
+    }
+
+    public byte[] ExportLtcWav(double durationMs, int sampleRate = 48000)
+    {
+        var tl = ActiveTimeline;
+        var fps = Show?.Prefs.LtcFps > 0 ? Show.Prefs.LtcFps : 30;
+        var start = LtcStamp.FromMilliseconds(tl?.Playhead ?? 0, fps);
+        var frames = Math.Max(1, (int)Math.Ceiling((durationMs <= 0 ? 1000 : durationMs) / (1000d / fps)));
+        Log($"Exported {frames} frames of LTC at {fps:0} fps");
+        return Ltc.Wav(start, frames, sampleRate, fps);
+    }
+
+    public void MarkNode(string id, bool online, NodeKind? kind = null) =>
+        Mutate(show =>
+        {
+            var node = show.Nodes.FirstOrDefault(n => n.Id == id);
+            if (node is null) return;
+            node.Online = online;
+            if (kind is { } k) node.Kind = k;
+        }, record: false);
+
+    public string NodeShowPayload() => Show is null ? "{}" : ShowSerializer.Save(Show);
+
+    public void PushAssetRevision(string assetId, string url, string? proxyPath, string notes)
+    {
+        Mutate(show =>
+        {
+            var asset = show.Assets.FirstOrDefault(a => a.Id == assetId);
+            if (asset is null) return;
+            asset.Revisions ??= [];
+            if (asset.Revisions.Count == 0 && !string.IsNullOrEmpty(asset.Url))
+            {
+                asset.Revisions.Add(new AssetRevision
+                {
+                    Id = Ids.New("rev"),
+                    Url = asset.Url,
+                    ProxyPath = asset.ProxyPath,
+                    OriginalPath = asset.OriginalPath,
+                    CreatedAt = DateTime.UtcNow.ToString("o"),
+                    Notes = "Original",
+                });
+            }
+            var rev = new AssetRevision
+            {
+                Id = Ids.New("rev"),
+                Url = url,
+                ProxyPath = proxyPath,
+                OriginalPath = asset.OriginalPath,
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                Notes = notes,
+            };
+            asset.Revisions.Add(rev);
+            ApplyRevision(asset, rev);
+        });
+        Log(notes);
+    }
+
+    public void ActivateRevision(string assetId, string revisionId)
+    {
+        Mutate(show =>
+        {
+            var asset = show.Assets.FirstOrDefault(a => a.Id == assetId);
+            var rev = asset?.Revisions.FirstOrDefault(r => r.Id == revisionId);
+            if (asset is null || rev is null) return;
+            ApplyRevision(asset, rev);
+        });
+        Log("Switched asset revision — cues keep the same slot");
+    }
+
+    static void ApplyRevision(Asset asset, AssetRevision rev)
+    {
+        asset.ActiveRevisionId = rev.Id;
+        asset.Url = rev.Url;
+        if (!string.IsNullOrEmpty(rev.ProxyPath)) asset.ProxyPath = rev.ProxyPath;
+        asset.Dynamic = true;
+        asset.Notes = rev.Notes;
     }
 
     public void ToggleFade(string which)

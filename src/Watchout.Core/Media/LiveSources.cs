@@ -19,7 +19,23 @@ public static class LiveSources
         return NdiNames.IsNdiUrl(asset.Url) ? NdiNames.SourceNameFromUrl(asset.Url) : null;
     }
 
-    public static bool IsLive(Asset? asset) => IsCapture(asset) || IsNdi(asset);
+    public const string St2110Prefix = "st2110:";
+
+    public static bool IsSt2110(Asset? asset) =>
+        asset is not null && (asset.Kind == AssetKind.St2110 || IsSt2110Url(asset.Url));
+
+    public static bool IsSt2110Url(string? url) =>
+        !string.IsNullOrEmpty(url) && url.StartsWith(St2110Prefix, StringComparison.OrdinalIgnoreCase);
+
+    public static string St2110Url(string sdp) => St2110Prefix + sdp;
+
+    public static string? St2110Sdp(Asset? asset)
+    {
+        if (!IsSt2110(asset)) return null;
+        return asset!.Url[St2110Prefix.Length..];
+    }
+
+    public static bool IsLive(Asset? asset) => IsCapture(asset) || IsNdi(asset) || IsSt2110(asset);
 
     public static bool IsCaptureUrl(string? url) =>
         !string.IsNullOrEmpty(url) && url.StartsWith(CapturePrefix, StringComparison.OrdinalIgnoreCase);
@@ -75,6 +91,32 @@ public static class LiveSources
                 ? $"{name} · NDI live via Webcam Input — drag onto a timeline layer"
                 : $"{name} · NDI live — drag onto a timeline layer. Picture comes from NDI Runtime.",
             OriginalPath = bound ? CaptureUrl(captureDeviceId!) : NdiNames.NdiUrl(name),
+        };
+    }
+
+    public static ImportedMedia St2110Asset(string name, string sdp, string? nmosId = null)
+    {
+        var streams = Sdp.Parse(sdp);
+        var (w, h, fps) = Sdp.VideoSize(streams);
+        var video = streams.FirstOrDefault(s => s.Kind.Equals("video", StringComparison.OrdinalIgnoreCase));
+        var label = string.IsNullOrWhiteSpace(name) ? video?.Encoding ?? "ST 2110" : name;
+        return new ImportedMedia
+        {
+            Id = Ids.New("asset"),
+            Name = label,
+            Kind = AssetKind.St2110,
+            Width = w,
+            Height = h,
+            Duration = LiveCueDurationMs,
+            Fps = fps,
+            Url = St2110Url(sdp),
+            Codec = $"ST 2110 · {video?.Encoding ?? "RTP"}",
+            Color = "#22d3ee",
+            Optimized = true,
+            Notes = nmosId is null
+                ? $"{label} · SMPTE ST 2110 SDP {video?.Destination}:{video?.Port} · {w}×{h}"
+                : $"{label} · NMOS {nmosId} · ST 2110 {video?.Destination}:{video?.Port}",
+            OriginalPath = St2110Url(sdp),
         };
     }
 
