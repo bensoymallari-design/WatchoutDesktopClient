@@ -678,7 +678,7 @@ public sealed class ProducerSession
         FrameDisplays();
         Log(includePrimary
             ? "Copied every monitor, including the Producer laptop, onto the Stage."
-            : "Assigned extra screens (MCTRL / NovaStar / HDMI) onto the Stage and copied their size and layout.");
+            : "Assigned extra screens (LED processor, Colorlight, NovaStar, TV, projector) onto the Stage and copied their size and layout.");
     }
 
     public void AssignDisplayScreen(string displayId, string? key)

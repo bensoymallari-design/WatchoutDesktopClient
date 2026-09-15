@@ -75,6 +75,17 @@ public class ScreenAssignTests
     }
 
     [Fact]
+    public void ScreenChoiceLabelMarksExtrasAsWallOrTv()
+    {
+        var laptop = new OutputScreen { Id = "1", Label = "DISPLAY1", IsPrimary = true, Width = 1920, Height = 1080 };
+        var colorlight = new OutputScreen { Id = "2", Label = "Colorlight", Width = 1920, Height = 1080 };
+        var tv = new OutputScreen { Id = "3", Label = "HDMI", Width = 3840, Height = 2160 };
+        Assert.Contains("Producer", ScreenAssign.ScreenChoiceLabel(laptop));
+        Assert.Equal("Colorlight · wall/TV 1920×1080", ScreenAssign.ScreenChoiceLabel(colorlight));
+        Assert.Equal("HDMI · wall/TV 3840×2160", ScreenAssign.ScreenChoiceLabel(tv));
+    }
+
+    [Fact]
     public void ResolveOutputSkipsTheProducerLaptopWhenAControllerExists()
     {
         var laptop = new OutputScreen { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080, Left = 0 };
@@ -94,5 +105,23 @@ public class ScreenAssignTests
         var pinned = ScreenAssign.ResolveOutputScreen(display, screens, null, out skipped);
         Assert.False(skipped);
         Assert.Equal("mctrl", pinned!.Id);
+    }
+
+    [Fact]
+    public void ResolveOutputTreatsColorlightAndTvsAsTheWall()
+    {
+        var laptop = new OutputScreen { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080, Left = 0 };
+        var colorlight = new OutputScreen { Id = "color", Label = "Colorlight", Width = 1920, Height = 1080, Left = 1920 };
+        var tv = new OutputScreen { Id = "tv", Label = "Samsung", Width = 3840, Height = 2160, Left = 3840 };
+        var display = new Display { Id = "d1", Name = "Display 1", Channel = 1, ScreenId = laptop.Id };
+
+        var toColorlight = ScreenAssign.ResolveOutputScreen(display, [laptop, colorlight], null, out var skipped);
+        Assert.True(skipped);
+        Assert.Equal("color", toColorlight!.Id);
+
+        display.ScreenId = tv.Id;
+        var toTv = ScreenAssign.ResolveOutputScreen(display, [laptop, colorlight, tv], null, out skipped);
+        Assert.False(skipped);
+        Assert.Equal("tv", toTv!.Id);
     }
 }
