@@ -42,6 +42,7 @@ public partial class ProducerView : UserControl
         Timelines.Reload();
         Timeline.Reload();
         Devices.Reload();
+        Layers.Reload();
         Log.Reload();
         Stage.Refresh();
         SyncTimelineScroll();

@@ -10,8 +10,37 @@ public static class TimelineMath
     public const double LaneHeight = 28;
     public const double RulerHeight = 22;
     public const double HeaderWidth = 120;
+    public const double LayerIconSize = 16;
+    public const double LayerIconGap = 4;
     public const double MinZoom = 0.0002;
     public const double MaxZoom = 0.2;
+
+    public enum LayerHeaderPart { Body, Lock, Eye }
+
+    public static double LayerEyeLeft(double headerWidth = HeaderWidth) =>
+        headerWidth - LayerIconGap - LayerIconSize;
+
+    public static double LayerLockLeft(double headerWidth = HeaderWidth) =>
+        LayerEyeLeft(headerWidth) - LayerIconGap - LayerIconSize;
+
+    public static LayerHeaderPart HitLayerHeader(double x, double headerWidth = HeaderWidth)
+    {
+        if (x >= LayerEyeLeft(headerWidth)) return LayerHeaderPart.Eye;
+        if (x >= LayerLockLeft(headerWidth)) return LayerHeaderPart.Lock;
+        return LayerHeaderPart.Body;
+    }
+
+    public static Layer? FindLayer(IEnumerable<Layer> layers, string? layerId) =>
+        layers.FirstOrDefault(l => l.Id == layerId);
+
+    public static Layer? FindLayer(Show show, string? layerId) =>
+        FindLayer(show.Timelines.SelectMany(t => t.Layers), layerId);
+
+    public static bool LayerIsVisible(IEnumerable<Layer> layers, string? layerId) =>
+        FindLayer(layers, layerId)?.Enabled != false;
+
+    public static bool LayerIsLocked(IEnumerable<Layer> layers, string? layerId) =>
+        FindLayer(layers, layerId)?.Locked == true;
 
     public static double ClampZoom(double zoom) => Math.Clamp(zoom, MinZoom, MaxZoom);
 

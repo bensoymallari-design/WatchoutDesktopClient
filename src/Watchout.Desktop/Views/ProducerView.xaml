@@ -101,7 +101,7 @@
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <views:TimelinePanel x:Name="Timeline" Grid.Row="0" Grid.Column="0"
-                             ToolTip="Wheel scrolls time · Shift+wheel scrolls layers · Ctrl+wheel zooms · middle-drag pans"/>
+                             ToolTip="Wheel scrolls time · Shift+wheel scrolls layers · Ctrl+wheel zooms · middle-drag pans · click the eye or lock on a layer"/>
         <ScrollBar x:Name="TimelineVScroll" Grid.Row="0" Grid.Column="1" Orientation="Vertical" Width="12"
                    Minimum="0" SmallChange="28" Scroll="TimelineVScroll_Scroll"/>
         <ScrollBar x:Name="TimelineHScroll" Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Height="12" Width="Auto"
@@ -111,6 +111,9 @@
     </DockPanel>
 
     <TabControl Grid.Row="2" Grid.Column="4" Background="#1C1C1C" BorderBrush="#111" Foreground="#E8E6E3">
+      <TabItem Header="Layers">
+        <views:LayersPanel x:Name="Layers"/>
+      </TabItem>
       <TabItem Header="Devices">
         <views:DevicesPanel x:Name="Devices"/>
       </TabItem>
