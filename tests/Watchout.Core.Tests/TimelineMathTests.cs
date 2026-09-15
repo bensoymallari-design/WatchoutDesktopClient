@@ -207,5 +207,7 @@ public class TimelineMathTests
         Assert.True(TimelineMath.LayerIsVisible(layers, "b"));
         Assert.True(TimelineMath.LayerIsLocked(layers, "b"));
         Assert.False(TimelineMath.LayerIsLocked(layers, "a"));
+        Assert.Equal(0, TimelineMath.LayerStackIndex(layers, "a"));
+        Assert.Equal(1, TimelineMath.LayerStackIndex(layers, "b"));
     }
 }

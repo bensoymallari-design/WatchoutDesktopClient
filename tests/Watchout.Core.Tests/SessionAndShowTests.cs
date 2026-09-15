@@ -546,4 +546,24 @@ public class SessionAndShowTests
         session.UpdateCue(cue.Id, c => c.Start = 2000);
         Assert.Equal(2000, cue.Start);
     }
+
+    [Fact]
+    public void VisibleMediaDrawsLaterTimelineLayersInFront()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var a = MediaImport.FromProbe("/a.mp4", "/library/a.mp4", probe, 1000, true);
+        var b = MediaImport.FromProbe("/b.mp4", "/library/b.mp4", probe, 1000, true);
+        session.ApplyImported(a);
+        session.ApplyImported(b);
+        var tl = session.ActiveTimeline!;
+        var back = session.AddCueFromAsset(a.Id, tl.Layers[0].Id, 0)!;
+        var front = session.AddCueFromAsset(b.Id, tl.Layers[1].Id, 0)!;
+        tl.Playhead = 500;
+        var ids = PlaybackClock.VisibleMedia(session.Show!).Select(e => e.Cue.Id).ToList();
+        Assert.True(ids.IndexOf(back.Id) >= 0);
+        Assert.True(ids.IndexOf(front.Id) >= 0);
+        Assert.True(ids.IndexOf(back.Id) < ids.IndexOf(front.Id));
+    }
 }

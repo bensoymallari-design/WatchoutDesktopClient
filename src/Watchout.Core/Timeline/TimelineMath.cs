@@ -42,6 +42,15 @@ public static class TimelineMath
     public static bool LayerIsLocked(IEnumerable<Layer> layers, string? layerId) =>
         FindLayer(layers, layerId)?.Locked == true;
 
+    /// <summary>0 = back (first in the timeline list), higher = in front.</summary>
+    public static int LayerStackIndex(IReadOnlyList<Layer> layers, string? layerId)
+    {
+        if (string.IsNullOrEmpty(layerId)) return 0;
+        for (var i = 0; i < layers.Count; i++)
+            if (layers[i].Id == layerId) return i;
+        return 0;
+    }
+
     public static double ClampZoom(double zoom) => Math.Clamp(zoom, MinZoom, MaxZoom);
 
     /// <summary>Visible portion of a cue bar after clipping to the time column.</summary>
