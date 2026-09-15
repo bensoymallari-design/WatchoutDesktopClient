@@ -61,6 +61,8 @@ public sealed class OutputWindow : Window
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
         NativeWindow.Place(hwnd, _screen.Left, _screen.Top, _screen.Width, _screen.Height);
+        UpdateLayout();
+        _surface.UpdateLayout();
         _surface.Refresh();
     }
 }
