@@ -303,6 +303,8 @@ public sealed class StageSurface : Canvas
             SetZIndex(el, 100 + z);
             z++;
         }
+        foreach (var el in _layers.Values)
+            if (el is CaptureLayer feed) feed.SyncOverlay();
     }
 
     void DrawHandles(Rect mapped, int z)

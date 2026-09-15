@@ -1,13 +1,19 @@
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
+using Watchout.Core.Stage;
+using Watchout.Desktop.Interop;
 using Watchout.Desktop.Media;
+using Watchout.Desktop.Output;
 
 namespace Watchout.Desktop.Views;
 
 /// <summary>
-/// Live NDI/capture as a Win32 child so it can stack in front of DXVA MediaElement.
-/// WPF Image/WriteableBitmap sits under the video overlay once H.264 starts playing.
+/// Live NDI/capture as a Win32 child on Stage so it can stack in front of DXVA MediaElement.
+/// On Output the same child sits under the fullscreen video overlay, so the wall feed is
+/// a top-level layered popup in screen pixels instead.
 /// </summary>
 public sealed class CaptureLayer : HwndHost
 {
@@ -18,6 +24,13 @@ public sealed class CaptureLayer : HwndHost
     const int WsClipSiblings = 0x04000000;
     const int WsExNoActivate = 0x08000000;
     const int WsExTransparent = 0x00000020;
+    const uint SwpNosize = 0x0001;
+    const uint SwpNomove = 0x0002;
+    const uint SwpNoActivate = 0x0010;
+    const uint SwpShowWindow = 0x0040;
+    const uint SwpHideWindow = 0x0080;
+    static readonly IntPtr HwndTop = IntPtr.Zero;
+    static readonly IntPtr HwndBottom = new(1);
 
     string? _deviceId;
     string? _ndiName;
@@ -25,13 +38,35 @@ public sealed class CaptureLayer : HwndHost
     IntPtr _hwnd;
     WriteableBitmap? _bmp;
     readonly Action _onFrame;
+    LiveOverlayWindow? _overlay;
+    bool _output;
+    bool _syncing;
+    int _overlayX, _overlayY, _overlayW, _overlayH;
 
     public CaptureLayer()
     {
         _onFrame = OnFrame;
-        Loaded += (_, _) => Attach();
-        Unloaded += (_, _) => Detach();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
+
+    void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _output = Window.GetWindow(this) is OutputWindow;
+        if (_output) LayoutUpdated += OnLayoutUpdated;
+        Attach();
+        SyncOverlay(forceBits: true);
+    }
+
+    void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        LayoutUpdated -= OnLayoutUpdated;
+        Detach();
+        _overlay?.Dispose();
+        _overlay = null;
+    }
+
+    void OnLayoutUpdated(object? sender, EventArgs e) => SyncOverlay(forceBits: false);
 
     public string? DeviceId
     {
@@ -61,6 +96,78 @@ public sealed class CaptureLayer : HwndHost
         }
     }
 
+    public void SyncOverlay() => SyncOverlay(forceBits: true);
+
+    void SyncOverlay(bool forceBits)
+    {
+        if (_syncing) return;
+        _output = Window.GetWindow(this) is OutputWindow;
+        if (!_output)
+        {
+            _overlay?.Hide();
+            return;
+        }
+
+        if (!LiveComposite.ScreenOverlayOnOutput(Panel.GetZIndex(this), VideoZs()))
+        {
+            _overlay?.Hide();
+            return;
+        }
+
+        if (!IsVisible || ActualWidth < 2 || ActualHeight < 2 || _bmp is null)
+        {
+            _overlay?.Hide();
+            return;
+        }
+
+        Point tl;
+        Point br;
+        try
+        {
+            tl = PointToScreen(new Point(0, 0));
+            br = PointToScreen(new Point(ActualWidth, ActualHeight));
+        }
+        catch
+        {
+            return;
+        }
+
+        var x = (int)Math.Round(Math.Min(tl.X, br.X));
+        var y = (int)Math.Round(Math.Min(tl.Y, br.Y));
+        var w = (int)Math.Round(Math.Abs(br.X - tl.X));
+        var h = (int)Math.Round(Math.Abs(br.Y - tl.Y));
+        if (!forceBits && _overlay is not null && x == _overlayX && y == _overlayY && w == _overlayW && h == _overlayH)
+            return;
+
+        var owner = Window.GetWindow(this) is { } win ? new WindowInteropHelper(win).Handle : IntPtr.Zero;
+        if (owner == IntPtr.Zero) return;
+        var alpha = (byte)Math.Clamp(Opacity * 255, 0, 255);
+        _syncing = true;
+        try
+        {
+            _overlay ??= new LiveOverlayWindow();
+            _overlay.Present(_bmp, x, y, w, h, alpha, owner);
+            _overlayX = x;
+            _overlayY = y;
+            _overlayW = w;
+            _overlayH = h;
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    IEnumerable<int> VideoZs()
+    {
+        if (Parent is not Panel panel) yield break;
+        foreach (UIElement child in panel.Children)
+        {
+            if (child is MediaElement)
+                yield return Panel.GetZIndex(child);
+        }
+    }
+
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
         _hwnd = CreateWindowEx(
@@ -69,8 +176,8 @@ public sealed class CaptureLayer : HwndHost
             "",
             WsChild | WsVisible | WsClipSiblings,
             0, 0,
-            Math.Max(1, (int)Math.Ceiling(Math.Max(Width, 1))),
-            Math.Max(1, (int)Math.Ceiling(Math.Max(Height, 1))),
+            Math.Max(1, (int)Math.Ceiling(Math.Max(double.IsNaN(Width) ? 1 : Width, 1))),
+            Math.Max(1, (int)Math.Ceiling(Math.Max(double.IsNaN(Height) ? 1 : Height, 1))),
             hwndParent.Handle,
             IntPtr.Zero,
             GetModuleHandle(null),
@@ -82,6 +189,20 @@ public sealed class CaptureLayer : HwndHost
     {
         DestroyWindow(hwnd.Handle);
         _hwnd = IntPtr.Zero;
+    }
+
+    protected override void OnWindowPositionChanged(Rect rc)
+    {
+        base.OnWindowPositionChanged(rc);
+        if (_hwnd == IntPtr.Zero) return;
+        _output = Window.GetWindow(this) is OutputWindow;
+        if (_output)
+        {
+            SetWindowPos(_hwnd, HwndBottom, 0, 0, 1, 1, SwpNoActivate | SwpHideWindow);
+            SyncOverlay();
+            return;
+        }
+        SetWindowPos(_hwnd, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate | SwpShowWindow);
     }
 
     protected override IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -145,8 +266,16 @@ public sealed class CaptureLayer : HwndHost
 
     void Redraw()
     {
+        if (_output)
+        {
+            SyncOverlay(forceBits: true);
+            return;
+        }
         if (_hwnd != IntPtr.Zero)
+        {
             InvalidateRect(_hwnd, IntPtr.Zero, false);
+            SetWindowPos(_hwnd, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate | SwpShowWindow);
+        }
     }
 
     void Paint(IntPtr hwnd)
@@ -200,6 +329,9 @@ public sealed class CaptureLayer : HwndHost
 
     [DllImport("user32.dll")]
     static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, bool erase);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
     [DllImport("user32.dll")]
     static extern IntPtr BeginPaint(IntPtr hwnd, out PaintStruct lpPaint);
