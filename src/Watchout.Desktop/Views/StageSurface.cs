@@ -19,6 +19,7 @@ public sealed class StageSurface : Canvas
     readonly Dictionary<string, FrameworkElement> _layers = [];
     readonly Dictionary<string, MediaElement> _videos = [];
     readonly HashSet<string> _playing = [];
+    readonly HashSet<string> _primed = [];
     readonly List<UIElement> _chrome = [];
     bool _clockQueued;
     bool _visualQueued;
@@ -90,6 +91,7 @@ public sealed class StageSurface : Canvas
             foreach (var v in _videos.Values) { try { v.Stop(); v.Close(); } catch { /* ignore */ } }
             _videos.Clear();
             _playing.Clear();
+            _primed.Clear();
         };
     }
 
@@ -143,6 +145,7 @@ public sealed class StageSurface : Canvas
             _layers.Clear();
             _videos.Clear();
             _playing.Clear();
+            _primed.Clear();
             _chrome.Clear();
             return;
         }
@@ -231,6 +234,7 @@ public sealed class StageSurface : Canvas
             Children.Remove(_layers[stale]);
             _layers.Remove(stale);
             _playing.Remove(stale);
+            _primed.Remove(stale);
             if (_videos.Remove(stale, out var dead))
             {
                 try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -249,6 +253,7 @@ public sealed class StageSurface : Canvas
                     Children.Remove(el);
                     _layers.Remove(ev.Cue.Id);
                     _playing.Remove(ev.Cue.Id);
+                    _primed.Remove(ev.Cue.Id);
                     if (_videos.Remove(ev.Cue.Id, out var dead))
                     {
                         try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -309,7 +314,10 @@ public sealed class StageSurface : Canvas
     FrameworkElement? BuildLayer(EvaluatedCue ev, Asset? asset, Rect mapped, Show show)
     {
         var inner = BuildMedia(ev, asset, mapped, show);
-        return inner is null ? null : WrapLooks(inner, ev);
+        if (inner is null) return null;
+        // Media Foundation / DXVA goes black under Grid, ScaleTransform, OpacityMask, or Clip.
+        if (inner is MediaElement) return inner;
+        return WrapLooks(inner, ev);
     }
 
     FrameworkElement? BuildMedia(EvaluatedCue ev, Asset? asset, Rect mapped, Show show)
@@ -394,9 +402,15 @@ public sealed class StageSurface : Canvas
                 var drift = Math.Abs((video.Position - target).TotalMilliseconds);
                 if (drift > 400) video.Position = target;
                 if (_playing.Add(cueId)) video.Play();
+                _primed.Add(cueId);
                 return;
             }
             if (_playing.Remove(cueId)) video.Pause();
+            if (_primed.Add(cueId))
+            {
+                video.Play();
+                video.Pause();
+            }
             if (Math.Abs((video.Position - target).TotalMilliseconds) > 80)
                 video.Position = target;
         }
@@ -421,7 +435,11 @@ public sealed class StageSurface : Canvas
     {
         if (ViewDisplay is { } d)
         {
-            var scale = Math.Min(ActualWidth / Math.Max(1, d.Width), ActualHeight / Math.Max(1, d.Height));
+            var vw = ActualWidth;
+            var vh = ActualHeight;
+            var scale = vw < 2 || vh < 2
+                ? 1
+                : Math.Min(vw / Math.Max(1, d.Width), vh / Math.Max(1, d.Height));
             if (Math.Abs(scale - 1) < 0.03) scale = 1;
             return (d.X, d.Y, scale > 0 ? scale : 1);
         }
@@ -517,19 +535,14 @@ public sealed class StageSurface : Canvas
         var h = Math.Max(1, mapped.Height);
         if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
         if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
-        var nw = el.Width > 1 && !double.IsNaN(el.Width) ? el.Width : w;
-        var nh = el.Height > 1 && !double.IsNaN(el.Height) ? el.Height : h;
-        if (double.IsNaN(el.Width) || el.Width < 1) el.Width = nw;
-        if (double.IsNaN(el.Height) || el.Height < 1) el.Height = nh;
-        var sx = w / Math.Max(1, el.Width);
-        var sy = h / Math.Max(1, el.Height);
-        if (el.RenderTransform is ScaleTransform st)
+        el.RenderTransform = Transform.Identity;
+        if (LayoutDiffers(el.Width, w)) el.Width = w;
+        if (LayoutDiffers(el.Height, h)) el.Height = h;
+        if (el is CueLookHost host)
         {
-            if (Math.Abs(st.ScaleX - sx) > 0.0005) st.ScaleX = sx;
-            if (Math.Abs(st.ScaleY - sy) > 0.0005) st.ScaleY = sy;
+            if (LayoutDiffers(host.Media.Width, w)) host.Media.Width = w;
+            if (LayoutDiffers(host.Media.Height, h)) host.Media.Height = h;
         }
-        else
-            el.RenderTransform = new ScaleTransform(sx, sy);
     }
 
     void OnWheel(object sender, MouseWheelEventArgs e)
@@ -833,6 +846,13 @@ public sealed class StageSurface : Canvas
     static void ApplyLooks(FrameworkElement el, EvaluatedCue ev)
     {
         el.Opacity = Math.Clamp(ev.Opacity / 100.0, 0, 1);
+        var video = el is CueLookHost hostMedia ? hostMedia.Media as MediaElement : el as MediaElement;
+        if (video is not null)
+        {
+            el.Clip = null;
+            el.OpacityMask = null;
+            return;
+        }
         var w = Math.Max(1, el.Width > 1 && !double.IsNaN(el.Width) ? el.Width : 1920);
         var h = Math.Max(1, el.Height > 1 && !double.IsNaN(el.Height) ? el.Height : 1080);
         var crop = ev.Crop;
