@@ -36,10 +36,15 @@ public static class ScreenAssign
 
     public static string AutoChoiceLabel(int channel) => $"Auto (channel {Math.Max(1, channel)})";
 
+    /// <summary>
+    /// Extra Windows screens are the show outputs: LED processors (Colorlight, NovaStar, MCTRL, Linsn, Brompton…),
+    /// TVs, and projectors. They all appear as HDMI/DP monitors after Win+P Extend — WatchMe does not talk
+    /// NovaStar protocol; it fills whichever extra OS screen the processor or TV presents.
+    /// </summary>
     public static string ScreenChoiceLabel(OutputScreen screen) =>
         screen.IsPrimary
             ? $"{screen.Label} · Producer {ScreenWidth(screen)}×{ScreenHeight(screen)}"
-            : $"{screen.Label} {ScreenWidth(screen)}×{ScreenHeight(screen)}";
+            : $"{screen.Label} · wall/TV {ScreenWidth(screen)}×{ScreenHeight(screen)}";
 
     public static int ScreenWidth(OutputScreen screen) =>
         screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;

@@ -38,7 +38,7 @@ public sealed class OutputManager
         win.Show();
         if (fullscreen) win.PlaceOnScreen();
         if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
-            App.Session.Log($"{display.Name} is on the Producer laptop — the wall stays black. On the Display row pick the MCTRL / NovaStar / HDMI screen, then Output.", "warn");
+            App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)
             App.Session.Log($"{display.Name} was aimed at the laptop — Output went to {target.Label} so the wall gets picture.");
         App.Session.Log($"Output {display.Name} → {target.Label} ({target.Width}×{target.Height} at {target.Left},{target.Top}) · DXVA H.264 · audio {(playAudio ? "on" : "muted")}");

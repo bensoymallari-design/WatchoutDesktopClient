@@ -482,15 +482,15 @@ public class DevicesPanel : UserControl
         foreach (var display in show?.Displays ?? [])
             _root.Children.Add(DisplayRow(display, screens));
 
-        _root.Children.Add(Header("MONITORS"));
+        _root.Children.Add(Header("SHOW OUTPUTS"));
         var monitorBar = new DockPanel { Margin = new Thickness(0, 2, 0, 6) };
         var find = Btn("Find screens", () =>
         {
             _fp = "";
             var n = Interop.Monitors.List().Count;
             App.Session.Log(n <= 1
-                ? "Only the Producer screen is visible. Win+P → Extend, then Find screens again for MCTRL / NovaStar / HDMI."
-                : $"{n} OS screens — pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
+                ? "Only the Producer laptop is visible. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, any brand), then Find screens."
+                : $"{n} OS screens — extra HDMI/DP outputs are LED walls, TVs, and processors. Pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
             Reload();
         }, "go", compact: true);
         find.HorizontalAlignment = HorizontalAlignment.Right;
@@ -512,8 +512,8 @@ public class DevicesPanel : UserControl
             Margin = new Thickness(0, 8, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
-                ? "Only one OS screen detected. Extend HDMI / MCTRL4K / NovaStar (Win+P), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "Controllers and TVs show up as OS screens. Assign screens copies their size onto the Stage. On each Display row pick the MCTRL / NovaStar / HDMI screen — not the Producer laptop — then Output. Output here on a monitor row sends that canvas to that screen.",
+                ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
+                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Assign screens copies their size onto the Stage. On each Display row pick that wall/TV screen — not the Producer laptop — then Output. Output here on a show-output row sends that canvas to that screen.",
         });
 
         _root.Children.Add(Header("AUDIO"));
@@ -682,7 +682,7 @@ public class DevicesPanel : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var label = new TextBlock
         {
-            Text = $"{screen.Label}{(screen.IsPrimary ? " · Producer" : "")}  {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}",
+            Text = ScreenAssign.ScreenChoiceLabel(screen),
             Foreground = (Brush)FindResource("Wo.Text"),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,

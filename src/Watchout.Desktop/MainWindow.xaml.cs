@@ -254,6 +254,7 @@ public partial class MainWindow : Window
             $"{Brand.Name} {Brand.Version} — native .NET / WPF desktop.\n\n" +
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
+            "Show outputs: extra Windows screens — Colorlight / NovaStar / any LED processor, TVs, projectors. Win+P Extend, Find screens, pick the wall/TV (not Producer), then Output.\n" +
             "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
             "Assets → NDI opens a source picker. Import the ones you want, then drag onto the timeline.\n" +
             "Picture comes from the installed NDI Runtime DLL.\n\n" +
