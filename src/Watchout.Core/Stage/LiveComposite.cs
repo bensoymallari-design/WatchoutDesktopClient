@@ -15,6 +15,13 @@ public static class LiveComposite
     }
 
     /// <summary>
+    /// Draw live overlays back-to-front (low Z first) so later timeline layers
+    /// sit above earlier NDI/capture feeds on the wall.
+    /// </summary>
+    public static int[] OverlayStack(IReadOnlyList<int> liveZs, IReadOnlyList<int> videoZs) =>
+        liveZs.Where(z => ScreenOverlayOnOutput(z, videoZs)).OrderBy(z => z).ToArray();
+
+    /// <summary>
     /// Ignore 1-pixel jitter from PointToScreen / layout rounding so the overlay
     /// does not recreate its DIB and flash every frame.
     /// </summary>

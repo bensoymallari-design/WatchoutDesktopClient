@@ -316,9 +316,10 @@ public sealed class StageSurface : Canvas
             z++;
         }
         var videoZs = VideoZs().ToArray();
-        foreach (var el in _layers.Values)
-            if (el is CaptureLayer feed)
-                feed.SetOutputOverlay(LiveComposite.ScreenOverlayOnOutput(GetZIndex(feed), videoZs));
+        foreach (var el in _layers.Values.OfType<CaptureLayer>().OrderBy(feed => GetZIndex(feed)))
+            el.SetOutputOverlay(LiveComposite.ScreenOverlayOnOutput(GetZIndex(el), videoZs));
+        foreach (var el in _layers.Values.OfType<CaptureLayer>().OrderBy(feed => GetZIndex(feed)))
+            el.RaiseOverlay();
     }
 
     IEnumerable<int> VideoZs()
@@ -602,6 +603,13 @@ public sealed class StageSurface : Canvas
         var h = Math.Max(1, mapped.Height);
         if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
         if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
+        if (el is CaptureLayer live && ViewDisplay is not null)
+        {
+            live.SetOverlayDipSize(w, h);
+            if (LayoutDiffers(el.Width, 2)) el.Width = 2;
+            if (LayoutDiffers(el.Height, 2)) el.Height = 2;
+            return;
+        }
         if (el is not MediaElement and not CaptureLayer)
             el.RenderTransform = Transform.Identity;
         if (LayoutDiffers(el.Width, w)) el.Width = w;

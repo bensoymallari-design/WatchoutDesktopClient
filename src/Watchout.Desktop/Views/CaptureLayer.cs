@@ -45,6 +45,8 @@ public sealed class CaptureLayer : HwndHost
     double _childX = double.NaN;
     double _childY = double.NaN;
     long _lastBitsMs;
+    double _overlayDipW;
+    double _overlayDipH;
 
     public CaptureLayer()
     {
@@ -98,6 +100,14 @@ public sealed class CaptureLayer : HwndHost
         }
     }
 
+    public void RaiseOverlay() => _overlay?.Raise();
+
+    public void SetOverlayDipSize(double width, double height)
+    {
+        _overlayDipW = width;
+        _overlayDipH = height;
+    }
+
     public void SetOutputOverlay(bool want)
     {
         _output = Window.GetWindow(this) is OutputWindow;
@@ -123,14 +133,16 @@ public sealed class CaptureLayer : HwndHost
         if (_syncing) return;
         _output = Window.GetWindow(this) is OutputWindow;
         if (!_output || !_wantOverlay || _bmp is null) return;
-        if (ActualWidth < 2 || ActualHeight < 2) return;
+        var dipW = _overlayDipW > 1 ? _overlayDipW : ActualWidth;
+        var dipH = _overlayDipH > 1 ? _overlayDipH : ActualHeight;
+        if (dipW < 2 || dipH < 2) return;
 
         Point tl;
         Point br;
         try
         {
             tl = PointToScreen(new Point(0, 0));
-            br = PointToScreen(new Point(ActualWidth, ActualHeight));
+            br = PointToScreen(new Point(dipW, dipH));
         }
         catch
         {
@@ -142,11 +154,12 @@ public sealed class CaptureLayer : HwndHost
         var w = (int)Math.Round(Math.Abs(br.X - tl.X));
         var h = (int)Math.Round(Math.Abs(br.Y - tl.Y));
         var alpha = (byte)Math.Clamp(Opacity * 255, 0, 255);
+        var owner = Window.GetWindow(this) is { } win ? new WindowInteropHelper(win).Handle : IntPtr.Zero;
         _syncing = true;
         try
         {
             _overlay ??= new LiveOverlayWindow();
-            _overlay.Present(_bmp, x, y, w, h, alpha, forceBits);
+            _overlay.Present(_bmp, x, y, w, h, alpha, forceBits, owner);
         }
         finally
         {

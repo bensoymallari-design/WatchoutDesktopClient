@@ -14,6 +14,9 @@ public class LiveCompositeTests
         Assert.False(LiveComposite.ScreenOverlayOnOutput(100, [100]));
         Assert.True(LiveComposite.ScreenOverlayOnOutput(102, [100, 101]));
         Assert.False(LiveComposite.ScreenOverlayOnOutput(101, [100, 102]));
+        Assert.Equal(new[] { 101, 102 }, LiveComposite.OverlayStack([102, 100, 101], [100]));
+        Assert.Equal(new[] { 102 }, LiveComposite.OverlayStack([101, 102], [101]));
+        Assert.Empty(LiveComposite.OverlayStack([100], [101]));
     }
 
     [Fact]

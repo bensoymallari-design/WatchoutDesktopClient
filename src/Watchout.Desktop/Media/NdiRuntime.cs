@@ -158,7 +158,7 @@ public static class NdiRuntime
         {
             if (!EnsureLoaded() || _recvCreate is null) return 0;
             namePtr = Marshal.StringToCoTaskMemUTF8(sourceName);
-            var recvName = Marshal.StringToCoTaskMemUTF8("WatchMe");
+            var recvName = Marshal.StringToCoTaskMemUTF8("WatchMe · " + sourceName);
             var create = new RecvCreate
             {
                 p_ndi_name = namePtr,

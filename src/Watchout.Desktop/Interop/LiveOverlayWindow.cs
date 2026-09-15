@@ -18,13 +18,14 @@ public sealed class LiveOverlayWindow : IDisposable
     const int WsExNoActivate = 0x08000000;
     const int WsExToolwindow = 0x00000080;
     const int WsExTopmost = 0x00000008;
-    const int WsExTransparent = 0x00000020;
     const int SwHide = 0;
     const int SwShowNoActivate = 4;
     const int UlwAlpha = 2;
     const uint SwpNosize = 0x0001;
+    const uint SwpNomove = 0x0002;
     const uint SwpNozorder = 0x0004;
     const uint SwpNoActivate = 0x0010;
+    static readonly IntPtr HwndTop = IntPtr.Zero;
     const int WmPaint = 0x000F;
     const int WmEraseBkgnd = 0x0014;
     const int NullBrush = 5;
@@ -70,9 +71,9 @@ public sealed class LiveOverlayWindow : IDisposable
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
 
-    public void Present(WriteableBitmap? bmp, int x, int y, int width, int height, byte alpha, bool bitsDirty)
+    public void Present(WriteableBitmap? bmp, int x, int y, int width, int height, byte alpha, bool bitsDirty, IntPtr owner = default)
     {
-        EnsureWindow();
+        EnsureWindow(owner);
         if (_popup == IntPtr.Zero) return;
         width = LiveComposite.Stick(width, _w);
         height = LiveComposite.Stick(height, _h);
@@ -86,6 +87,12 @@ public sealed class LiveOverlayWindow : IDisposable
             ShowWindow(_popup, SwShowNoActivate);
             _visible = true;
         }
+    }
+
+    public void Raise()
+    {
+        if (_popup == IntPtr.Zero || !_visible) return;
+        SetWindowPos(_popup, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate);
     }
 
     public void PresentChild(IntPtr hwnd, WriteableBitmap? bmp, int width, int height, byte alpha, bool bitsDirty)
@@ -163,17 +170,17 @@ public sealed class LiveOverlayWindow : IDisposable
         }
     }
 
-    void EnsureWindow()
+    void EnsureWindow(IntPtr owner = default)
     {
         if (_popup != IntPtr.Zero) return;
         EnsureClass();
         _popup = CreateWindowEx(
-            WsExLayered | WsExNoActivate | WsExToolwindow | WsExTopmost | WsExTransparent,
+            WsExLayered | WsExNoActivate | WsExToolwindow | WsExTopmost,
             ClassName,
             "",
             WsPopup,
             0, 0, 1, 1,
-            IntPtr.Zero,
+            owner,
             IntPtr.Zero,
             GetModuleHandle(null),
             IntPtr.Zero);
