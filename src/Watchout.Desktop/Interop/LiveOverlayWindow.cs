@@ -25,7 +25,7 @@ public sealed class LiveOverlayWindow : IDisposable
     const uint SwpNomove = 0x0002;
     const uint SwpNozorder = 0x0004;
     const uint SwpNoActivate = 0x0010;
-    static readonly IntPtr HwndTop = IntPtr.Zero;
+    static readonly IntPtr HwndTopmost = new(-1);
     const int WmPaint = 0x000F;
     const int WmEraseBkgnd = 0x0014;
     const int NullBrush = 5;
@@ -92,7 +92,8 @@ public sealed class LiveOverlayWindow : IDisposable
     public void Raise()
     {
         if (_popup == IntPtr.Zero || !_visible) return;
-        SetWindowPos(_popup, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate);
+        // HWND_TOPMOST keeps the blit above DXVA and above earlier NDI popups.
+        SetWindowPos(_popup, HwndTopmost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate);
     }
 
     public void PresentChild(IntPtr hwnd, WriteableBitmap? bmp, int width, int height, byte alpha, bool bitsDirty)

@@ -566,4 +566,24 @@ public class SessionAndShowTests
         Assert.True(ids.IndexOf(front.Id) >= 0);
         Assert.True(ids.IndexOf(back.Id) < ids.IndexOf(front.Id));
     }
+
+    [Fact]
+    public void VisibleCuesFollowNdiLayerSwap()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var tl = session.ActiveTimeline!;
+        var video = ShowFactory.EmptyCue(new Cue { Name = "video", LayerId = tl.Layers[0].Id, Duration = 10_000 });
+        var ndi1 = ShowFactory.EmptyCue(new Cue { Name = "ndi1", LayerId = tl.Layers[1].Id, Duration = 10_000, FreeRunning = true });
+        var ndi2 = ShowFactory.EmptyCue(new Cue { Name = "ndi2", LayerId = tl.Layers[2].Id, Duration = 10_000, FreeRunning = true });
+        tl.Cues.Add(video);
+        tl.Cues.Add(ndi1);
+        tl.Cues.Add(ndi2);
+        tl.Playhead = 500;
+        Assert.Equal(new[] { "video", "ndi1", "ndi2" }, PlaybackClock.VisibleCues(tl).Select(e => e.Cue.Name));
+
+        ndi2.LayerId = tl.Layers[1].Id;
+        ndi1.LayerId = tl.Layers[2].Id;
+        Assert.Equal(new[] { "video", "ndi2", "ndi1" }, PlaybackClock.VisibleCues(tl).Select(e => e.Cue.Name));
+    }
 }

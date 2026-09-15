@@ -316,10 +316,34 @@ public sealed class StageSurface : Canvas
             z++;
         }
         var videoZs = VideoZs().ToArray();
-        foreach (var el in _layers.Values.OfType<CaptureLayer>().OrderBy(feed => GetZIndex(feed)))
-            el.SetOutputOverlay(LiveComposite.ScreenOverlayOnOutput(GetZIndex(el), videoZs));
-        foreach (var el in _layers.Values.OfType<CaptureLayer>().OrderBy(feed => GetZIndex(feed)))
-            el.RaiseOverlay();
+        var captures = _layers.Values.OfType<CaptureLayer>().OrderBy(feed => GetZIndex(feed)).ToList();
+        foreach (var el in captures)
+        {
+            var inFront = LiveComposite.ScreenOverlayOnOutput(GetZIndex(el), videoZs);
+            el.SetOutputOverlay(inFront);
+            if (!inFront) el.SendBehind();
+        }
+        var stack = captures.Where(el => LiveComposite.ScreenOverlayOnOutput(GetZIndex(el), videoZs)).ToList();
+        var restacking = false;
+        void Restack()
+        {
+            if (restacking) return;
+            restacking = true;
+            try
+            {
+                foreach (var el in stack)
+                    el.RaiseOverlay();
+            }
+            finally
+            {
+                restacking = false;
+            }
+        }
+        foreach (var el in captures)
+            el.OnRestack(null);
+        foreach (var el in stack)
+            el.OnRestack(stack.Count > 1 ? Restack : null);
+        Restack();
     }
 
     IEnumerable<int> VideoZs()
