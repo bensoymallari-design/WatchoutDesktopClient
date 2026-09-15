@@ -43,14 +43,31 @@ public static class ScreenAssign
     /// </summary>
     public static string ScreenChoiceLabel(OutputScreen screen) =>
         screen.IsPrimary
-            ? $"{screen.Label} · Producer {ScreenWidth(screen)}×{ScreenHeight(screen)}"
-            : $"{screen.Label} · wall/TV {ScreenWidth(screen)}×{ScreenHeight(screen)}";
+            ? $"{screen.Label} · Producer {ScreenSizeText(screen)}"
+            : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
     public static int ScreenWidth(OutputScreen screen) =>
         screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;
 
     public static int ScreenHeight(OutputScreen screen) =>
         screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
+
+    /// <summary>
+    /// True when Windows is driving the HDMI port at a different mode than the controller EDID.
+    /// Stage/Use size still copy the controller size; Output placement uses Width×Height.
+    /// </summary>
+    public static bool WindowsModeDiffersFromController(OutputScreen screen) =>
+        screen.Width > 0 && screen.Height > 0
+        && (screen.Width != ScreenWidth(screen) || screen.Height != ScreenHeight(screen));
+
+    public static string ScreenSizeText(OutputScreen screen)
+    {
+        var w = ScreenWidth(screen);
+        var h = ScreenHeight(screen);
+        return WindowsModeDiffersFromController(screen)
+            ? $"{w}×{h} (Windows {screen.Width}×{screen.Height})"
+            : $"{w}×{h}";
+    }
 
     public static void ApplyAssignment(Display display, string? key)
     {

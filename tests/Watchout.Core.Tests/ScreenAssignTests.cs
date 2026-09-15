@@ -83,6 +83,21 @@ public class ScreenAssignTests
         Assert.Contains("Producer", ScreenAssign.ScreenChoiceLabel(laptop));
         Assert.Equal("Colorlight · wall/TV 1920×1080", ScreenAssign.ScreenChoiceLabel(colorlight));
         Assert.Equal("HDMI · wall/TV 3840×2160", ScreenAssign.ScreenChoiceLabel(tv));
+        var scaled = new OutputScreen
+        {
+            Id = "mctrl",
+            Label = "MCTRL4K",
+            Width = 1920,
+            Height = 1080,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 1080,
+        };
+        Assert.True(ScreenAssign.WindowsModeDiffersFromController(scaled));
+        Assert.Equal("MCTRL4K · wall/TV 3840×1080 (Windows 1920×1080)", ScreenAssign.ScreenChoiceLabel(scaled));
+        var d = new Display { Width = 100, Height = 100 };
+        ScreenAssign.CopyScreenSize(d, scaled);
+        Assert.Equal(3840, d.Width);
+        Assert.Equal(1080, d.Height);
     }
 
     [Fact]

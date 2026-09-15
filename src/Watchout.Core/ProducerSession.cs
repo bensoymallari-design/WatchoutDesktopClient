@@ -1171,22 +1171,41 @@ public sealed class ProducerSession
         Log(includePrimary
             ? "Copied every monitor, including the Producer laptop, onto the Stage."
             : "Assigned extra screens (LED processor, Colorlight, NovaStar, TV, projector) onto the Stage and copied their size and layout.");
+        WarnWindowsModeMismatch(screens);
     }
 
-    public void AssignDisplayScreen(string displayId, string? key)
+    public void AssignDisplayScreen(string displayId, string? key, OutputScreen? screen = null)
     {
         string? name = null;
+        var copied = false;
         Mutate(show =>
         {
             var d = show.Displays.FirstOrDefault(x => x.Id == displayId);
             if (d is null) return;
             ScreenAssign.ApplyAssignment(d, key);
             name = d.Name;
+            if (screen is not null && !ScreenAssign.IsAutoKey(key))
+            {
+                ScreenAssign.CopyScreenSize(d, screen);
+                copied = true;
+            }
         });
-        if (name is not null)
-            Log(ScreenAssign.IsAutoKey(key)
-                ? $"{name} uses {ScreenAssign.AutoChoiceLabel(Show?.Displays.FirstOrDefault(d => d.Id == displayId)?.Channel ?? 1)}"
-                : $"{name} is pinned to a specific screen — Output sends it there");
+        if (copied) FrameDisplays();
+        if (name is null) return;
+        if (ScreenAssign.IsAutoKey(key))
+        {
+            Log($"{name} uses {ScreenAssign.AutoChoiceLabel(Show?.Displays.FirstOrDefault(d => d.Id == displayId)?.Channel ?? 1)}");
+            return;
+        }
+        if (screen is not null && copied)
+        {
+            var w = ScreenAssign.ScreenWidth(screen);
+            var h = ScreenAssign.ScreenHeight(screen);
+            Log($"{name} is pinned to {screen.Label} at {w}×{h} — Output sends it there");
+            WarnWindowsModeMismatch([screen]);
+        }
+        else
+            Log($"{name} is pinned to a specific screen — Output sends it there");
     }
 
     public void CopyScreenSizeToDisplay(string? displayId, OutputScreen screen)
@@ -1212,6 +1231,15 @@ public sealed class ProducerSession
         FrameDisplays();
         if (name is not null)
             Log($"Copied {screen.Label} {w}×{h} onto {name}");
+        WarnWindowsModeMismatch([screen]);
+    }
+
+    void WarnWindowsModeMismatch(IEnumerable<OutputScreen> screens)
+    {
+        foreach (var screen in screens.Where(ScreenAssign.WindowsModeDiffersFromController))
+        {
+            Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label}. The controller EDID is {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}. In Windows Display settings set that extra screen to {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}.", "warn");
+        }
     }
 
     public AudioDevice ActiveAudioDevice =>
