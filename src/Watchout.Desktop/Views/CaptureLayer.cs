@@ -11,9 +11,8 @@ using Watchout.Desktop.Output;
 namespace Watchout.Desktop.Views;
 
 /// <summary>
-/// Live NDI/capture as a Win32 child on Stage so it can stack in front of DXVA MediaElement.
-/// On Output the same child sits under the fullscreen video overlay, so the wall feed is
-/// a top-level layered popup in screen pixels instead.
+/// Live NDI/capture above DXVA. Stage uses a layered child HWND (no WM_PAINT erase).
+/// Output uses a top-level layered popup because the fullscreen video overlay covers children.
 /// </summary>
 public sealed class CaptureLayer : HwndHost
 {
@@ -22,6 +21,7 @@ public sealed class CaptureLayer : HwndHost
     const int WsChild = 0x40000000;
     const int WsVisible = 0x10000000;
     const int WsClipSiblings = 0x04000000;
+    const int WsExLayered = 0x00080000;
     const int WsExNoActivate = 0x08000000;
     const int WsExTransparent = 0x00000020;
     const uint SwpNomove = 0x0002;
@@ -40,6 +40,10 @@ public sealed class CaptureLayer : HwndHost
     bool _wantOverlay;
     bool _syncing;
     bool _childHidden;
+    int _childW;
+    int _childH;
+    double _childX = double.NaN;
+    double _childY = double.NaN;
 
     public CaptureLayer()
     {
@@ -57,7 +61,7 @@ public sealed class CaptureLayer : HwndHost
             LayoutUpdated += OnLayoutUpdated;
         }
         Attach();
-        SyncOverlay(forceBits: true);
+        Redraw();
     }
 
     void OnUnloaded(object sender, RoutedEventArgs e)
@@ -106,7 +110,6 @@ public sealed class CaptureLayer : HwndHost
         if (!_output)
         {
             _wantOverlay = false;
-            _overlay?.Hide();
             return;
         }
         if (_wantOverlay == want)
@@ -125,13 +128,7 @@ public sealed class CaptureLayer : HwndHost
     {
         if (_syncing) return;
         _output = Window.GetWindow(this) is OutputWindow;
-        if (!_output)
-        {
-            _overlay?.Hide();
-            return;
-        }
-        if (!_wantOverlay) return;
-        if (_bmp is null) return;
+        if (!_output || !_wantOverlay || _bmp is null) return;
         if (ActualWidth < 2 || ActualHeight < 2) return;
 
         Point tl;
@@ -165,9 +162,10 @@ public sealed class CaptureLayer : HwndHost
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
+        LiveOverlayWindow.EnsureClass();
         _hwnd = CreateWindowEx(
-            WsExNoActivate | WsExTransparent,
-            "Static",
+            WsExLayered | WsExNoActivate | WsExTransparent,
+            LiveOverlayWindow.ClassName,
             "",
             WsChild | WsVisible | WsClipSiblings,
             0, 0,
@@ -189,32 +187,43 @@ public sealed class CaptureLayer : HwndHost
 
     protected override void OnWindowPositionChanged(Rect rc)
     {
-        base.OnWindowPositionChanged(rc);
-        if (_hwnd == IntPtr.Zero) return;
         _output = Window.GetWindow(this) is OutputWindow;
         if (_output)
         {
-            if (!_childHidden)
+            if (_hwnd != IntPtr.Zero && !_childHidden)
             {
                 SetWindowPos(_hwnd, HwndBottom, 0, 0, 1, 1, SwpNoActivate | SwpHideWindow | SwpNomove);
                 _childHidden = true;
             }
             return;
         }
+
+        var w = LiveComposite.Stick(Math.Max(1, (int)Math.Round(rc.Width)), _childW);
+        var h = LiveComposite.Stick(Math.Max(1, (int)Math.Round(rc.Height)), _childH);
+        var sized = w != _childW || h != _childH;
+        var moved = double.IsNaN(_childX) || double.IsNaN(_childY)
+            || Math.Abs(rc.X - _childX) > 0.5 || Math.Abs(rc.Y - _childY) > 0.5;
+        if (!sized && !moved) return;
+        _childW = w;
+        _childH = h;
+        _childX = rc.X;
+        _childY = rc.Y;
+        base.OnWindowPositionChanged(new Rect(rc.X, rc.Y, w, h));
+        if (sized) Redraw();
     }
 
     protected override IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmPaint)
-        {
-            Paint(hwnd);
-            handled = true;
-            return IntPtr.Zero;
-        }
         if (msg == WmEraseBkgnd)
         {
             handled = true;
             return new IntPtr(1);
+        }
+        if (msg == WmPaint)
+        {
+            ValidateRect(hwnd, IntPtr.Zero);
+            handled = true;
+            return IntPtr.Zero;
         }
         return base.WndProc(hwnd, msg, wParam, lParam, ref handled);
     }
@@ -269,53 +278,13 @@ public sealed class CaptureLayer : HwndHost
             SyncOverlay(forceBits: true);
             return;
         }
-        if (_hwnd != IntPtr.Zero)
-            InvalidateRect(_hwnd, IntPtr.Zero, false);
-    }
-
-    void Paint(IntPtr hwnd)
-    {
-        var ps = new PaintStruct();
-        var hdc = BeginPaint(hwnd, out ps);
-        try
-        {
-            GetClientRect(hwnd, out var rc);
-            var dw = Math.Max(1, rc.Right - rc.Left);
-            var dh = Math.Max(1, rc.Bottom - rc.Top);
-            var bmp = _bmp;
-            if (bmp is null)
-            {
-                var brush = CreateSolidBrush(0x00181008);
-                FillRect(hdc, ref rc, brush);
-                DeleteObject(brush);
-                return;
-            }
-            bmp.Lock();
-            try
-            {
-                var info = new BitmapInfo
-                {
-                    Size = Marshal.SizeOf<BitmapInfo>(),
-                    Width = bmp.PixelWidth,
-                    Height = -bmp.PixelHeight,
-                    Planes = 1,
-                    BitCount = 32,
-                    Compression = 0,
-                };
-                StretchDIBits(
-                    hdc, 0, 0, dw, dh,
-                    0, 0, bmp.PixelWidth, bmp.PixelHeight,
-                    bmp.BackBuffer, ref info, 0, 0x00CC0020);
-            }
-            finally
-            {
-                bmp.Unlock();
-            }
-        }
-        finally
-        {
-            EndPaint(hwnd, ref ps);
-        }
+        if (_hwnd == IntPtr.Zero || _bmp is null) return;
+        var w = Math.Max(_childW, (int)Math.Round(ActualWidth));
+        var h = Math.Max(_childH, (int)Math.Round(ActualHeight));
+        if (w < 2 || h < 2) return;
+        var alpha = (byte)Math.Clamp(Opacity * 255, 0, 255);
+        _overlay ??= new LiveOverlayWindow();
+        _overlay.PresentChild(_hwnd, _bmp, w, h, alpha, bitsDirty: true);
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -325,68 +294,12 @@ public sealed class CaptureLayer : HwndHost
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool DestroyWindow(IntPtr hwnd);
 
-    [DllImport("user32.dll")]
-    static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, bool erase);
-
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
     [DllImport("user32.dll")]
-    static extern IntPtr BeginPaint(IntPtr hwnd, out PaintStruct lpPaint);
-
-    [DllImport("user32.dll")]
-    static extern bool EndPaint(IntPtr hwnd, ref PaintStruct lpPaint);
-
-    [DllImport("user32.dll")]
-    static extern bool GetClientRect(IntPtr hwnd, out NativeRect lpRect);
-
-    [DllImport("user32.dll")]
-    static extern int FillRect(IntPtr hdc, ref NativeRect lprc, IntPtr hbr);
-
-    [DllImport("gdi32.dll")]
-    static extern IntPtr CreateSolidBrush(int color);
-
-    [DllImport("gdi32.dll")]
-    static extern bool DeleteObject(IntPtr ho);
-
-    [DllImport("gdi32.dll")]
-    static extern int StretchDIBits(IntPtr hdc, int xDest, int yDest, int destWidth, int destHeight,
-        int xSrc, int ySrc, int srcWidth, int srcHeight, IntPtr bits, ref BitmapInfo info, int usage, int rop);
+    static extern bool ValidateRect(IntPtr hwnd, IntPtr rect);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct NativeRect
-    {
-        public int Left, Top, Right, Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct PaintStruct
-    {
-        public IntPtr Hdc;
-        public int Erase;
-        public NativeRect RcPaint;
-        public int Restore;
-        public int IncUpdate;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
-        public byte[] Reserved;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct BitmapInfo
-    {
-        public int Size;
-        public int Width;
-        public int Height;
-        public short Planes;
-        public short BitCount;
-        public int Compression;
-        public int SizeImage;
-        public int XPelsPerMeter;
-        public int YPelsPerMeter;
-        public int ClrUsed;
-        public int ClrImportant;
-    }
 }
