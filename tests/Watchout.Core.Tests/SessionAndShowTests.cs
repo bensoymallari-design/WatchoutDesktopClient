@@ -458,6 +458,17 @@ public class SessionAndShowTests
         var id = session.Show!.Displays[0].Id;
         session.AssignDisplayScreen(id, "mctrl4k");
         Assert.Equal("mctrl4k", session.Show.Displays[0].ScreenId);
+        session.AssignDisplayScreen(id, "mctrl4k", new OutputScreen
+        {
+            Id = "mctrl4k",
+            Label = "MCTRL4K",
+            Width = 1920,
+            Height = 1080,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 1080,
+        });
+        Assert.Equal(3840, session.Show.Displays[0].Width);
+        Assert.Equal(1080, session.Show.Displays[0].Height);
         session.CopyScreenSizeToDisplay(id, new OutputScreen
         {
             Id = "mctrl4k",

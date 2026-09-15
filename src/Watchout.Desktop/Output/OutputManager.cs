@@ -41,7 +41,7 @@ public sealed class OutputManager
             App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)
             App.Session.Log($"{display.Name} was aimed at the laptop — Output went to {target.Label} so the wall gets picture.");
-        App.Session.Log($"Output {display.Name} → {target.Label} ({target.Width}×{target.Height} at {target.Left},{target.Top}) · DXVA H.264 · audio {(playAudio ? "on" : "muted")}");
+        App.Session.Log($"Output {display.Name} → {target.Label} ({ScreenAssign.ScreenSizeText(target)} at {target.Left},{target.Top}) · DXVA H.264 · audio {(playAudio ? "on" : "muted")}");
     }
 
     public void Close(string displayId)
