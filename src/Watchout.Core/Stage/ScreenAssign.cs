@@ -121,4 +121,22 @@ public static class ScreenAssign
         if (pool.Count == 0) return null;
         return pool[Math.Max(0, Math.Min(pool.Count - 1, channel - 1))];
     }
+
+    public static OutputScreen? ResolveOutputScreen(Display display, IReadOnlyList<OutputScreen> screens, OutputScreen? requested = null)
+        => ResolveOutputScreen(display, screens, requested, out _);
+
+    public static OutputScreen? ResolveOutputScreen(Display display, IReadOnlyList<OutputScreen> screens, OutputScreen? requested, out bool skippedProducer)
+    {
+        skippedProducer = false;
+        if (requested is not null)
+            return screens.FirstOrDefault(s => s.Id == requested.Id) ?? requested;
+        var chosen = ScreenForDisplay(display, screens) ?? screens.FirstOrDefault();
+        if (chosen is null) return null;
+        if (!chosen.IsPrimary || screens.Count(s => !s.IsPrimary) == 0) return chosen;
+        var extra = PreferredOutputScreen(screens, display.Channel);
+        if (extra is null || extra.Id == chosen.Id) return chosen;
+        skippedProducer = true;
+        return extra;
+    }
+
 }

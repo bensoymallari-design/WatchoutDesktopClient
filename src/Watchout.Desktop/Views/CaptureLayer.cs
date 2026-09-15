@@ -25,6 +25,8 @@ public sealed class CaptureLayer : Grid
     {
         Background = new SolidColorBrush(Color.FromRgb(8, 16, 24));
         _onFrame = OnFrame;
+        _image.SnapsToDevicePixels = true;
+        RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
         Children.Add(_image);
         Children.Add(_status);
         Loaded += (_, _) => Attach();
