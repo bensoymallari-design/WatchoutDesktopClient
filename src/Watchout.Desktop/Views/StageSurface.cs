@@ -237,7 +237,10 @@ public sealed class StageSurface : Canvas
                 proc.InvalidateVisual();
             }
             else if (el is CaptureLayer capture)
+            {
                 capture.DeviceId = LiveSources.CaptureDeviceId(asset);
+                capture.NdiName = LiveSources.IsCapture(asset) ? null : LiveSources.NdiSourceName(asset);
+            }
             else if (el is MediaElement video)
             {
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
@@ -282,10 +285,12 @@ public sealed class StageSurface : Canvas
         if (asset is null) return Placeholder(mapped, ev.Cue.Name, ev.Cue.Color);
         if (LiveSources.IsCapture(asset))
             return new CaptureLayer { DeviceId = LiveSources.CaptureDeviceId(asset), Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
+        if (LiveSources.NdiSourceName(asset) is { Length: > 0 } ndiName)
+            return new CaptureLayer { NdiName = ndiName, Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         if (asset.Url.StartsWith("procedural:", StringComparison.Ordinal))
             return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = mapped.Width, Height = mapped.Height, IsHitTestVisible = false };
         if (LiveSources.IsNdi(asset))
-            return Placeholder(mapped, $"{asset.Name}\nNDI · pick this source in NDI Webcam Input, then Import NDI again", asset.Color);
+            return Placeholder(mapped, $"{asset.Name}\nNDI · no source name on this clip", asset.Color);
         if (asset.Kind is AssetKind.Image
             || asset.Url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase)
             || asset.Url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase)
@@ -330,7 +335,7 @@ public sealed class StageSurface : Canvas
 
     static bool LayerFits(FrameworkElement el, Asset? asset)
     {
-        if (LiveSources.IsCapture(asset)) return el is CaptureLayer;
+        if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
         return el is not CaptureLayer;

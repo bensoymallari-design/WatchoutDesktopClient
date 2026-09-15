@@ -34,6 +34,23 @@ public class NdiTests
     }
 
     [Fact]
+    public void AdvertisedSourceRejectsMdnsJunk()
+    {
+        Assert.True(NdiNames.IsAdvertisedSource("LOCALHOST (Qubit Jhon NDI)"));
+        Assert.False(NdiNames.IsAdvertisedSource("_ndi._tcp.local"));
+        Assert.False(NdiNames.IsAdvertisedSource("KeepAliveServer"));
+        Assert.False(NdiNames.IsAdvertisedSource("KeepAliveServer (130)"));
+    }
+
+    [Fact]
+    public void NdiSourceNameReadsNdiUrl()
+    {
+        var asset = new Asset { Kind = AssetKind.Ndi, Name = "LOCALHOST (Qubit Jhon NDI)", Url = "ndi:LOCALHOST (Qubit Jhon NDI)" };
+        Assert.Equal("LOCALHOST (Qubit Jhon NDI)", LiveSources.NdiSourceName(asset));
+        Assert.Null(LiveSources.NdiSourceName(new Asset { Kind = AssetKind.Ndi, Name = "NDI Program", Url = "procedural:ndi" }));
+    }
+
+    [Fact]
     public void FromRuntimeParsesUrlAndMachineName()
     {
         var a = NdiNames.FromRuntime("LOCALHOST (Qubit Jhon NDI)", "192.168.8.110:5961");

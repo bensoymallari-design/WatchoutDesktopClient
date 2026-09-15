@@ -65,6 +65,7 @@ public partial class App : Application
     {
         Outputs.CloseAll();
         CaptureHub.Shutdown();
+        NdiHub.Shutdown();
         PersistRecents();
         base.OnExit(e);
     }

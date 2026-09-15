@@ -13,6 +13,12 @@ public static class LiveSources
 
     public static bool IsNdi(Asset? asset) => NdiLive.IsNdi(asset);
 
+    public static string? NdiSourceName(Asset? asset)
+    {
+        if (asset is null || !IsNdi(asset)) return null;
+        return NdiNames.IsNdiUrl(asset.Url) ? NdiNames.SourceNameFromUrl(asset.Url) : null;
+    }
+
     public static bool IsLive(Asset? asset) => IsCapture(asset) || IsNdi(asset);
 
     public static bool IsCaptureUrl(string? url) =>
@@ -67,7 +73,7 @@ public static class LiveSources
             Optimized = true,
             Notes = bound
                 ? $"{name} · NDI live via Webcam Input — drag onto a timeline layer"
-                : $"{name} · NDI on the LAN. Drag onto a timeline layer. For picture, open NDI Webcam Input, pick this source, then Import NDI again.",
+                : $"{name} · NDI live — drag onto a timeline layer. Picture comes from NDI Runtime.",
             OriginalPath = bound ? CaptureUrl(captureDeviceId!) : NdiNames.NdiUrl(name),
         };
     }
