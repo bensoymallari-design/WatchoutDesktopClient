@@ -2,11 +2,11 @@ namespace Watchout.Core.Models;
 
 public enum CueType { Media, Control, Marker, Output, Variable, Artnet }
 
-public enum AssetKind { Image, Video, Audio, Composition, Ndi, Capture, Procedural }
+public enum AssetKind { Image, Video, Audio, Composition, Ndi, Capture, Procedural, St2110 }
 
 public enum PlaybackState { Play, Pause, Stop }
 
-public enum OutputType { GPU, SDI, NDI, Virtual }
+public enum OutputType { GPU, SDI, NDI, Virtual, ST2110 }
 
 public enum TweenType
 {
@@ -64,6 +64,27 @@ public enum GpuPreference
     Auto,
     HighPerformance,
     PowerSaving
+}
+
+public enum OptimizePreset
+{
+    Fast,
+    Quality,
+    Broadcast
+}
+
+public enum AccessRole
+{
+    Producer,
+    Operator,
+    Viewer
+}
+
+public enum NodeKind
+{
+    Producer,
+    Runner,
+    Watchpax
 }
 
 public enum StageHitKind
@@ -246,6 +267,9 @@ public sealed class Asset
     public string? ActiveRevisionId { get; set; }
     public List<AssetRevision> Revisions { get; set; } = [];
     public List<Cue> Children { get; set; } = [];
+    public int Channels { get; set; }
+    public int BitDepth { get; set; }
+    public ColorSpaceTag ColorSpace { get; set; } = ColorSpaceTag.Rec709;
 }
 
 public sealed class AssetRevision
@@ -282,6 +306,8 @@ public sealed class Display
     public DisplayRole Role { get; set; } = DisplayRole.Fill;
     public int KeyChannel { get; set; } = 1;
     public ColorSpaceTag ColorSpace { get; set; } = ColorSpaceTag.Rec709;
+    public int BitDepth { get; set; } = 8;
+    public bool Hdr { get; set; }
 }
 
 public sealed class NodeService
@@ -306,6 +332,8 @@ public sealed class ShowNode
     public double Disk { get; set; }
     public string Version { get; set; } = "1.0.0";
     public string MacAddress { get; set; } = "";
+    public NodeKind Kind { get; set; } = NodeKind.Runner;
+    public int ControlPort { get; set; } = 8090;
 }
 
 public sealed class AudioDevice
@@ -361,6 +389,12 @@ public sealed class ShowPrefs
     public MediaReplaceMode MediaReplaceMode { get; set; } = MediaReplaceMode.KeepOldSize;
     public bool AutoStart { get; set; }
     public ColorSpaceTag ColorSpace { get; set; } = ColorSpaceTag.Rec709;
+    public int BitDepth { get; set; } = 8;
+    public bool HdrPipeline { get; set; }
+    public OptimizePreset OptimizePreset { get; set; } = OptimizePreset.Quality;
+    public string NmosRegistry { get; set; } = "";
+    public bool LtcEnabled { get; set; }
+    public double LtcFps { get; set; } = 30;
 }
 
 public sealed class Show
@@ -449,6 +483,9 @@ public sealed class ImportedMedia
     public long Bytes { get; set; }
     public bool Linked { get; set; }
     public string? PosterUrl { get; set; }
+    public int Channels { get; set; }
+    public int BitDepth { get; set; }
+    public ColorSpaceTag ColorSpace { get; set; } = ColorSpaceTag.Rec709;
 }
 
 public sealed class MediaProbe
@@ -459,4 +496,7 @@ public sealed class MediaProbe
     public double Fps { get; set; } = 60;
     public string Codec { get; set; } = "";
     public bool HasAudio { get; set; }
+    public int Channels { get; set; }
+    public int BitDepth { get; set; }
+    public string PixelFormat { get; set; } = "";
 }

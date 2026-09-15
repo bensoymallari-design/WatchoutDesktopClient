@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
         _watchDebounce.Tick += OnWatchDebounce;
         OnSessionChanged();
         StartWatchFolder();
+        Dispatcher.BeginInvoke(MaybeUnlock);
         Dispatcher.BeginInvoke(MaybeAutoStartLastShow);
         _ = FfmpegTools.DetectAsync().ContinueWith(t =>
         {
@@ -162,6 +164,121 @@ public partial class MainWindow : Window
     void Wake_Click(object sender, RoutedEventArgs e) => App.Session.WakeNode();
     async void ImportMedia_Click(object sender, RoutedEventArgs e) => await ImportMediaAsync();
     async void CreateVersion_Click(object sender, RoutedEventArgs e) => await CreateVersionAsync();
+    async void EncodeHap_Click(object sender, RoutedEventArgs e)
+    {
+        var id = App.Session.Selection.Kind == SelectionKind.Asset
+            ? App.Session.Selection.Ids.FirstOrDefault()
+            : App.Session.Show?.Assets.FirstOrDefault()?.Id;
+        if (id is null)
+        {
+            App.Session.Log("Select a video in Assets, then Encode HAP", "warn");
+            return;
+        }
+        await MediaLibrary.EncodeHapAsync(id, App.Session);
+    }
+
+    void ImportSdp_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Filter = "SDP|*.sdp;*.txt|All files|*.*", Title = "Import ST 2110 SDP" };
+        if (dlg.ShowDialog() != true) return;
+        App.Session.ImportSt2110(Path.GetFileNameWithoutExtension(dlg.FileName), File.ReadAllText(dlg.FileName));
+    }
+
+    async void RefreshNmos_Click(object sender, RoutedEventArgs e)
+    {
+        var registry = App.Session.Show?.Prefs.NmosRegistry;
+        if (string.IsNullOrWhiteSpace(registry)) registry = App.Settings.NmosRegistry;
+        if (string.IsNullOrWhiteSpace(registry))
+        {
+            App.Session.Log("Set an NMOS query registry in Preferences, then Refresh NMOS", "warn");
+            return;
+        }
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var url = Nmos.QuerySendersUrl(registry);
+            var json = await http.GetStringAsync(url);
+            var senders = Nmos.ParseSenders(json);
+            var sdp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in senders.Where(s => !string.IsNullOrEmpty(s.ManifestHref)))
+            {
+                try { sdp[item.ManifestHref] = await http.GetStringAsync(item.ManifestHref); }
+                catch { /* SDP optional */ }
+            }
+            App.Session.ImportNmosSenders(senders, sdp);
+        }
+        catch (Exception ex)
+        {
+            App.Session.Log($"NMOS query failed: {ex.Message}", "error");
+        }
+    }
+
+    async void PingNode_Click(object sender, RoutedEventArgs e)
+    {
+        var node = App.Session.Show?.Nodes.FirstOrDefault(n => n.Kind == NodeKind.Watchpax)
+                   ?? App.Session.Show?.Nodes.FirstOrDefault(n => n.Services.Runner);
+        if (node is null)
+        {
+            App.Session.Log("No playback node in the show", "warn");
+            return;
+        }
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+            var json = await http.GetStringAsync(NodeControl.HealthUrl(node));
+            var online = NodeControl.ParseHealth(json);
+            App.Session.MarkNode(node.Id, online, node.Kind);
+            App.Session.Log(online
+                ? $"Playback node {node.Name} is online at {NodeControl.HealthUrl(node)}"
+                : $"Playback node {node.Name} answered but not ok");
+        }
+        catch (Exception ex)
+        {
+            App.Session.MarkNode(node.Id, false);
+            App.Session.Log($"Ping {node.Name} failed: {ex.Message}", "warn");
+        }
+    }
+
+    void ExportLtc_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Session.Show is null) return;
+        var dlg = new SaveFileDialog { Filter = "WAV|*.wav", FileName = "ltc.wav", Title = "Export LTC" };
+        if (dlg.ShowDialog() != true) return;
+        var wav = App.Session.ExportLtcWav(App.Session.ActiveTimeline?.Duration ?? 10_000);
+        File.WriteAllBytes(dlg.FileName, wav);
+    }
+
+    void MaybeUnlock()
+    {
+        if (!AccessControl.IsLocked(App.Settings)) return;
+        var pin = new TextBox { Width = 180 };
+        var panel = new StackPanel { Margin = new Thickness(24) };
+        panel.Children.Add(new TextBlock { Text = "PIN", Margin = new Thickness(0, 0, 0, 8) });
+        panel.Children.Add(pin);
+        var dlg = new Window
+        {
+            Title = "WatchMe access",
+            Width = 320,
+            Height = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Content = panel,
+            Background = Background,
+            Foreground = Foreground,
+        };
+        pin.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            dlg.Close();
+        };
+        dlg.Loaded += (_, _) => pin.Focus();
+        dlg.ShowDialog();
+        if (!AccessControl.Unlock(App.Settings, pin.Text))
+        {
+            MessageBox.Show(this, "PIN did not match. WatchMe stays in viewer mode until you fix the PIN in settings.json.", "Access");
+            App.Settings.AccessRole = AccessRole.Viewer;
+        }
+    }
 
     void ImportWatchout6_Click(object sender, RoutedEventArgs e)
     {
@@ -324,6 +441,7 @@ public partial class MainWindow : Window
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
             "Show outputs: extra Windows screens — Colorlight / NovaStar / any LED processor, TVs, projectors. Win+P Extend, Find screens, pick the wall/TV (not Producer), then Output.\n" +
             "Cue tools: linear wipe, temperature, exposure, chroma-key eyedropper, playback speed, placeholder cues, replace-media sizing, display image masks, blind edit, group/ungroup, WATCHOUT 6 JSON import, Wake-on-LAN, asset revisions.\n" +
+            "ST 2110 / NMOS, 10-bit HDR encodes, HAP encode, Notch LC → H.264, playback-node ping, PIN access, optimize presets, 65535-ch WAV downmix, LTC.\n" +
             "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
             "Assets → NDI opens a source picker. Import the ones you want, then drag onto the timeline.\n" +
             "Picture comes from the installed NDI Runtime DLL.\n\n" +

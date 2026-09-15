@@ -107,6 +107,7 @@ sealed class OutputTypeConverter : JsonConverter<OutputType>
             "SDI" => OutputType.SDI,
             "NDI" => OutputType.NDI,
             "VIRTUAL" => OutputType.Virtual,
+            "ST2110" or "2110" => OutputType.ST2110,
             _ => OutputType.GPU,
         };
     }
@@ -117,6 +118,7 @@ sealed class OutputTypeConverter : JsonConverter<OutputType>
             OutputType.SDI => "SDI",
             OutputType.NDI => "NDI",
             OutputType.Virtual => "Virtual",
+            OutputType.ST2110 => "ST2110",
             _ => "GPU",
         });
 }

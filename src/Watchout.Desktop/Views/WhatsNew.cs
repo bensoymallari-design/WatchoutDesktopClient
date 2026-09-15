@@ -37,8 +37,17 @@ public sealed class WhatsNewWindow : Window
                     "Create H.264 version / re-optimize — ffmpeg transcode, stored as an asset revision you can switch.\n" +
                     "Color space tag — Rec.709 / Rec.2020 / HLG / PQ metadata. WPF output is still 8-bit.\n" +
                     "Watch folder — drop files into a folder and WatchMe imports them.\n" +
-                    "Help → User Guide — honest map of WatchMe vs Dataton-only hardware.\n\n" +
-                    "Not copied (Dataton media-server stack): ST 2110, NMOS, 10-bit SDI/HDR GPU pipeline, HAP encode suite, Notch LC, WATCHPAX, Access Control, MainConcept optimizer, 65535-ch WAV, LTC hardware. WatchMe stays native Media Foundation / DXVA H.264 on extra Windows screens (Colorlight, NovaStar, TVs, projectors).",
+                    "ST 2110 — import an SDP (Live → Import ST 2110 SDP) or pull NMOS senders. Stage shows the live slot; a 2110 NIC + ffmpeg/registry still feed the essence.\n" +
+                    "NMOS IS-04 — Preferences registry URL, then Live → Refresh NMOS.\n" +
+                    "10-bit HDR — Preferences enables 10-bit / PQ encodes (high10). The WPF window is still 8-bit; files and tags are 10-bit.\n" +
+                    "HAP encode — Assets → Encode HAP (ffmpeg hap).\n" +
+                    "Notch LC — imports transcode to H.264 MP4 like HAP/DXV.\n" +
+                    "Playback node — Runner / WATCHPAX-style node, ping HTTP /watchme/health, Wake-on-LAN.\n" +
+                    "Access control — PIN + Producer/Operator/Viewer in Preferences.\n" +
+                    "Optimize presets — Fast / Quality / Broadcast for H.264 versions.\n" +
+                    "65535-ch WAV — header is read; >8 channels downmix to stereo for Media Foundation.\n" +
+                    "LTC — generate a WAV from the playhead (Output → Export LTC) and chase SMPTE time.\n\n" +
+                    "WatchMe is this app — those pipelines live here. A Dataton appliance is not required.",
             },
         };
     }

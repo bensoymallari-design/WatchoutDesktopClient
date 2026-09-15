@@ -14,12 +14,19 @@ public sealed class PrefsWindow : Window
     readonly TextBox _folder = new();
     readonly CheckBox _watch = new() { Content = "Watch that folder for new media", Margin = new Thickness(0, 8, 0, 0) };
     readonly CheckBox _auto = new() { Content = "Open last show when WatchMe starts", Margin = new Thickness(0, 12, 0, 0) };
+    readonly CheckBox _hdr = new() { Content = "10-bit HDR pipeline (PQ / Rec.2020 on encodes)", Margin = new Thickness(0, 12, 0, 0) };
+    readonly ComboBox _opt = new();
+    readonly TextBox _nmos = new();
+    readonly CheckBox _ltc = new() { Content = "LTC chase / generate at 30 fps", Margin = new Thickness(0, 8, 0, 0) };
+    readonly CheckBox _access = new() { Content = "Require PIN to open WatchMe", Margin = new Thickness(0, 12, 0, 0) };
+    readonly TextBox _pin = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    readonly ComboBox _role = new();
 
     public PrefsWindow()
     {
         Title = "Preferences — WatchMe";
         Width = 520;
-        Height = 520;
+        Height = 720;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(17, 17, 17));
         Foreground = new SolidColorBrush(Color.FromRgb(232, 230, 227));
@@ -66,6 +73,36 @@ public sealed class PrefsWindow : Window
         _auto.IsChecked = App.Settings.AutoStartLastShow;
         root.Children.Add(_auto);
 
+        root.Children.Add(new TextBlock { Text = "Optimize preset (H.264 / 10-bit encodes)", Foreground = new SolidColorBrush(Color.FromRgb(154, 149, 141)), Margin = new Thickness(0, 16, 0, 4) });
+        _opt.Items.Add(new ComboBoxItem { Content = "Fast", Tag = OptimizePreset.Fast });
+        _opt.Items.Add(new ComboBoxItem { Content = "Quality", Tag = OptimizePreset.Quality });
+        _opt.Items.Add(new ComboBoxItem { Content = "Broadcast (slow, high bit-rate)", Tag = OptimizePreset.Broadcast });
+        Select(_opt, App.Session.Show?.Prefs.OptimizePreset ?? OptimizePreset.Quality);
+        _opt.IsEnabled = App.Session.Show is not null;
+        root.Children.Add(_opt);
+        _hdr.IsChecked = App.Session.Show?.Prefs.HdrPipeline == true;
+        _hdr.IsEnabled = App.Session.Show is not null;
+        root.Children.Add(_hdr);
+
+        root.Children.Add(new TextBlock { Text = "NMOS query registry", Foreground = new SolidColorBrush(Color.FromRgb(154, 149, 141)), Margin = new Thickness(0, 16, 0, 4) });
+        _nmos.Text = string.IsNullOrEmpty(App.Session.Show?.Prefs.NmosRegistry) ? App.Settings.NmosRegistry : App.Session.Show!.Prefs.NmosRegistry;
+        root.Children.Add(_nmos);
+        _ltc.IsChecked = App.Session.Show?.Prefs.LtcEnabled == true;
+        _ltc.IsEnabled = App.Session.Show is not null;
+        root.Children.Add(_ltc);
+
+        root.Children.Add(new TextBlock { Text = "Access control", Foreground = new SolidColorBrush(Color.FromRgb(154, 149, 141)), Margin = new Thickness(0, 16, 0, 4) });
+        _access.IsChecked = App.Settings.AccessEnabled;
+        root.Children.Add(_access);
+        root.Children.Add(new TextBlock { Text = "PIN", Foreground = new SolidColorBrush(Color.FromRgb(154, 149, 141)), Margin = new Thickness(0, 8, 0, 4) });
+        _pin.Text = App.Settings.AccessPin;
+        root.Children.Add(_pin);
+        _role.Items.Add(new ComboBoxItem { Content = "Producer", Tag = AccessRole.Producer });
+        _role.Items.Add(new ComboBoxItem { Content = "Operator", Tag = AccessRole.Operator });
+        _role.Items.Add(new ComboBoxItem { Content = "Viewer", Tag = AccessRole.Viewer });
+        Select(_role, App.Settings.AccessRole);
+        root.Children.Add(_role);
+
         var save = new Button { Content = "Save", Margin = new Thickness(0, 24, 0, 0), Padding = new Thickness(16, 6, 16, 6), HorizontalAlignment = HorizontalAlignment.Left };
         save.Click += (_, _) =>
         {
@@ -74,9 +111,22 @@ public sealed class PrefsWindow : Window
             App.Settings.WatchFolder = _folder.Text.Trim();
             App.Settings.WatchFolderEnabled = _watch.IsChecked == true;
             App.Settings.AutoStartLastShow = _auto.IsChecked == true;
+            App.Settings.NmosRegistry = _nmos.Text.Trim();
+            App.Settings.AccessEnabled = _access.IsChecked == true;
+            App.Settings.AccessPin = _pin.Text.Trim();
+            if (_role.SelectedItem is ComboBoxItem roleItem && roleItem.Tag is AccessRole role)
+                App.Settings.AccessRole = role;
             App.PersistSettings();
-            if (App.Session.Show is not null && _color.SelectedItem is ComboBoxItem cs && cs.Tag is ColorSpaceTag tag)
-                App.Session.SetColorSpace(tag);
+            if (App.Session.Show is not null)
+            {
+                if (_color.SelectedItem is ComboBoxItem cs && cs.Tag is ColorSpaceTag tag)
+                    App.Session.SetColorSpace(tag);
+                if (_opt.SelectedItem is ComboBoxItem op && op.Tag is OptimizePreset preset)
+                    App.Session.SetOptimizePreset(preset);
+                App.Session.SetHdrPipeline(_hdr.IsChecked == true);
+                App.Session.SetNmosRegistry(_nmos.Text.Trim());
+                App.Session.SetLtc(_ltc.IsChecked == true);
+            }
             App.Session.Log(App.Settings.GpuPreference switch
             {
                 GpuPreference.HighPerformance => "GPU preference: High performance — pin WatchMe.exe in Windows Graphics settings",
@@ -86,7 +136,7 @@ public sealed class PrefsWindow : Window
             Close();
         };
         root.Children.Add(save);
-        Content = root;
+        Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
 
     public TextBox FolderBox => _folder;

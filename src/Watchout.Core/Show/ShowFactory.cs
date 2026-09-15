@@ -72,6 +72,8 @@ public static class ShowFactory
             Role = d.Role,
             KeyChannel = d.KeyChannel > 0 ? d.KeyChannel : 1,
             ColorSpace = d.ColorSpace,
+            BitDepth = d.BitDepth > 0 ? d.BitDepth : 8,
+            Hdr = d.Hdr,
         };
     }
 
@@ -102,6 +104,9 @@ public static class ShowFactory
             ActiveRevisionId = partial.ActiveRevisionId,
             Revisions = partial.Revisions ?? [],
             Children = partial.Children ?? [],
+            Channels = partial.Channels,
+            BitDepth = partial.BitDepth,
+            ColorSpace = partial.ColorSpace,
         };
     }
 
@@ -174,6 +179,8 @@ public static class ShowFactory
             Disk = n.Disk,
             Version = Version,
             MacAddress = n.MacAddress ?? "",
+            Kind = n.Kind,
+            ControlPort = n.ControlPort > 0 ? n.ControlPort : 8090,
         };
     }
 
@@ -199,6 +206,7 @@ public static class ShowFactory
                 {
                     Id = "local-producer",
                     Name = "Producer",
+                    Kind = NodeKind.Producer,
                     Services = new NodeService { Producer = true, Director = true, Runner = false, AssetManager = true },
                 }),
                 LocalNode(new ShowNode
@@ -206,6 +214,7 @@ public static class ShowFactory
                     Id = "local-runner",
                     Name = "Runner-01",
                     Address = "127.0.0.1",
+                    Kind = NodeKind.Watchpax,
                     Services = new NodeService { Producer = false, Director = false, Runner = true, AssetManager = false },
                     Gpu = "DXVA / Media Foundation",
                     Cpu = 12,

@@ -344,6 +344,8 @@ public sealed class StageSurface : Canvas
             return new ProceduralLayer { Kind = asset.Url, LocalTime = ev.LocalTime, Width = native.W, Height = native.H, IsHitTestVisible = false };
         if (LiveSources.IsNdi(asset))
             return Placeholder(native, $"{asset.Name}\nNDI · no source name on this clip", asset.Color);
+        if (LiveSources.IsSt2110(asset))
+            return Placeholder(native, $"{asset.Name}\nST 2110 · SDP on this clip", asset.Color);
         if (asset.Kind is AssetKind.Image
             || asset.Url.StartsWith("watchout:", StringComparison.OrdinalIgnoreCase)
             || asset.Url.StartsWith("watchme:", StringComparison.OrdinalIgnoreCase)

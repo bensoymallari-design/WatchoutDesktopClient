@@ -63,6 +63,15 @@ public static class FfmpegTools
             }
             var codecV = video is { } vv && vv.TryGetProperty("codec_name", out var cn) ? cn.GetString() : null;
             var codecA = audio is { } aa && aa.TryGetProperty("codec_name", out var an) ? an.GetString() : null;
+            var channels = 0;
+            if (audio is { } ach && ach.TryGetProperty("channels", out var ch) && ch.ValueKind == JsonValueKind.Number)
+                channels = ch.GetInt32();
+            var pix = video is { } px && px.TryGetProperty("pix_fmt", out var pf) ? pf.GetString() ?? "" : "";
+            var bits = 8;
+            if (video is { } vb && vb.TryGetProperty("bits_per_raw_sample", out var brs) && brs.ValueKind == JsonValueKind.String && int.TryParse(brs.GetString(), out var parsedBits))
+                bits = parsedBits;
+            else if (pix.Contains("10", StringComparison.Ordinal)) bits = 10;
+            else if (pix.Contains("12", StringComparison.Ordinal)) bits = 12;
             return new MediaProbe
             {
                 Width = video is { } w && w.TryGetProperty("width", out var width) ? width.GetInt32() : 0,
@@ -71,6 +80,9 @@ public static class FfmpegTools
                 Fps = fps > 1 && double.IsFinite(fps) ? fps : 60,
                 Codec = string.Join(" + ", new[] { codecV, codecA }.Where(s => !string.IsNullOrEmpty(s))),
                 HasAudio = audio is not null,
+                Channels = channels,
+                BitDepth = bits,
+                PixelFormat = pix,
             };
         }
         catch
@@ -82,8 +94,21 @@ public static class FfmpegTools
     public static async Task TranscodeH264Async(string src, string dest, MediaProbe probe, int? maxWidth, IProgress<string>? progress)
     {
         if (FfmpegPath is null) throw new InvalidOperationException("ffmpeg not found");
-        var args = Codecs.H264TranscodeArgs(src, dest, H264Encoder, probe.Width, probe.Height, maxWidth, video: true);
+        var preset = App.Session.Show?.Prefs.OptimizePreset ?? OptimizePreset.Quality;
+        var depth = App.Session.Show?.Prefs.BitDepth > 0 ? App.Session.Show.Prefs.BitDepth : 8;
+        var args = Codecs.H264TranscodeArgs(src, dest, H264Encoder, probe.Width, probe.Height, maxWidth, video: true, preset, depth, probe.Channels > 0 ? probe.Channels : 2);
         var result = await RunAsync(FfmpegPath, args, line =>
+        {
+            if (line.Contains("time=")) progress?.Report(line.Trim());
+        });
+        if (result.Code != 0)
+            throw new InvalidOperationException(result.Stderr.Length > 400 ? result.Stderr[^400..] : result.Stderr);
+    }
+
+    public static async Task HapEncodeAsync(string src, string dest, bool alpha, IProgress<string>? progress)
+    {
+        if (FfmpegPath is null) throw new InvalidOperationException("ffmpeg not found");
+        var result = await RunAsync(FfmpegPath, Codecs.HapEncodeArgs(src, dest, alpha), line =>
         {
             if (line.Contains("time=")) progress?.Report(line.Trim());
         });

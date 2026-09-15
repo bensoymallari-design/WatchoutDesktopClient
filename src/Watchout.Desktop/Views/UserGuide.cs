@@ -39,10 +39,14 @@ public sealed class UserGuideWindow : Window
                     "Select a Display, set the Runner MAC in Properties, then Output → Wake Display Node. Sends a UDP magic packet. The PC must allow WOL in firmware.\n\n" +
                     "Media versions\n" +
                     "Select a clip → Assets → Create H.264 version. ffmpeg writes a new MP4 and stores it as a revision. Switch revisions in Properties without rebuilding cues. Watch folder (Preferences) auto-imports new files.\n\n" +
-                    "Color / GPU\n" +
-                    "Show color space is a tag for the crew (Rec.709 default). WatchMe’s WPF window is 8-bit. GPU preference is a reminder to pin WatchMe.exe to the discrete GPU in Windows Settings → System → Display → Graphics.\n\n" +
-                    "Dataton-only (not in WatchMe)\n" +
-                    "ST 2110, NMOS, HAP encode, Notch LC, WATCHPAX, Access Control, MainConcept, 65535-ch WAV, LTC. Those need Dataton’s server stack.",
+                    "Color / GPU / HDR\n" +
+                    "Show color space and 10-bit HDR are encode tags (Rec.709 / Rec.2020 / HLG / PQ). WatchMe’s WPF window is 8-bit. Pin WatchMe.exe to the discrete GPU in Windows Graphics settings.\n\n" +
+                    "ST 2110 and NMOS\n" +
+                    "Live → Import ST 2110 SDP, or set an IS-04 query registry and Refresh NMOS. Senders become ST 2110 assets. Essence still needs a 2110-capable NIC or ffmpeg RTP path on the machine.\n\n" +
+                    "HAP, Notch LC, WAV, LTC\n" +
+                    "Encode HAP from Assets. Notch LC transcodes to H.264 for DXVA. WAV files can declare up to 65535 channels; WatchMe downmixes wide files to stereo for playback. Export LTC WAV from the timeline playhead; ChaseLtc follows SMPTE time.\n\n" +
+                    "Access and playback nodes\n" +
+                    "Preferences PIN locks launch. Ping the Runner/WATCHPAX-style node at /watchme/health. Wake-on-LAN uses the MAC on that node.",
             },
         };
     }

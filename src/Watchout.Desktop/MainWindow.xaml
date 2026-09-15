@@ -71,11 +71,15 @@
         <MenuItem Header="Refresh Capture Cards" Click="RefreshCapture_Click"/>
         <MenuItem Header="Connect Capture Cards…" Click="ConnectCapture_Click"/>
         <MenuItem Header="Connect All Capture Cards" Click="ConnectAllCapture_Click"/>
+        <Separator/>
+        <MenuItem Header="Refresh NMOS" Click="RefreshNmos_Click"/>
+        <MenuItem Header="Import ST 2110 SDP…" Click="ImportSdp_Click"/>
       </MenuItem>
       <MenuItem Header="_Assets">
         <MenuItem Header="Import Media…" Click="ImportMedia_Click"/>
         <MenuItem Header="Create H.264 Version" Click="CreateVersion_Click"/>
         <MenuItem Header="Re-optimize Selected" Click="CreateVersion_Click"/>
+        <MenuItem Header="Encode HAP" Click="EncodeHap_Click"/>
         <Separator/>
         <MenuItem Header="Group Selected Cues" Click="Group_Click"/>
         <MenuItem Header="Ungroup Composition" Click="Ungroup_Click"/>
@@ -88,6 +92,8 @@
         <MenuItem Header="Close All Outputs" Click="CloseOutputs_Click"/>
         <Separator/>
         <MenuItem Header="Wake Display Node" Click="Wake_Click"/>
+        <MenuItem Header="Ping Playback Node" Click="PingNode_Click"/>
+        <MenuItem Header="Export LTC WAV…" Click="ExportLtc_Click"/>
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="What's New" Click="WhatsNew_Click"/>

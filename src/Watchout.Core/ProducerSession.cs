@@ -386,6 +386,9 @@ public sealed class ProducerSession
                 Bytes = media.Bytes,
                 Linked = media.Linked,
                 PosterUrl = media.PosterUrl,
+                Channels = media.Channels,
+                BitDepth = media.BitDepth,
+                ColorSpace = media.ColorSpace,
             };
             if (existing is null) show.Assets.Add(asset);
             else
@@ -902,6 +905,108 @@ public sealed class ProducerSession
         {
             show.Prefs.ColorSpace = space;
         });
+
+    public void SetHdrPipeline(bool hdr, int bitDepth = 10) =>
+        Mutate(show =>
+        {
+            show.Prefs.HdrPipeline = hdr;
+            show.Prefs.BitDepth = hdr ? Math.Max(10, bitDepth) : 8;
+            if (hdr) show.Prefs.ColorSpace = ColorSpaceTag.Pq;
+        });
+
+    public void SetOptimizePreset(OptimizePreset preset) =>
+        Mutate(show => show.Prefs.OptimizePreset = preset);
+
+    public void SetNmosRegistry(string url) =>
+        Mutate(show => show.Prefs.NmosRegistry = url ?? "");
+
+    public void SetLtc(bool enabled, double fps = 30) =>
+        Mutate(show =>
+        {
+            show.Prefs.LtcEnabled = enabled;
+            show.Prefs.LtcFps = fps > 0 ? fps : 30;
+        });
+
+    public Asset ImportSt2110(string name, string sdp, string? nmosId = null, bool placeOnLayer = false)
+    {
+        if (Show is null) NewShow();
+        var media = LiveSources.St2110Asset(name, sdp, nmosId);
+        ApplyImported(media);
+        Mutate(show =>
+        {
+            show.CaptureDevices = show.CaptureDevices
+                .Where(d => d.Signal != media.Url)
+                .Append(new CaptureDevice
+                {
+                    Id = Ids.New("cap"),
+                    Name = media.Name,
+                    NodeId = show.Nodes.FirstOrDefault(n => n.Services.Runner)?.Id ?? "local-runner",
+                    Kind = "ST2110",
+                    Signal = media.Url,
+                })
+                .ToList();
+        }, record: false);
+        if (placeOnLayer)
+        {
+            var hasCue = Show!.Timelines.SelectMany(t => t.Cues).Any(c => c.AssetId == media.Id);
+            if (!hasCue)
+            {
+                string? layerId = null;
+                Mutate(show => layerId = LiveSources.NextLiveLayerId(show), record: false);
+                AddCueFromAsset(media.Id, layerId, 0);
+            }
+        }
+        else
+            Select(SelectionKind.Asset, media.Id);
+        return Show!.Assets.First(a => a.Id == media.Id);
+    }
+
+    public int ImportNmosSenders(IEnumerable<NmosSender> senders, IReadOnlyDictionary<string, string>? sdpByHref = null)
+    {
+        var n = 0;
+        foreach (var sender in senders)
+        {
+            var sdp = "";
+            if (sdpByHref is not null && !string.IsNullOrEmpty(sender.ManifestHref) && sdpByHref.TryGetValue(sender.ManifestHref, out var body))
+                sdp = body;
+            if (string.IsNullOrWhiteSpace(sdp))
+                sdp = $"v=0\nm=video 5004 RTP/AVP 96\na=rtpmap:96 raw/90000\na=fmtp:96 width=1920; height=1080; exactframerate=60\n";
+            ImportSt2110(sender.Label, sdp, sender.Id);
+            n++;
+        }
+        if (n > 0) Log($"Imported {n} NMOS sender(s) as ST 2110 assets");
+        else Log("NMOS registry returned no senders", "warn");
+        return n;
+    }
+
+    public void ChaseLtc(LtcStamp stamp)
+    {
+        var tl = ActiveTimeline;
+        if (tl is null) return;
+        SetPlayhead(tl.Id, stamp.Milliseconds);
+        Log($"LTC chase {stamp.Hours:00}:{stamp.Minutes:00}:{stamp.Seconds:00}:{stamp.Frames:00}");
+    }
+
+    public byte[] ExportLtcWav(double durationMs, int sampleRate = 48000)
+    {
+        var tl = ActiveTimeline;
+        var fps = Show?.Prefs.LtcFps > 0 ? Show.Prefs.LtcFps : 30;
+        var start = LtcStamp.FromMilliseconds(tl?.Playhead ?? 0, fps);
+        var frames = Math.Max(1, (int)Math.Ceiling((durationMs <= 0 ? 1000 : durationMs) / (1000d / fps)));
+        Log($"Exported {frames} frames of LTC at {fps:0} fps");
+        return Ltc.Wav(start, frames, sampleRate, fps);
+    }
+
+    public void MarkNode(string id, bool online, NodeKind? kind = null) =>
+        Mutate(show =>
+        {
+            var node = show.Nodes.FirstOrDefault(n => n.Id == id);
+            if (node is null) return;
+            node.Online = online;
+            if (kind is { } k) node.Kind = k;
+        }, record: false);
+
+    public string NodeShowPayload() => Show is null ? "{}" : ShowSerializer.Save(Show);
 
     public void PushAssetRevision(string assetId, string url, string? proxyPath, string notes)
     {
