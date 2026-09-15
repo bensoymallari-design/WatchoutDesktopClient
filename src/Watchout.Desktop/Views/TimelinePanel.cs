@@ -92,25 +92,30 @@ public sealed class TimelinePanel : FrameworkElement
         {
             if (y + LaneH >= RulerH && y <= h)
             {
+                if (!layer.Enabled)
+                    dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(70, 0, 0, 0)), null, new Rect(HeadW, y, timeW, LaneH));
                 dc.DrawLine(lanePen, new Point(HeadW, y + LaneH), new Point(w, y + LaneH));
-                foreach (var cue in tl.Cues.Where(c => c.LayerId == layer.Id))
+                if (layer.Enabled)
                 {
-                    var x = xOf(cue.Start);
-                    var cw = Math.Max(4, cue.Duration * zoom);
-                    if (TimelineMath.ClipCueBar(x, cw, HeadW, w) is not { } bar) continue;
-                    var selected = App.Session.Selection.Kind == SelectionKind.Cue && App.Session.Selection.Ids.Contains(cue.Id);
-                    var fill = BrushFrom(cue.Color);
-                    dc.DrawRectangle(fill, new Pen(selected ? new SolidColorBrush(Color.FromRgb(245, 166, 35)) : Brushes.Transparent, 2),
-                        new Rect(bar.X, y + 3, bar.W, LaneH - 6));
-                    var titleX = bar.X + 4;
-                    var titleW = bar.W - 8;
-                    if (titleW > 8)
+                    foreach (var cue in tl.Cues.Where(c => c.LayerId == layer.Id))
                     {
-                        var title = new FormattedText(cue.Name, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                            new Typeface("Segoe UI"), 11, Brushes.White, 1.25);
-                        title.MaxTextWidth = titleW;
-                        title.MaxTextHeight = 16;
-                        dc.DrawText(title, new Point(titleX, y + 6));
+                        var x = xOf(cue.Start);
+                        var cw = Math.Max(4, cue.Duration * zoom);
+                        if (TimelineMath.ClipCueBar(x, cw, HeadW, w) is not { } bar) continue;
+                        var selected = App.Session.Selection.Kind == SelectionKind.Cue && App.Session.Selection.Ids.Contains(cue.Id);
+                        var fill = BrushFrom(cue.Color);
+                        dc.DrawRectangle(fill, new Pen(selected ? new SolidColorBrush(Color.FromRgb(245, 166, 35)) : Brushes.Transparent, 2),
+                            new Rect(bar.X, y + 3, bar.W, LaneH - 6));
+                        var titleX = bar.X + 4;
+                        var titleW = bar.W - 8;
+                        if (titleW > 8)
+                        {
+                            var title = new FormattedText(cue.Name, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                new Typeface("Segoe UI"), 11, Brushes.White, 1.25);
+                            title.MaxTextWidth = titleW;
+                            title.MaxTextHeight = 16;
+                            dc.DrawText(title, new Point(titleX, y + 6));
+                        }
                     }
                 }
             }
@@ -120,26 +125,13 @@ public sealed class TimelinePanel : FrameworkElement
 
         dc.PushClip(new RectangleGeometry(new Rect(0, RulerH, HeadW, lanesH)));
         y = RulerH - layerScroll;
+        var layerIndex = 0;
         foreach (var layer in tl.Layers)
         {
             if (y + LaneH >= RulerH && y <= h)
-            {
-                var nameBrush = !layer.Enabled
-                    ? new SolidColorBrush(Color.FromRgb(90, 90, 90))
-                    : layer.Locked
-                        ? new SolidColorBrush(Color.FromRgb(160, 140, 90))
-                        : Brushes.White;
-                var selectedLayer = App.Session.Selection.Kind == SelectionKind.Layer && App.Session.Selection.Ids.Contains(layer.Id);
-                if (selectedLayer)
-                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(42, 36, 24)), null, new Rect(0, y, HeadW, LaneH));
-                var name = new FormattedText((layer.Locked ? "* " : "") + layer.Name, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    new Typeface("Segoe UI"), 11, nameBrush, 1.25);
-                name.MaxTextWidth = HeadW - 12;
-                name.MaxTextHeight = LaneH - 4;
-                dc.DrawText(name, new Point(8, y + 6));
-                dc.DrawLine(lanePen, new Point(0, y + LaneH), new Point(HeadW, y + LaneH));
-            }
+                DrawLayerHeader(dc, layer, layerIndex, y, lanePen);
             y += LaneH;
+            layerIndex++;
         }
         dc.Pop();
 
@@ -174,6 +166,74 @@ public sealed class TimelinePanel : FrameworkElement
     {
         try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!); }
         catch { return new SolidColorBrush(Color.FromRgb(59, 130, 196)); }
+    }
+
+    static void DrawLayerHeader(DrawingContext dc, Layer layer, int index, double y, Pen lanePen)
+    {
+        var nameBrush = !layer.Enabled
+            ? new SolidColorBrush(Color.FromRgb(90, 90, 90))
+            : layer.Locked
+                ? new SolidColorBrush(Color.FromRgb(160, 140, 90))
+                : Brushes.White;
+        var selectedLayer = App.Session.Selection.Kind == SelectionKind.Layer && App.Session.Selection.Ids.Contains(layer.Id);
+        if (selectedLayer)
+            dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(42, 36, 24)), null, new Rect(0, y, HeadW, LaneH));
+        var num = new FormattedText((index + 1).ToString(), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"), 10, new SolidColorBrush(Color.FromRgb(140, 140, 140)), 1.25);
+        dc.DrawText(num, new Point(4, y + 7));
+        var lockLeft = TimelineMath.LayerLockLeft();
+        var name = new FormattedText(layer.Name, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"), 11, nameBrush, 1.25);
+        name.MaxTextWidth = Math.Max(24, lockLeft - 22);
+        name.MaxTextHeight = LaneH - 4;
+        dc.DrawText(name, new Point(20, y + 6));
+        var iconY = y + (LaneH - TimelineMath.LayerIconSize) / 2;
+        DrawLock(dc, lockLeft, iconY, layer.Locked);
+        DrawEye(dc, TimelineMath.LayerEyeLeft(), iconY, layer.Enabled);
+        dc.DrawLine(lanePen, new Point(0, y + LaneH), new Point(HeadW, y + LaneH));
+    }
+
+    static void DrawEye(DrawingContext dc, double x, double y, bool visible)
+    {
+        var cx = x + 8;
+        var cy = y + 8;
+        var brush = new SolidColorBrush(visible ? Color.FromRgb(210, 210, 210) : Color.FromRgb(90, 90, 90));
+        var pen = new Pen(brush, 1.2);
+        var geo = new StreamGeometry();
+        using (var g = geo.Open())
+        {
+            g.BeginFigure(new Point(cx - 7, cy), false, true);
+            g.QuadraticBezierTo(new Point(cx, cy - 5), new Point(cx + 7, cy), true, false);
+            g.QuadraticBezierTo(new Point(cx, cy + 5), new Point(cx - 7, cy), true, false);
+        }
+        geo.Freeze();
+        dc.DrawGeometry(null, pen, geo);
+        dc.DrawEllipse(visible ? brush : Brushes.Transparent, pen, new Point(cx, cy), 2.2, 2.2);
+        if (!visible)
+            dc.DrawLine(pen, new Point(cx - 6, cy + 5), new Point(cx + 6, cy - 5));
+    }
+
+    static void DrawLock(DrawingContext dc, double x, double y, bool locked)
+    {
+        var brush = new SolidColorBrush(locked ? Color.FromRgb(245, 166, 35) : Color.FromRgb(170, 170, 170));
+        var pen = new Pen(brush, 1.2);
+        dc.DrawRoundedRectangle(null, pen, new Rect(x + 3.5, y + 7, 9, 7), 1, 1);
+        var shackle = new StreamGeometry();
+        using (var g = shackle.Open())
+        {
+            if (locked)
+            {
+                g.BeginFigure(new Point(x + 5.5, y + 7.5), false, false);
+                g.ArcTo(new Point(x + 10.5, y + 7.5), new Size(2.5, 3.2), 0, false, SweepDirection.Clockwise, true, false);
+            }
+            else
+            {
+                g.BeginFigure(new Point(x + 5.5, y + 7.5), false, false);
+                g.ArcTo(new Point(x + 11.5, y + 4), new Size(3, 3.4), 0, false, SweepDirection.Clockwise, true, false);
+            }
+        }
+        shackle.Freeze();
+        dc.DrawGeometry(null, pen, shackle);
     }
 
     int LayerIndexAt(Point p)
@@ -250,14 +310,28 @@ public sealed class TimelinePanel : FrameworkElement
         var layer = tl.Layers[layerIndex];
         if (p.X < HeadW)
         {
-            App.Session.Select(SelectionKind.Layer, layer.Id);
+            switch (TimelineMath.HitLayerHeader(p.X))
+            {
+                case TimelineMath.LayerHeaderPart.Eye:
+                    App.Session.ToggleLayerVisible(layer.Id);
+                    break;
+                case TimelineMath.LayerHeaderPart.Lock:
+                    App.Session.ToggleLayerLocked(layer.Id);
+                    break;
+                default:
+                    App.Session.Select(SelectionKind.Layer, layer.Id);
+                    break;
+            }
             return;
         }
         var msAt = (p.X - HeadW) / zoom + scroll;
-        var cue = tl.Cues.LastOrDefault(c => c.LayerId == layer.Id && msAt >= c.Start && msAt <= c.Start + Math.Max(40 / zoom, c.Duration));
+        var cue = layer.Enabled
+            ? tl.Cues.LastOrDefault(c => c.LayerId == layer.Id && msAt >= c.Start && msAt <= c.Start + Math.Max(40 / zoom, c.Duration))
+            : null;
         if (cue is not null)
         {
             App.Session.Select(SelectionKind.Cue, cue.Id);
+            if (layer.Locked) return;
             var x = HeadW + (cue.Start - scroll) * zoom;
             var w = Math.Max(4, cue.Duration * zoom);
             var local = p.X - x;
@@ -308,8 +382,8 @@ public sealed class TimelinePanel : FrameworkElement
             menu.Items.Add(Menu("Insert layer below", () => App.Session.InsertLayer(layer.Id)));
             menu.Items.Add(Menu("Add layer", () => App.Session.AddLayer()));
             menu.Items.Add(new Separator());
-            menu.Items.Add(Menu(layer.Enabled ? "Disable layer" : "Enable layer", () => App.Session.UpdateLayer(layer.Id, l => l.Enabled = !l.Enabled)));
-            menu.Items.Add(Menu(layer.Locked ? "Unlock layer" : "Lock layer", () => App.Session.UpdateLayer(layer.Id, l => l.Locked = !l.Locked)));
+            menu.Items.Add(Menu(layer.Enabled ? "Hide layer" : "Show layer", () => App.Session.ToggleLayerVisible(layer.Id)));
+            menu.Items.Add(Menu(layer.Locked ? "Unlock layer" : "Lock layer", () => App.Session.ToggleLayerLocked(layer.Id)));
             menu.Items.Add(new Separator());
             menu.Items.Add(Menu("Delete layer", () => App.Session.DeleteLayer(layer.Id)));
         }
@@ -372,7 +446,7 @@ public sealed class TimelinePanel : FrameworkElement
         }
         if (_dragId is null || e.LeftButton != MouseButtonState.Pressed) return;
         var tl = App.Session.ActiveTimeline;
-        if (tl is null) return;
+        if (tl is null || App.Session.CueLayerLocked(_dragId)) return;
         var zoomDrag = App.Session.TimelineZoom;
         var dx = e.GetPosition(this).X - _mouseDown.X;
         var dms = dx / zoomDrag;

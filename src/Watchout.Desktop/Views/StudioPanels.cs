@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Media;
@@ -419,6 +420,225 @@ public class LogPanel : UserControl
         if (App.Session.Logs.Count == _count) return;
         _count = App.Session.Logs.Count;
         _list.ItemsSource = App.Session.Logs.Take(80).Select(l => $"[{l.Level}] {l.Message}").ToList();
+    }
+}
+
+public class LayersPanel : UserControl
+{
+    readonly StackPanel _rows = new() { Margin = new Thickness(6, 4, 6, 8) };
+    readonly TextBlock _caption = new()
+    {
+        Text = "Layers — 1 in front",
+        Foreground = new SolidColorBrush(Color.FromRgb(214, 211, 209)),
+        VerticalAlignment = VerticalAlignment.Center,
+        TextTrimming = TextTrimming.CharacterEllipsis,
+    };
+    string _fp = "";
+
+    public LayersPanel()
+    {
+        var root = new DockPanel();
+        var bar = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(42, 42, 42)),
+            Padding = new Thickness(8, 6, 8, 6),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(17, 17, 17)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+        bar.Child = _caption;
+        DockPanel.SetDock(bar, Dock.Top);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 4, 8, 8) };
+        actions.Children.Add(Mini("Add layer", () => App.Session.AddLayer()));
+        actions.Children.Add(Mini("Delete", () => App.Session.DeleteLayer()));
+        DockPanel.SetDock(actions, Dock.Bottom);
+        root.Children.Add(bar);
+        root.Children.Add(actions);
+        root.Children.Add(new ScrollViewer
+        {
+            Content = _rows,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
+        Content = root;
+        App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
+        Loaded += (_, _) => Reload();
+    }
+
+    static Button Mini(string label, Action click)
+    {
+        var b = new Button
+        {
+            Content = label,
+            Style = (Style)Application.Current.FindResource("Wo.Button"),
+            Padding = new Thickness(8, 2, 8, 2),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    public void Reload()
+    {
+        var s = App.Session;
+        var tl = s.ActiveTimeline;
+        var sel = s.Selection.Kind == SelectionKind.Layer ? string.Join(",", s.Selection.Ids) : "";
+        var fp = (tl?.Id ?? "") + "|" + sel + "|" + string.Join("|", tl?.Layers.Select(l => $"{l.Id}:{l.Name}:{l.Enabled}:{l.Locked}") ?? []);
+        if (fp == _fp && _rows.Children.Count > 0) return;
+        _fp = fp;
+        _caption.Text = tl is null ? "Layers" : $"Layers — 1 in front";
+        _rows.Children.Clear();
+        if (tl is null) return;
+        for (var i = 0; i < tl.Layers.Count; i++)
+        {
+            var layer = tl.Layers[i];
+            var selected = s.Selection.Kind == SelectionKind.Layer && s.Selection.Ids.Contains(layer.Id);
+            _rows.Children.Add(Row(layer, i + 1, selected));
+        }
+    }
+
+    static Border Row(Layer layer, int number, bool selected)
+    {
+        var row = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Margin = new Thickness(0, 2, 0, 2),
+            Padding = new Thickness(8, 4, 6, 4),
+            Background = new SolidColorBrush(selected ? Color.FromRgb(48, 42, 30) : Color.FromRgb(36, 36, 36)),
+            BorderBrush = new SolidColorBrush(selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(48, 48, 48)),
+            BorderThickness = new Thickness(1),
+            Cursor = Cursors.Hand,
+        };
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var num = new TextBlock
+        {
+            Text = number.ToString(),
+            Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+        };
+        var name = new TextBlock
+        {
+            Text = layer.Name,
+            Foreground = new SolidColorBrush(!layer.Enabled
+                ? Color.FromRgb(110, 110, 110)
+                : layer.Locked ? Color.FromRgb(210, 185, 120) : Color.FromRgb(232, 230, 227)),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(4, 0, 8, 0),
+        };
+        var lockBtn = IconBtn(LockGlyph(layer.Locked), layer.Locked ? "Unlock layer" : "Lock layer",
+            () => App.Session.ToggleLayerLocked(layer.Id));
+        var eyeBtn = IconBtn(EyeGlyph(layer.Enabled), layer.Enabled ? "Hide layer" : "Show layer",
+            () => App.Session.ToggleLayerVisible(layer.Id));
+        Grid.SetColumn(num, 0);
+        Grid.SetColumn(name, 1);
+        Grid.SetColumn(lockBtn, 2);
+        Grid.SetColumn(eyeBtn, 3);
+        grid.Children.Add(num);
+        grid.Children.Add(name);
+        grid.Children.Add(lockBtn);
+        grid.Children.Add(eyeBtn);
+        row.Child = grid;
+        row.MouseLeftButtonDown += (_, _) => App.Session.Select(SelectionKind.Layer, layer.Id);
+        return row;
+    }
+
+    static Button IconBtn(UIElement glyph, string tip, Action click)
+    {
+        var b = new Button
+        {
+            Content = glyph,
+            ToolTip = tip,
+            Style = (Style)Application.Current.FindResource("Wo.Button"),
+            Padding = new Thickness(4, 2, 4, 2),
+            Margin = new Thickness(2, 0, 0, 0),
+            Width = 28,
+            Height = 24,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Cursor = Cursors.Hand,
+        };
+        b.Click += (_, e) =>
+        {
+            click();
+            e.Handled = true;
+        };
+        return b;
+    }
+
+    static UIElement EyeGlyph(bool visible)
+    {
+        var color = new SolidColorBrush(visible ? Color.FromRgb(210, 210, 210) : Color.FromRgb(110, 110, 110));
+        var canvas = new Canvas { Width = 16, Height = 16, IsHitTestVisible = false };
+        var almond = new Ellipse
+        {
+            Width = 14,
+            Height = 8,
+            Stroke = color,
+            StrokeThickness = 1.2,
+            Fill = Brushes.Transparent,
+        };
+        Canvas.SetLeft(almond, 1);
+        Canvas.SetTop(almond, 4);
+        canvas.Children.Add(almond);
+        var pupil = new Ellipse
+        {
+            Width = 4,
+            Height = 4,
+            Fill = visible ? color : Brushes.Transparent,
+            Stroke = color,
+            StrokeThickness = 1,
+        };
+        Canvas.SetLeft(pupil, 6);
+        Canvas.SetTop(pupil, 6);
+        canvas.Children.Add(pupil);
+        if (!visible)
+        {
+            canvas.Children.Add(new Line
+            {
+                X1 = 2,
+                Y1 = 13,
+                X2 = 14,
+                Y2 = 3,
+                Stroke = color,
+                StrokeThickness = 1.2,
+            });
+        }
+        return canvas;
+    }
+
+    static UIElement LockGlyph(bool locked)
+    {
+        var color = new SolidColorBrush(locked ? Color.FromRgb(245, 166, 35) : Color.FromRgb(170, 170, 170));
+        var canvas = new Canvas { Width = 16, Height = 16, IsHitTestVisible = false };
+        var body = new Rectangle
+        {
+            Width = 10,
+            Height = 7,
+            RadiusX = 1,
+            RadiusY = 1,
+            Stroke = color,
+            StrokeThickness = 1.2,
+            Fill = Brushes.Transparent,
+        };
+        Canvas.SetLeft(body, 3);
+        Canvas.SetTop(body, 8);
+        canvas.Children.Add(body);
+        var shackle = new System.Windows.Shapes.Path
+        {
+            Stroke = color,
+            StrokeThickness = 1.2,
+            Fill = Brushes.Transparent,
+            Data = locked
+                ? Geometry.Parse("M 5.5,8 C 5.5,5.2 10.5,5.2 10.5,8")
+                : Geometry.Parse("M 5.5,8 C 5.5,4.4 12,4.6 12,7"),
+        };
+        canvas.Children.Add(shackle);
+        return canvas;
     }
 }
 
@@ -1095,7 +1315,7 @@ public class PropertiesPanel : UserControl
             var layer = show.Timelines.SelectMany(t => t.Layers).FirstOrDefault(l => s.Selection.Ids.Contains(l.Id));
             if (layer is null) return;
             Field("Name", layer.Name, v => s.UpdateLayer(layer.Id, l => l.Name = v));
-            Check("Enabled", layer.Enabled, v => s.UpdateLayer(layer.Id, l => l.Enabled = v));
+            Check("Visible", layer.Enabled, v => s.UpdateLayer(layer.Id, l => l.Enabled = v));
             Check("Locked", layer.Locked, v => s.UpdateLayer(layer.Id, l => l.Locked = v));
             ActionBtn("Insert layer below", () => s.InsertLayer(layer.Id));
             ActionBtn("Delete layer", () => s.DeleteLayer(layer.Id));

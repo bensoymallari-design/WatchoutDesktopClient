@@ -32,7 +32,9 @@ public static class PlaybackClock
     public static IReadOnlyList<EvaluatedCue> VisibleCues(Models.Timeline timeline)
     {
         var others = timeline.Cues;
+        var hidden = timeline.Layers.Where(l => !l.Enabled).Select(l => l.Id).ToHashSet();
         return timeline.Cues
+            .Where(c => !hidden.Contains(c.LayerId))
             .Select(c => Tweens.EvaluateCue(c, timeline.Playhead, others))
             .OfType<EvaluatedCue>()
             .OrderBy(e => e.Z)

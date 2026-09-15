@@ -671,6 +671,7 @@ public sealed class StageSurface : Canvas
                 return;
             case StageHitKind.CueHandle:
                 App.Session.Select(SelectionKind.Cue, hit.Id!);
+                if (App.Session.CueLayerLocked(hit.Id!)) return;
                 _resizeHandle = hit.Handle;
                 _resizeDisplay = false;
                 var ev = PlaybackClock.VisibleMedia(show).FirstOrDefault(c => c.Cue.Id == hit.Id);
@@ -681,6 +682,7 @@ public sealed class StageSurface : Canvas
                 return;
             case StageHitKind.Cue:
                 App.Session.Select(SelectionKind.Cue, hit.Id!);
+                if (App.Session.CueLayerLocked(hit.Id!)) return;
                 var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == hit.Id);
                 _dragCueId = hit.Id;
                 _dragStart = e.GetPosition(this);

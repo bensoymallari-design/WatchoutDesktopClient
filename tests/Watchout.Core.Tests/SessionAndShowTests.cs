@@ -473,4 +473,55 @@ public class SessionAndShowTests
         Assert.Null(session.Show.Displays[0].ScreenId);
         Assert.Equal(2, session.Show.Displays[0].Channel);
     }
+
+    [Fact]
+    public void HiddenLayerCuesAreNotVisibleOnStage()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/shows/wall.mp4", "/library/wall.mp4", probe, 40_000_000, false);
+        session.ApplyImported(media);
+        var layer = session.ActiveTimeline!.Layers[0];
+        var cue = session.AddCueFromAsset(media.Id, layer.Id, 0)!;
+        session.ActiveTimeline.Playhead = 500;
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+        session.ToggleLayerVisible(layer.Id);
+        Assert.False(layer.Enabled);
+        Assert.DoesNotContain(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+        session.ToggleLayerVisible(layer.Id);
+        Assert.True(layer.Enabled);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+    }
+
+    [Fact]
+    public void LockedLayerBlocksCueEditsAndDrops()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/shows/wall.mp4", "/library/wall.mp4", probe, 40_000_000, false);
+        session.ApplyImported(media);
+        var layer = session.ActiveTimeline!.Layers[0];
+        var cue = session.AddCueFromAsset(media.Id, layer.Id, 0)!;
+        var start = cue.Start;
+        var x = cue.Position.X;
+        session.ToggleLayerLocked(layer.Id);
+        Assert.True(layer.Locked);
+        Assert.True(session.CueLayerLocked(cue.Id));
+        session.UpdateCue(cue.Id, c => c.Start = 9000);
+        Assert.Equal(start, cue.Start);
+        session.LiveUpdateCue(cue.Id, c => c.Position = new Vec3 { X = 999, Y = c.Position.Y, Z = c.Position.Z });
+        Assert.Equal(x, cue.Position.X);
+        session.Select(SelectionKind.Cue, cue.Id);
+        session.NudgeSelected(40, 10);
+        Assert.Equal(x, cue.Position.X);
+        session.DeleteSelected();
+        Assert.Contains(session.ActiveTimeline.Cues, c => c.Id == cue.Id);
+        Assert.Null(session.AddCueFromAsset(media.Id, layer.Id, 1000));
+        session.ToggleLayerLocked(layer.Id);
+        Assert.False(layer.Locked);
+        session.UpdateCue(cue.Id, c => c.Start = 2000);
+        Assert.Equal(2000, cue.Start);
+    }
 }

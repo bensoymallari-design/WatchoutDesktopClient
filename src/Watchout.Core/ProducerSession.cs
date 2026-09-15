@@ -406,6 +406,7 @@ public sealed class ProducerSession
 
     public Cue? AddCueFromAsset(string assetId, string? layerId = null, double? start = null, string? displayId = null)
     {
+        if (RefuseLockedLayer(ActiveTimeline, layerId)) return null;
         Cue? created = null;
         Mutate(show =>
         {
@@ -413,9 +414,7 @@ public sealed class ProducerSession
             if (tl is null) return;
             var asset = show.Assets.FirstOrDefault(a => a.Id == assetId);
             if (asset is null) return;
-            var layer = layerId is not null
-                ? tl.Layers.FirstOrDefault(l => l.Id == layerId)
-                : tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked) ?? tl.Layers.FirstOrDefault();
+            var layer = PickEditableLayer(tl, layerId);
             if (layer is null) return;
             var display = displayId is not null
                 ? show.Displays.FirstOrDefault(d => d.Id == displayId)
@@ -483,14 +482,13 @@ public sealed class ProducerSession
 
     public Cue? AddPlaceholderCue(string? layerId = null, double? start = null)
     {
+        if (RefuseLockedLayer(ActiveTimeline, layerId)) return null;
         Cue? created = null;
         Mutate(show =>
         {
             var tl = ActiveTimelineOf(show);
             if (tl is null) return;
-            var layer = layerId is not null
-                ? tl.Layers.FirstOrDefault(l => l.Id == layerId)
-                : tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked) ?? tl.Layers.FirstOrDefault();
+            var layer = PickEditableLayer(tl, layerId);
             if (layer is null) return;
             var display = show.Displays.FirstOrDefault(d => d.Enabled) ?? show.Displays.FirstOrDefault();
             var cue = ShowFactory.EmptyCue(new Cue
@@ -624,19 +622,26 @@ public sealed class ProducerSession
         });
     }
 
-    public void UpdateCue(string id, Action<Cue> patch, bool record = true) =>
+    public void UpdateCue(string id, Action<Cue> patch, bool record = true)
+    {
+        if (CueLayerLocked(id))
+        {
+            Log("Layer is locked", "warn");
+            return;
+        }
         Mutate(show =>
         {
             var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == id);
             if (cue is not null) patch(cue);
         }, record);
+    }
 
     /// <summary>
     /// Stage drag/resize: patch position/scale without rebuilding Devices, Timeline, or seeking video.
     /// </summary>
     public void LiveUpdateCue(string id, Action<Cue> patch)
     {
-        if (Show is null) return;
+        if (Show is null || CueLayerLocked(id)) return;
         var cue = Show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == id);
         if (cue is null) return;
         var x = cue.Position.X;
@@ -654,11 +659,13 @@ public sealed class ProducerSession
 
     public void MoveCues(IEnumerable<string> ids, double dStart, string? layerId = null)
     {
+        if (layerId is not null && RefuseLockedLayer(ActiveTimeline, layerId)) return;
         var set = ids.ToHashSet();
         Mutate(show =>
         {
             foreach (var cue in show.Timelines.SelectMany(t => t.Cues).Where(c => set.Contains(c.Id)))
             {
+                if (CueOnLockedLayer(show, cue)) continue;
                 cue.Start = Math.Max(0, cue.Start + dStart);
                 if (layerId is not null) cue.LayerId = layerId;
             }
@@ -695,7 +702,12 @@ public sealed class ProducerSession
         {
             if (Selection.Kind == SelectionKind.Cue)
             {
-                var drop = Selection.Ids.ToHashSet();
+                var drop = Selection.Ids.Where(id => !CueLayerLocked(id)).ToHashSet();
+                if (drop.Count == 0)
+                {
+                    Log("Layer is locked", "warn");
+                    return;
+                }
                 foreach (var tl in show.Timelines)
                     tl.Cues = tl.Cues.Where(c => !drop.Contains(c.Id)).ToList();
             }
@@ -722,6 +734,7 @@ public sealed class ProducerSession
             {
                 foreach (var cue in SelectedCues(show))
                 {
+                    if (CueOnLockedLayer(show, cue)) continue;
                     cue.Position.X += dx;
                     cue.Position.Y += dy;
                 }
@@ -750,6 +763,7 @@ public sealed class ProducerSession
             {
                 foreach (var cue in tl.Cues.Where(c => Selection.Ids.Contains(c.Id)).ToList())
                 {
+                    if (CueOnLockedLayer(show, cue)) continue;
                     var json = ShowSerializer.SaveCue(cue);
                     var copy = ShowSerializer.LoadCue(json);
                     copy.Id = Ids.New("cue");
@@ -1359,6 +1373,24 @@ public sealed class ProducerSession
             if (layer is not null) patch(layer);
         });
 
+    public void ToggleLayerVisible(string id) =>
+        UpdateLayer(id, l => l.Enabled = !l.Enabled);
+
+    public void ToggleLayerLocked(string id) =>
+        UpdateLayer(id, l => l.Locked = !l.Locked);
+
+    public bool CueLayerLocked(string cueId)
+    {
+        if (Show is null) return false;
+        foreach (var tl in Show.Timelines)
+        {
+            var cue = tl.Cues.FirstOrDefault(c => c.Id == cueId);
+            if (cue is null) continue;
+            return TimelineMath.LayerIsLocked(tl.Layers, cue.LayerId);
+        }
+        return false;
+    }
+
     public void SetShowName(string name)
     {
         if (Show is null) return;
@@ -1589,6 +1621,25 @@ public sealed class ProducerSession
         });
         Log("Deleted asset — it is gone from Assets and from the Timeline");
     }
+
+    static Layer? PickEditableLayer(Models.Timeline tl, string? layerId) =>
+        layerId is not null
+            ? tl.Layers.FirstOrDefault(l => l.Id == layerId && !l.Locked)
+            : tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked);
+
+    bool RefuseLockedLayer(Models.Timeline? tl, string? layerId)
+    {
+        if (tl is null) return false;
+        var layer = layerId is not null
+            ? tl.Layers.FirstOrDefault(l => l.Id == layerId)
+            : tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked) ?? tl.Layers.FirstOrDefault();
+        if (layer is not { Locked: true }) return false;
+        Log($"Layer \"{layer.Name}\" is locked", "warn");
+        return true;
+    }
+
+    static bool CueOnLockedLayer(Models.Show show, Cue cue) =>
+        TimelineMath.LayerIsLocked(show.Timelines.SelectMany(t => t.Layers), cue.LayerId);
 
     Timeline? ActiveTimelineOf(Models.Show show) =>
         show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? show.Timelines.FirstOrDefault();

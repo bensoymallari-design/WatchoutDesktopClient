@@ -191,4 +191,21 @@ public class TimelineMathTests
         Assert.False(TimelineMath.TimelineClickSeeksPlayhead("lane", false));
         Assert.True(TimelineMath.TimelineClickSeeksPlayhead("ruler", false));
     }
+
+    [Fact]
+    public void LayerHeaderHitsEyeAndLockIcons()
+    {
+        Assert.Equal(TimelineMath.LayerHeaderPart.Eye, TimelineMath.HitLayerHeader(TimelineMath.HeaderWidth - 2));
+        Assert.Equal(TimelineMath.LayerHeaderPart.Lock, TimelineMath.HitLayerHeader(TimelineMath.LayerLockLeft() + 1));
+        Assert.Equal(TimelineMath.LayerHeaderPart.Body, TimelineMath.HitLayerHeader(8));
+        var layers = new List<Layer>
+        {
+            new() { Id = "a", Enabled = false, Locked = false },
+            new() { Id = "b", Enabled = true, Locked = true },
+        };
+        Assert.False(TimelineMath.LayerIsVisible(layers, "a"));
+        Assert.True(TimelineMath.LayerIsVisible(layers, "b"));
+        Assert.True(TimelineMath.LayerIsLocked(layers, "b"));
+        Assert.False(TimelineMath.LayerIsLocked(layers, "a"));
+    }
 }
