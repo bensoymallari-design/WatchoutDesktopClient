@@ -46,21 +46,18 @@ public sealed class OutputWindow : Window
             if (e.Key == Key.Escape) Close();
         };
         SourceInitialized += (_, _) => PlaceOnScreen();
-        Loaded += (_, _) =>
-        {
-            PlaceOnScreen();
-            _surface.Refresh();
-        };
-        DpiChanged += (_, _) => PlaceOnScreen();
+        Loaded += (_, _) => PlaceOnScreen(refresh: true);
+        DpiChanged += (_, _) => PlaceOnScreen(refresh: true);
     }
 
     public void BindDisplay(Display display) => _surface.ViewDisplay = display;
 
-    public void PlaceOnScreen()
+    public void PlaceOnScreen(bool refresh = false)
     {
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
         NativeWindow.Place(hwnd, _screen.Left, _screen.Top, _screen.Width, _screen.Height);
+        if (!refresh) return;
         UpdateLayout();
         _surface.UpdateLayout();
         _surface.Refresh();

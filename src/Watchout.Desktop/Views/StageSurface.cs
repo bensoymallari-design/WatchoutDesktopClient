@@ -303,8 +303,17 @@ public sealed class StageSurface : Canvas
             SetZIndex(el, 100 + z);
             z++;
         }
+        var videoZs = VideoZs().ToArray();
         foreach (var el in _layers.Values)
-            if (el is CaptureLayer feed) feed.SyncOverlay();
+            if (el is CaptureLayer feed)
+                feed.SetOutputOverlay(LiveComposite.ScreenOverlayOnOutput(GetZIndex(feed), videoZs));
+    }
+
+    IEnumerable<int> VideoZs()
+    {
+        foreach (var el in _layers.Values)
+            if (el is MediaElement)
+                yield return GetZIndex(el);
     }
 
     void DrawHandles(Rect mapped, int z)
