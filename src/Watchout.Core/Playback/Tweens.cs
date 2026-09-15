@@ -1,5 +1,6 @@
 using Watchout.Core.Models;
 using Watchout.Core.Scheduling;
+using Watchout.Core.Stage;
 
 namespace Watchout.Core.Playback;
 
@@ -30,7 +31,8 @@ public static class Tweens
     {
         if (!cue.Enabled) return null;
         if (!cue.FreeRunning && (playhead < cue.Start || playhead >= cue.Start + cue.Duration)) return null;
-        var local = cue.FreeRunning ? playhead : playhead - cue.Start;
+        var raw = cue.FreeRunning ? playhead : playhead - cue.Start;
+        var local = CueLooks.MediaTime(raw, cue.Speed);
         var map = cue.Tweens.GroupBy(t => t.Type).ToDictionary(g => g.Key, g => g.First());
         var opacity = Pick(map, TweenType.Opacity, local, cue.Opacity) * TimelineMath.FadeMultiplier(cue, local, others);
         return new EvaluatedCue
@@ -59,7 +61,12 @@ public static class Tweens
                 Left = Pick(map, TweenType.CropLeft, local, cue.Crop.Left),
                 Right = Pick(map, TweenType.CropRight, local, cue.Crop.Right),
             },
-            Wipe = Pick(map, TweenType.WipeCompletion, local, 100),
+            Wipe = Pick(map, TweenType.WipeCompletion, local, cue.WipeCompletion),
+            WipeAngle = cue.WipeAngle,
+            WipeFeather = cue.WipeFeather,
+            Temperature = cue.Temperature,
+            Exposure = cue.Exposure,
+            Speed = cue.Speed <= 0 ? 100 : cue.Speed,
         };
     }
 
@@ -112,4 +119,9 @@ public sealed class EvaluatedCue
     public double Hue { get; init; }
     public Crop Crop { get; init; } = new();
     public double Wipe { get; init; }
+    public double WipeAngle { get; init; }
+    public double WipeFeather { get; init; }
+    public double Temperature { get; init; }
+    public double Exposure { get; init; }
+    public double Speed { get; init; } = 100;
 }

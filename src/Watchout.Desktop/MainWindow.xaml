@@ -34,6 +34,7 @@
         <MenuItem Header="Fit Cue to _Display" Click="FitDisplay_Click"/>
         <MenuItem Header="Fit Cue to Wall" Click="FitWall_Click"/>
         <MenuItem Header="Add Display" Click="AddDisplay_Click"/>
+        <MenuItem Header="Add Placeholder Cue" Click="Placeholder_Click"/>
         <MenuItem Header="_Edit Cues" Click="EditCues_Click"/>
         <MenuItem Header="Edit _Displays / Canvas" Click="EditDisplays_Click"/>
         <MenuItem Header="Display Grid 3×1" Click="Grid31_Click"/>
@@ -71,6 +72,7 @@
         <MenuItem Header="Close All Outputs" Click="CloseOutputs_Click"/>
       </MenuItem>
       <MenuItem Header="_Help">
+        <MenuItem Header="What's New" Click="WhatsNew_Click"/>
         <MenuItem Header="About WatchMe" Click="About_Click"/>
       </MenuItem>
     </Menu>

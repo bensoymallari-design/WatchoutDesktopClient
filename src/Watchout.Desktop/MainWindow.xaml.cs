@@ -25,6 +25,7 @@ public partial class MainWindow : Window
         App.Session.Clock += OnClockTick;
         PreviewKeyDown += OnPreviewKey;
         OnSessionChanged();
+        Dispatcher.BeginInvoke(MaybeAutoStartLastShow);
         _ = FfmpegTools.DetectAsync().ContinueWith(t =>
         {
             Dispatcher.Invoke(() =>
@@ -79,7 +80,8 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            if (App.Outputs.LiveIds.Count > 0) App.Outputs.CloseAll();
+            if (App.Session.PickingChroma) App.Session.CancelPickChroma();
+            else if (App.Outputs.LiveIds.Count > 0) App.Outputs.CloseAll();
             else App.Session.Stop();
             e.Handled = true;
         }
@@ -117,6 +119,16 @@ public partial class MainWindow : Window
         App.PersistRecents();
         App.Session.Log($"Opened {path} — original H.264 files play through DXVA (Electron WebM proxies are ignored when the master is H.264).");
     }
+
+    void MaybeAutoStartLastShow()
+    {
+        if (!App.Settings.AutoStartLastShow) return;
+        var recent = App.Session.Recents.FirstOrDefault();
+        if (recent is null || !File.Exists(recent.Path) || App.Session.Show is not null) return;
+        OpenPath(recent.Path);
+    }
+
+    void WhatsNew_Click(object sender, RoutedEventArgs e) => WhatsNewWindow.ShowDialog(this);
 
     void Save_Click(object sender, RoutedEventArgs e) => Save(false);
     void SaveAs_Click(object sender, RoutedEventArgs e) => Save(true);
@@ -167,6 +179,7 @@ public partial class MainWindow : Window
         else App.Session.FrameDisplay();
     }
     void AddDisplay_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplay();
+    void Placeholder_Click(object sender, RoutedEventArgs e) => App.Session.AddPlaceholderCue();
     void Grid31_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(3, 1, 1920, 1080);
     void Grid22_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(2, 2, 1920, 1080);
     void Grid41_Click(object sender, RoutedEventArgs e) => App.Session.AddDisplayGrid(4, 1, 1920, 1080);
@@ -255,6 +268,7 @@ public partial class MainWindow : Window
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
             "Show outputs: extra Windows screens — Colorlight / NovaStar / any LED processor, TVs, projectors. Win+P Extend, Find screens, pick the wall/TV (not Producer), then Output.\n" +
+            "Cue tools: linear wipe, temperature, exposure, chroma-key eyedropper, playback speed, placeholder cues, replace-media sizing, display image masks.\n" +
             "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
             "Assets → NDI opens a source picker. Import the ones you want, then drag onto the timeline.\n" +
             "Picture comes from the installed NDI Runtime DLL.\n\n" +

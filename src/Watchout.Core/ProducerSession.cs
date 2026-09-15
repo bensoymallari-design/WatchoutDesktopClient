@@ -40,6 +40,8 @@ public sealed class ProducerSession
     public event Action? TimelineViewChanged;
     public event Action? LayoutChanged;
 
+    public bool PickingChroma { get; private set; }
+
     public Timeline? ActiveTimeline =>
         Show is null ? null : Show.Timelines.FirstOrDefault(t => t.Id == ActiveTimelineId) ?? Show.Timelines.FirstOrDefault();
 
@@ -84,6 +86,7 @@ public sealed class ProducerSession
         if (!string.IsNullOrEmpty(path))
             Remember(path, show.Name, show.Id);
         Changed?.Invoke();
+        if (show.Prefs.AutoStart) Play();
     }
 
     public void QuitToWelcome()
@@ -410,6 +413,115 @@ public sealed class ProducerSession
             ? $"Placed {cue.Name} on Stage — press Space to play"
             : $"Placed {cue.Name} on the display — press Space to play");
         return cue;
+    }
+
+    public Cue? AddPlaceholderCue(string? layerId = null, double? start = null)
+    {
+        Cue? created = null;
+        Mutate(show =>
+        {
+            var tl = ActiveTimelineOf(show);
+            if (tl is null) return;
+            var layer = layerId is not null
+                ? tl.Layers.FirstOrDefault(l => l.Id == layerId)
+                : tl.Layers.FirstOrDefault(l => l.Enabled && !l.Locked) ?? tl.Layers.FirstOrDefault();
+            if (layer is null) return;
+            var display = show.Displays.FirstOrDefault(d => d.Enabled) ?? show.Displays.FirstOrDefault();
+            var cue = ShowFactory.EmptyCue(new Cue
+            {
+                Name = "Placeholder",
+                Type = CueType.Media,
+                LayerId = layer.Id,
+                Start = start ?? tl.Playhead,
+                Duration = show.Prefs.ImageDuration,
+                Color = "#78716C",
+            });
+            if (display is not null)
+            {
+                cue.Position = new Vec3 { X = display.X, Y = display.Y };
+                cue.Scale = new Vec2
+                {
+                    X = display.Width / 19.20,
+                    Y = display.Height / 10.80,
+                };
+            }
+            tl.Cues.Add(cue);
+            created = cue;
+            Selection = new Selection { Kind = SelectionKind.Cue, Ids = [cue.Id] };
+        });
+        if (created is not null)
+            Log("Placeholder cue — assign a clip, capture, or NDI in Properties when the content is ready");
+        return created;
+    }
+
+    public void ReplaceCueMedia(string cueId, string? assetId)
+    {
+        Mutate(show =>
+        {
+            var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == cueId);
+            if (cue is null) return;
+            if (string.IsNullOrEmpty(assetId))
+            {
+                cue.AssetId = null;
+                cue.Name = "Placeholder";
+                cue.Color = "#78716C";
+                return;
+            }
+            var next = show.Assets.FirstOrDefault(a => a.Id == assetId);
+            if (next is null) return;
+            var previous = cue.AssetId is { } oldId ? show.Assets.FirstOrDefault(a => a.Id == oldId) : null;
+            var fit = CueLooks.ReplaceMedia(show.Prefs.MediaReplaceMode, previous, next, cue.Position, cue.Scale);
+            cue.AssetId = next.Id;
+            cue.Name = next.Name;
+            cue.Color = next.Color;
+            cue.Position = fit.Position;
+            cue.Scale = fit.Scale;
+            if (!LiveSources.IsLive(next) && next.Duration > 0)
+                cue.Duration = next.Duration;
+        });
+        Log("Replaced cue media");
+    }
+
+    public void SetMediaReplaceMode(MediaReplaceMode mode) =>
+        Mutate(show => show.Prefs.MediaReplaceMode = mode);
+
+    public void SetShowAutoStart(bool value) =>
+        Mutate(show => show.Prefs.AutoStart = value);
+
+    public void BeginPickChroma()
+    {
+        if (Selection.Kind != SelectionKind.Cue)
+        {
+            Log("Select a cue first, then pick the key color on Stage", "warn");
+            return;
+        }
+        PickingChroma = true;
+        Log("Click the Stage (or Output) to pick the chroma-key color");
+        Changed?.Invoke();
+    }
+
+    public void ApplyPickedChroma(string hex)
+    {
+        PickingChroma = false;
+        var id = Selection.Kind == SelectionKind.Cue ? Selection.Ids.FirstOrDefault() : null;
+        if (id is null)
+        {
+            Changed?.Invoke();
+            return;
+        }
+        UpdateCue(id, c =>
+        {
+            c.ChromaKeyEnabled = true;
+            c.ChromaKeyColor = hex;
+        });
+        Log($"Chroma key {hex}");
+    }
+
+    public void CancelPickChroma()
+    {
+        if (!PickingChroma) return;
+        PickingChroma = false;
+        Changed?.Invoke();
     }
 
     public void FitSelectedToDisplay(string mode = "cover")

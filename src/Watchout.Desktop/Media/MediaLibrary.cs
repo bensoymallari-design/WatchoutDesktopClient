@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 using Watchout.Core;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Media;
 
@@ -126,7 +127,6 @@ public static class MediaLibrary
             bmp.BeginInit();
             bmp.UriSource = LocalUri(file);
             bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.DecodePixelWidth = 480;
             bmp.EndInit();
             bmp.Freeze();
             return bmp;
@@ -142,5 +142,33 @@ public static class MediaLibrary
         if (path.StartsWith("file:", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(path, UriKind.Absolute, out var file))
             return file;
         return new Uri(Path.GetFullPath(path));
+    }
+
+    public static BitmapSource? ChromaKey(BitmapSource source, string hex, double tolerance)
+    {
+        if (!CueLooks.TryParseHex(hex, out var kr, out var kg, out var kb)) return null;
+        try
+        {
+            var conv = new FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
+            var w = conv.PixelWidth;
+            var h = conv.PixelHeight;
+            var stride = w * 4;
+            var pixels = new byte[h * stride];
+            conv.CopyPixels(pixels, stride, 0);
+            var t = Math.Max(8, tolerance) * 2.55;
+            var limit = t * 3;
+            for (var i = 0; i < pixels.Length; i += 4)
+            {
+                var d = Math.Abs(pixels[i + 2] - kr) + Math.Abs(pixels[i + 1] - kg) + Math.Abs(pixels[i] - kb);
+                if (d < limit) pixels[i + 3] = 0;
+            }
+            var bmp = BitmapSource.Create(w, h, 96, 96, PixelFormats.Pbgra32, null, pixels, stride);
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

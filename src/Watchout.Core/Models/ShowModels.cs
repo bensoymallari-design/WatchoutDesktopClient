@@ -38,6 +38,13 @@ public enum StageEditMode
     Displays
 }
 
+public enum MediaReplaceMode
+{
+    NewSize,
+    KeepOldSize,
+    FitProportionally
+}
+
 public enum StageHitKind
 {
     None,
@@ -152,6 +159,15 @@ public sealed class Cue
     public double FadeOutDuration { get; set; } = 500;
     public Easing FadeCurve { get; set; } = Easing.Linear;
     public List<Tween> Tweens { get; set; } = [];
+    public double Speed { get; set; } = 100;
+    public double WipeCompletion { get; set; } = 100;
+    public double WipeAngle { get; set; }
+    public double WipeFeather { get; set; } = 8;
+    public double Temperature { get; set; }
+    public double Exposure { get; set; }
+    public bool ChromaKeyEnabled { get; set; }
+    public string ChromaKeyColor { get; set; } = "#00FF00";
+    public double ChromaKeyTolerance { get; set; } = 28;
     public CueControl? Control { get; set; }
     public CueOutput? Output { get; set; }
     public CueVariable? Variable { get; set; }
@@ -225,6 +241,9 @@ public sealed class Display
     public double BlendWidth { get; set; } = 128;
     public bool Virtual { get; set; }
     public string? ScreenId { get; set; }
+    public bool MaskEnabled { get; set; }
+    public bool MaskInvert { get; set; }
+    public string? MaskUrl { get; set; }
 }
 
 public sealed class NodeService
@@ -300,6 +319,8 @@ public sealed class ShowPrefs
     public double FadeOut { get; set; } = 500;
     public Easing FadeCurve { get; set; } = Easing.Linear;
     public string NdiExtraIps { get; set; } = "";
+    public MediaReplaceMode MediaReplaceMode { get; set; } = MediaReplaceMode.KeepOldSize;
+    public bool AutoStart { get; set; }
 }
 
 public sealed class Show
