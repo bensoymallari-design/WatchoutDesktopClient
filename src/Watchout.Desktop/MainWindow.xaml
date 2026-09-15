@@ -11,8 +11,11 @@
         <MenuItem Header="_New Show" InputGestureText="Ctrl+Shift+N" Click="NewShow_Click"/>
         <MenuItem Header="Demo Show" Click="Demo_Click"/>
         <MenuItem Header="_Open…" InputGestureText="Ctrl+O" Click="Open_Click"/>
+        <MenuItem Header="Import WATCHOUT 6…" Click="ImportWatchout6_Click"/>
         <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="Save_Click"/>
         <MenuItem Header="Save _As…" InputGestureText="Ctrl+Shift+S" Click="SaveAs_Click"/>
+        <Separator/>
+        <MenuItem Header="Preferences…" Click="Prefs_Click"/>
         <Separator/>
         <MenuItem Header="Close Show" Click="QuitWelcome_Click"/>
         <MenuItem Header="E_xit" Click="Exit_Click"/>
@@ -27,6 +30,9 @@
         <Separator/>
         <MenuItem x:Name="SnapItem" Header="Snap to Edges" IsCheckable="True" IsChecked="True" Click="Snap_Click"/>
         <MenuItem x:Name="ClickJumpItem" Header="Click Jumps Playhead" IsCheckable="True" IsChecked="True" Click="ClickJump_Click"/>
+        <Separator/>
+        <MenuItem x:Name="BlindItem" Header="Blind Edit" IsCheckable="True" Click="Blind_Click"/>
+        <MenuItem Header="Take to Output" InputGestureText="Ctrl+T" Click="Take_Click"/>
       </MenuItem>
       <MenuItem Header="_Stage">
         <MenuItem Header="Frame _Wall in View" Click="Frame_Click"/>
@@ -66,13 +72,26 @@
         <MenuItem Header="Connect Capture Cards…" Click="ConnectCapture_Click"/>
         <MenuItem Header="Connect All Capture Cards" Click="ConnectAllCapture_Click"/>
       </MenuItem>
+      <MenuItem Header="_Assets">
+        <MenuItem Header="Import Media…" Click="ImportMedia_Click"/>
+        <MenuItem Header="Create H.264 Version" Click="CreateVersion_Click"/>
+        <MenuItem Header="Re-optimize Selected" Click="CreateVersion_Click"/>
+        <Separator/>
+        <MenuItem Header="Group Selected Cues" Click="Group_Click"/>
+        <MenuItem Header="Ungroup Composition" Click="Ungroup_Click"/>
+        <Separator/>
+        <MenuItem Header="Watch Folder…" Click="WatchFolder_Click"/>
+      </MenuItem>
       <MenuItem Header="_Output">
         <MenuItem Header="Output Selected Display" Click="OutputSelected_Click"/>
         <MenuItem Header="Output All Displays" Click="OutputAll_Click"/>
         <MenuItem Header="Close All Outputs" Click="CloseOutputs_Click"/>
+        <Separator/>
+        <MenuItem Header="Wake Display Node" Click="Wake_Click"/>
       </MenuItem>
       <MenuItem Header="_Help">
         <MenuItem Header="What's New" Click="WhatsNew_Click"/>
+        <MenuItem Header="User Guide (7.8 map)" Click="Guide_Click"/>
         <MenuItem Header="About WatchMe" Click="About_Click"/>
       </MenuItem>
     </Menu>

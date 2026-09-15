@@ -34,7 +34,7 @@
         <Button Style="{StaticResource Wo.Button}" Click="WhatsNew_Click" MinWidth="160" Margin="0,0,10,10">
           <StackPanel>
             <TextBlock Text="What's New" FontWeight="SemiBold"/>
-            <TextBlock Text="Wipe, chroma, speed, masks" FontSize="11" Foreground="#9A958D"/>
+            <TextBlock Text="Wipe, chroma, blind, import" FontSize="11" Foreground="#9A958D"/>
           </StackPanel>
         </Button>
       </WrapPanel>

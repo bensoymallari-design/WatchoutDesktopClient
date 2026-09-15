@@ -45,6 +45,8 @@ public sealed class StageSurface : Canvas
     public Display? ViewDisplay { get => _viewDisplay; set => _viewDisplay = value; }
     public bool PlayAudio { get; set; }
 
+    Show? SurfaceShow => Editing ? App.Session.Show : App.Session.PlaybackShow;
+
     public StageSurface()
     {
         ClipToBounds = true;
@@ -61,6 +63,7 @@ public sealed class StageSurface : Canvas
         App.Session.Changed += QueueRefresh;
         App.Session.LayoutChanged += QueueLayout;
         App.Session.Clock += QueuePlaybackTick;
+        App.Session.PlaybackChanged += QueueTake;
         SizeChanged += (_, _) =>
         {
             SyncViewSize();
@@ -97,14 +100,22 @@ public sealed class StageSurface : Canvas
 
     void QueueRefresh()
     {
+        if (!Editing && App.Session.BlindEdit) return;
         _chromeNeeded = true;
         QueueVisual(syncMedia: true);
     }
 
     void QueueLayout()
     {
+        if (!Editing && App.Session.BlindEdit) return;
         if (Editing) _chromeNeeded = true;
         QueueVisual(syncMedia: false);
+    }
+
+    void QueueTake()
+    {
+        _chromeNeeded = true;
+        QueueVisual(syncMedia: true);
     }
 
     void QueuePlaybackTick() => QueueVisual(syncMedia: true);
@@ -138,7 +149,7 @@ public sealed class StageSurface : Canvas
     void DrawChrome()
     {
         var session = App.Session;
-        var show = session.Show;
+        var show = SurfaceShow;
         if (show is null)
         {
             Children.Clear();
@@ -176,13 +187,14 @@ public sealed class StageSurface : Canvas
             Children.Add(border);
             _chrome.Add(border);
             var cap = LiveSources.CaptureNameOnDisplay(show, display.Id);
+            var key = display.Role == DisplayRole.Key ? $"  ·  KEY {Math.Max(1, display.KeyChannel)}" : "";
             var label = new TextBlock
             {
                 Text = cap is null
                     ? session.StageEditMode == StageEditMode.Displays || selected
-                        ? $"{display.Name}  {display.Width:0}×{display.Height:0}  ·  canvas"
-                        : $"{display.Name}  {display.Width:0}×{display.Height:0}"
-                    : $"{display.Name}  ·  {cap}",
+                        ? $"{display.Name}{key}  {display.Width:0}×{display.Height:0}  ·  canvas"
+                        : $"{display.Name}{key}  {display.Width:0}×{display.Height:0}"
+                    : $"{display.Name}{key}  ·  {cap}",
                 Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
                 FontSize = 11,
                 IsHitTestVisible = false,
@@ -223,7 +235,7 @@ public sealed class StageSurface : Canvas
     void TickPlayback(bool syncMedia = true)
     {
         var session = App.Session;
-        var show = session.Show;
+        var show = SurfaceShow;
         if (show is null) return;
 
         var (originX, originY, scale) = Viewport(show);
@@ -278,7 +290,7 @@ public sealed class StageSurface : Canvas
             }
             else if (syncMedia && media is MediaElement video)
             {
-                var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
+                var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
                 video.IsMuted = !PlayAudio || ev.Volume <= 0;
                 video.Volume = Math.Clamp(ev.Volume / 100.0, 0, 1);
                 try { video.SpeedRatio = CueLooks.SpeedRatio(ev.Speed); } catch { /* decoder not ready */ }
@@ -344,6 +356,8 @@ public sealed class StageSurface : Canvas
             return new Image { Source = still, Stretch = Stretch.Fill, Width = native.W, Height = native.H, IsHitTestVisible = false };
         }
         if (asset.Kind == AssetKind.Audio) return null;
+        if (asset.Kind == AssetKind.Composition)
+            return Placeholder(native, asset.Name, asset.Color);
 
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
@@ -365,13 +379,13 @@ public sealed class StageSurface : Canvas
         video.MediaOpened += (_, _) =>
         {
             App.Session.Log($"{asset.Name} · Media Foundation / DXVA opened {System.IO.Path.GetFileName(file)}");
-            var tlNow = App.Session.Show?.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
+            var tlNow = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
             SyncVideo(ev.Cue.Id, video, ev, tlNow?.Playback ?? PlaybackState.Stop);
         };
         try { video.Source = MediaLibrary.LocalUri(file); }
         catch { return Placeholder(native, asset.Name, asset.Color); }
         _videos[ev.Cue.Id] = video;
-        var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == ev.Cue.Id));
+        var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
         SyncVideo(ev.Cue.Id, video, ev, tl?.Playback ?? PlaybackState.Stop);
         return video;
     }

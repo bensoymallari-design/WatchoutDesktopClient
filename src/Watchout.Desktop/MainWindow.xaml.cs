@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using Watchout.Core;
 using Watchout.Core.Media;
@@ -16,6 +17,9 @@ public partial class MainWindow : Window
 {
     readonly WelcomeView _welcome = new();
     readonly ProducerView _producer = new();
+    FileSystemWatcher? _watch;
+    readonly DispatcherTimer _watchDebounce = new() { Interval = TimeSpan.FromMilliseconds(800) };
+    readonly HashSet<string> _watchPending = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow()
     {
@@ -24,7 +28,9 @@ public partial class MainWindow : Window
         App.Session.Changed += OnSessionChanged;
         App.Session.Clock += OnClockTick;
         PreviewKeyDown += OnPreviewKey;
+        _watchDebounce.Tick += OnWatchDebounce;
         OnSessionChanged();
+        StartWatchFolder();
         Dispatcher.BeginInvoke(MaybeAutoStartLastShow);
         _ = FfmpegTools.DetectAsync().ContinueWith(t =>
         {
@@ -42,12 +48,15 @@ public partial class MainWindow : Window
     {
         var s = App.Session;
         Root.Content = s.View == "producer" ? _producer : _welcome;
-        Title = s.Show is { } show ? $"{show.Name} — {Brand.Name}" : Brand.Name;
+        Title = s.Show is { } show
+            ? $"{show.Name}{(s.BlindEdit ? " · BLIND" : "")} — {Brand.Name}"
+            : Brand.Name;
         if (s.ActiveTimeline is { } tl)
             StatusClock.Text = TimeFormat.FormatPlayTime(tl.Playhead);
         StatusLog.Text = s.Logs.FirstOrDefault()?.Message ?? "Ready";
         SnapItem.IsChecked = s.Snap;
         ClickJumpItem.IsChecked = s.ClickJumpsToTime;
+        BlindItem.IsChecked = s.BlindEdit;
         LoopItem.IsChecked = s.ActiveTimeline?.Loop == true;
     }
 
@@ -89,6 +98,16 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) App.Session.Undo();
         else if (e.Key == Key.Y && Keyboard.Modifiers == ModifierKeys.Control) App.Session.Redo();
         else if (e.Key == Key.D && Keyboard.Modifiers == ModifierKeys.Control) App.Session.DuplicateSelected();
+        else if (e.Key == Key.T && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            App.Session.TakeToOutput();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.G && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            App.Session.GroupSelectedCues();
+            e.Handled = true;
+        }
         else if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
         {
             var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 10 : 1;
@@ -129,6 +148,42 @@ public partial class MainWindow : Window
     }
 
     void WhatsNew_Click(object sender, RoutedEventArgs e) => WhatsNewWindow.ShowDialog(this);
+    void Guide_Click(object sender, RoutedEventArgs e) => UserGuideWindow.ShowDialog(this);
+    void Prefs_Click(object sender, RoutedEventArgs e)
+    {
+        PrefsWindow.ShowDialog(this);
+        StartWatchFolder();
+    }
+
+    void Blind_Click(object sender, RoutedEventArgs e) => App.Session.SetBlindEdit(BlindItem.IsChecked == true);
+    void Take_Click(object sender, RoutedEventArgs e) => App.Session.TakeToOutput();
+    void Group_Click(object sender, RoutedEventArgs e) => App.Session.GroupSelectedCues();
+    void Ungroup_Click(object sender, RoutedEventArgs e) => App.Session.UngroupSelected();
+    void Wake_Click(object sender, RoutedEventArgs e) => App.Session.WakeNode();
+    async void ImportMedia_Click(object sender, RoutedEventArgs e) => await ImportMediaAsync();
+    async void CreateVersion_Click(object sender, RoutedEventArgs e) => await CreateVersionAsync();
+
+    void ImportWatchout6_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "WATCHOUT / WatchMe|*.watchme.json;*.watch.json;*.json;*.watch;*.xml;*.zip|All files|*.*",
+            Title = "Import WATCHOUT 6 / JSON show",
+        };
+        if (dlg.ShowDialog() != true) return;
+        var report = App.Session.ImportWatchout6(dlg.FileName);
+        if (!report.Ok)
+            MessageBox.Show(this, report.Message, "Import", MessageBoxButton.OK, MessageBoxImage.Warning);
+        else if (report.Notes.Count > 0)
+            App.PersistRecents();
+        if (report.Ok) App.PersistRecents();
+    }
+
+    void WatchFolder_Click(object sender, RoutedEventArgs e)
+    {
+        PrefsWindow.ShowDialog(this, focusWatchFolder: true);
+        StartWatchFolder();
+    }
 
     void Save_Click(object sender, RoutedEventArgs e) => Save(false);
     void SaveAs_Click(object sender, RoutedEventArgs e) => Save(true);
@@ -268,7 +323,7 @@ public partial class MainWindow : Window
             "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
             "Show outputs: extra Windows screens — Colorlight / NovaStar / any LED processor, TVs, projectors. Win+P Extend, Find screens, pick the wall/TV (not Producer), then Output.\n" +
-            "Cue tools: linear wipe, temperature, exposure, chroma-key eyedropper, playback speed, placeholder cues, replace-media sizing, display image masks.\n" +
+            "Cue tools: linear wipe, temperature, exposure, chroma-key eyedropper, playback speed, placeholder cues, replace-media sizing, display image masks, blind edit, group/ungroup, WATCHOUT 6 JSON import, Wake-on-LAN, asset revisions.\n" +
             "Live: HDMI/SDI capture cards, and NDI imported as an Assets clip you drag onto a layer.\n" +
             "Assets → NDI opens a source picker. Import the ones you want, then drag onto the timeline.\n" +
             "Picture comes from the installed NDI Runtime DLL.\n\n" +
@@ -287,5 +342,64 @@ public partial class MainWindow : Window
         };
         if (dlg.ShowDialog() != true) return;
         await MediaLibrary.ImportFilesAsync(dlg.FileNames, App.Session);
+    }
+
+    public static async Task CreateVersionAsync()
+    {
+        var id = App.Session.Selection.Kind == SelectionKind.Asset
+            ? App.Session.Selection.Ids.FirstOrDefault()
+            : App.Session.Show?.Assets.FirstOrDefault()?.Id;
+        if (id is null)
+        {
+            App.Session.Log("Select an imported video in Assets, then Create H.264 version", "warn");
+            return;
+        }
+        await MediaLibrary.CreateVersionAsync(id, App.Session);
+    }
+
+    public void StartWatchFolder()
+    {
+        _watch?.Dispose();
+        _watch = null;
+        if (!App.Settings.WatchFolderEnabled || string.IsNullOrWhiteSpace(App.Settings.WatchFolder) || !Directory.Exists(App.Settings.WatchFolder))
+            return;
+        try
+        {
+            _watch = new FileSystemWatcher(App.Settings.WatchFolder)
+            {
+                IncludeSubdirectories = false,
+                EnableRaisingEvents = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+            };
+            _watch.Created += OnWatchFile;
+            _watch.Renamed += (_, e) => OnWatchFile(_watch, new FileSystemEventArgs(WatcherChangeTypes.Created, Path.GetDirectoryName(e.FullPath) ?? "", e.Name ?? ""));
+            App.Session.Log($"Watching {App.Settings.WatchFolder} for new media");
+        }
+        catch (Exception ex)
+        {
+            App.Session.Log($"Watch folder failed: {ex.Message}", "error");
+        }
+    }
+
+    void OnWatchFile(object sender, FileSystemEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.FullPath)) return;
+        var ext = Path.GetExtension(e.FullPath);
+        if (ext is ".tmp" or ".crdownload" or ".part") return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _watchPending.Add(e.FullPath);
+            _watchDebounce.Stop();
+            _watchDebounce.Start();
+        });
+    }
+
+    async void OnWatchDebounce(object? sender, EventArgs e)
+    {
+        _watchDebounce.Stop();
+        var files = _watchPending.ToArray();
+        _watchPending.Clear();
+        if (App.Session.Show is null) App.Session.NewShow();
+        await MediaLibrary.ImportFilesAsync(files.Where(File.Exists), App.Session);
     }
 }

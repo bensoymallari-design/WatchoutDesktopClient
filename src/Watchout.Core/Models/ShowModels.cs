@@ -45,6 +45,27 @@ public enum MediaReplaceMode
     FitProportionally
 }
 
+public enum DisplayRole
+{
+    Fill,
+    Key
+}
+
+public enum ColorSpaceTag
+{
+    Rec709,
+    Rec2020,
+    Hlg,
+    Pq
+}
+
+public enum GpuPreference
+{
+    Auto,
+    HighPerformance,
+    PowerSaving
+}
+
 public enum StageHitKind
 {
     None,
@@ -221,6 +242,20 @@ public sealed class Asset
     public long? Bytes { get; set; }
     public bool? Linked { get; set; }
     public string? PosterUrl { get; set; }
+    public bool Dynamic { get; set; }
+    public string? ActiveRevisionId { get; set; }
+    public List<AssetRevision> Revisions { get; set; } = [];
+    public List<Cue> Children { get; set; } = [];
+}
+
+public sealed class AssetRevision
+{
+    public string Id { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string? ProxyPath { get; set; }
+    public string? OriginalPath { get; set; }
+    public string CreatedAt { get; set; } = "";
+    public string Notes { get; set; } = "";
 }
 
 public sealed class Display
@@ -244,6 +279,9 @@ public sealed class Display
     public bool MaskEnabled { get; set; }
     public bool MaskInvert { get; set; }
     public string? MaskUrl { get; set; }
+    public DisplayRole Role { get; set; } = DisplayRole.Fill;
+    public int KeyChannel { get; set; } = 1;
+    public ColorSpaceTag ColorSpace { get; set; } = ColorSpaceTag.Rec709;
 }
 
 public sealed class NodeService
@@ -267,6 +305,7 @@ public sealed class ShowNode
     public double Ram { get; set; }
     public double Disk { get; set; }
     public string Version { get; set; } = "1.0.0";
+    public string MacAddress { get; set; } = "";
 }
 
 public sealed class AudioDevice
@@ -321,6 +360,7 @@ public sealed class ShowPrefs
     public string NdiExtraIps { get; set; } = "";
     public MediaReplaceMode MediaReplaceMode { get; set; } = MediaReplaceMode.KeepOldSize;
     public bool AutoStart { get; set; }
+    public ColorSpaceTag ColorSpace { get; set; } = ColorSpaceTag.Rec709;
 }
 
 public sealed class Show

@@ -297,6 +297,8 @@ public sealed class TimelinePanel : FrameworkElement
             menu.Items.Add(Menu("Crossfade", () => App.Session.ApplyCrossfade()));
             menu.Items.Add(new Separator());
             menu.Items.Add(Menu("Duplicate", () => App.Session.DuplicateSelected()));
+            menu.Items.Add(Menu("Group selected", () => App.Session.GroupSelectedCues()));
+            menu.Items.Add(Menu("Ungroup", () => App.Session.UngroupSelected()));
             menu.Items.Add(Menu("Delete", () => App.Session.DeleteSelected()));
         }
         else if (layer is not null)

@@ -10,8 +10,8 @@ public sealed class WhatsNewWindow : Window
     public WhatsNewWindow()
     {
         Title = $"What's New — {Brand.Name} {Brand.Version}";
-        Width = 640;
-        Height = 640;
+        Width = 680;
+        Height = 720;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(17, 17, 17));
         Foreground = new SolidColorBrush(Color.FromRgb(232, 230, 227));
@@ -24,17 +24,21 @@ public sealed class WhatsNewWindow : Window
                 FontSize = 13,
                 LineHeight = 22,
                 Text =
-                    "Producer tools for LED-wall shows (the WATCHOUT 7.8 creative set that runs locally in WatchMe).\n\n" +
-                    "Linear wipe — angle, feather, and completion on each cue. 100 is fully on, 0 is hidden.\n" +
-                    "Temperature and Exposure — warm/cool and EV overlays on Stage and Output.\n" +
-                    "Chroma key — enable on a still, then Pick key color on Stage (eyedropper).\n" +
-                    "Speed — play the clip faster or slower without re-encoding.\n" +
-                    "Placeholder cues — park a slot on the timeline, assign media later.\n" +
-                    "Replace media — keep old size, use new size, or fit proportionally.\n" +
-                    "Display image mask — PNG/JPG on a display, used on Output for LED processor shapes.\n" +
-                    "Pixel-perfect placement — cues snap to whole pixels so LED walls stay sharp.\n" +
-                    "Auto-start — play a show when it opens, and optionally reopen the last show when WatchMe launches.\n\n" +
-                    "Dataton WATCHOUT 7.8 also has ST 2110, HAP encode, NMOS, WATCHPAX, Access Control, and a .watch v6 importer. Those are their media-server stack, not copied here. WatchMe remains native Media Foundation / DXVA H.264 on extra Windows screens (Colorlight, NovaStar, TVs, projectors).",
+                    "WATCHOUT 7.8 Producer tools that run locally in WatchMe.\n\n" +
+                    "Already in the first 7.8 slice:\n" +
+                    "Linear wipe — angle, feather, completion. Temperature and Exposure overlays. Chroma key on stills with Stage eyedropper. Playback speed. Placeholder cues. Replace media (keep old / new size / fit). Display image mask. Pixel-perfect placement. Auto-start.\n\n" +
+                    "Added in this update:\n" +
+                    "Blind edit — Output holds a snapshot while you change Producer. Ctrl+T Take to Output.\n" +
+                    "WATCHOUT 6 import — File → Import. JSON, XML, or a zip with JSON inside. Binary Dataton .watch is reported, not decoded.\n" +
+                    "Key / Fill — each Display can be Fill or Key 1–4 (label + routing). Video is never OpacityMasked (that blacks DXVA).\n" +
+                    "Group / Ungroup — selected cues become a composition asset; Ungroup explodes children.\n" +
+                    "Wake on LAN — MAC on the Runner node, Output → Wake Display Node.\n" +
+                    "GPU preference — saved in Preferences. Bind WatchMe.exe in Windows Graphics settings; WPF cannot switch GPUs by itself.\n" +
+                    "Create H.264 version / re-optimize — ffmpeg transcode, stored as an asset revision you can switch.\n" +
+                    "Color space tag — Rec.709 / Rec.2020 / HLG / PQ metadata. WPF output is still 8-bit.\n" +
+                    "Watch folder — drop files into a folder and WatchMe imports them.\n" +
+                    "Help → User Guide — honest map of WatchMe vs Dataton-only hardware.\n\n" +
+                    "Not copied (Dataton media-server stack): ST 2110, NMOS, 10-bit SDI/HDR GPU pipeline, HAP encode suite, Notch LC, WATCHPAX, Access Control, MainConcept optimizer, 65535-ch WAV, LTC hardware. WatchMe stays native Media Foundation / DXVA H.264 on extra Windows screens (Colorlight, NovaStar, TVs, projectors).",
             },
         };
     }

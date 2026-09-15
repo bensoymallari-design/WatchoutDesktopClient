@@ -69,6 +69,9 @@ public static class ShowFactory
             MaskEnabled = d.MaskEnabled,
             MaskInvert = d.MaskInvert,
             MaskUrl = d.MaskUrl,
+            Role = d.Role,
+            KeyChannel = d.KeyChannel > 0 ? d.KeyChannel : 1,
+            ColorSpace = d.ColorSpace,
         };
     }
 
@@ -95,6 +98,10 @@ public static class ShowFactory
             Bytes = partial.Bytes,
             Linked = partial.Linked,
             PosterUrl = partial.PosterUrl,
+            Dynamic = partial.Dynamic,
+            ActiveRevisionId = partial.ActiveRevisionId,
+            Revisions = partial.Revisions ?? [],
+            Children = partial.Children ?? [],
         };
     }
 
@@ -166,6 +173,7 @@ public static class ShowFactory
             Ram = n.Ram,
             Disk = n.Disk,
             Version = Version,
+            MacAddress = n.MacAddress ?? "",
         };
     }
 
@@ -181,7 +189,7 @@ public static class ShowFactory
             ModifiedAt = now,
             Director = "localhost",
             AssetManager = "localhost",
-            Prefs = new ShowPrefs(),
+            Prefs = new ShowPrefs { ColorSpace = ColorSpaceTag.Rec709 },
             Assets = [],
             Displays = [EmptyDisplay(new Display { Name = "Display 1", Width = 1920, Height = 1080, NodeId = "local-runner" })],
             Timelines = [timeline],

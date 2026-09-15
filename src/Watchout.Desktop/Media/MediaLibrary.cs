@@ -96,6 +96,52 @@ public static class MediaLibrary
         return ids;
     }
 
+    public static async Task CreateVersionAsync(string assetId, ProducerSession session)
+    {
+        await FfmpegTools.DetectAsync();
+        var asset = session.Show?.Assets.FirstOrDefault(a => a.Id == assetId);
+        if (asset is null)
+        {
+            session.Log("Select an imported clip in Assets first", "warn");
+            return;
+        }
+        if (asset.Kind is not (AssetKind.Video or AssetKind.Audio))
+        {
+            session.Log("Create version is for video or audio files", "warn");
+            return;
+        }
+        if (!FfmpegTools.Available)
+        {
+            session.Log("ffmpeg is not on PATH — install it to create an H.264 version", "warn");
+            return;
+        }
+        var src = Codecs.PlaybackPath(asset);
+        var file = Codecs.TryFileUrl(src) ?? (File.Exists(src) ? src : asset.OriginalPath);
+        if (string.IsNullOrEmpty(file) || !File.Exists(file))
+        {
+            session.Log($"No file on disk for {asset.Name}", "warn");
+            return;
+        }
+        var probe = await FfmpegTools.ProbeAsync(file);
+        var dest = Path.Combine(App.DataDir(), "media", "proxies", $"{asset.Id}.v{DateTime.UtcNow:yyyyMMddHHmmss}.mp4");
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        session.Log($"Creating H.264 version of {asset.Name} ({FfmpegTools.H264Encoder}) — not WebM");
+        try
+        {
+            await FfmpegTools.TranscodeH264Async(file, dest, probe, null, new Progress<string>(m => session.Log(m)));
+            var url = MediaImport.ToFileUrl(dest);
+            void Apply() => session.PushAssetRevision(assetId, url, dest, $"H.264 version · {FfmpegTools.H264Encoder} · DXVA");
+            if (App.Current?.Dispatcher is { } d && !d.CheckAccess())
+                d.Invoke(Apply);
+            else
+                Apply();
+        }
+        catch (Exception ex)
+        {
+            session.Log(ex.Message, "error");
+        }
+    }
+
     static string? FindPreparedH264(string src, string dest)
     {
         foreach (var candidate in Codecs.PreparedSidecarCandidates(src, dest))
