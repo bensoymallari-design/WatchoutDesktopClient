@@ -275,7 +275,7 @@ public static class CaptureHub
                     {
                         Interlocked.Exchange(ref _uiBusy, 0);
                     }
-                }, DispatcherPriority.Render);
+                }, DispatcherPriority.Background);
             }
             catch
             {

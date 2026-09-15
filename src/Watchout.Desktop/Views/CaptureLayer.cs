@@ -44,6 +44,7 @@ public sealed class CaptureLayer : HwndHost
     int _childH;
     double _childX = double.NaN;
     double _childY = double.NaN;
+    long _lastBitsMs;
 
     public CaptureLayer()
     {
@@ -55,26 +56,19 @@ public sealed class CaptureLayer : HwndHost
     void OnLoaded(object sender, RoutedEventArgs e)
     {
         _output = Window.GetWindow(this) is OutputWindow;
-        if (_output)
-        {
-            _wantOverlay = true;
-            LayoutUpdated += OnLayoutUpdated;
-        }
+        if (_output) _wantOverlay = true;
         Attach();
         Redraw();
     }
 
     void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        LayoutUpdated -= OnLayoutUpdated;
         Detach();
         _overlay?.Dispose();
         _overlay = null;
         _wantOverlay = false;
         _childHidden = false;
     }
-
-    void OnLayoutUpdated(object? sender, EventArgs e) => SyncOverlay(forceBits: false);
 
     public string? DeviceId
     {
@@ -273,11 +267,16 @@ public sealed class CaptureLayer : HwndHost
 
     void Redraw()
     {
+        var now = Environment.TickCount64;
+        var bits = now - _lastBitsMs >= 33;
         if (_output)
         {
-            SyncOverlay(forceBits: true);
+            if (bits) _lastBitsMs = now;
+            SyncOverlay(forceBits: bits);
             return;
         }
+        if (!bits) return;
+        _lastBitsMs = now;
         if (_hwnd == IntPtr.Zero || _bmp is null) return;
         var w = Math.Max(_childW, (int)Math.Round(ActualWidth));
         var h = Math.Max(_childH, (int)Math.Round(ActualHeight));

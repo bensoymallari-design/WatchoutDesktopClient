@@ -315,7 +315,7 @@ public static class NdiHub
                 {
                     Interlocked.Exchange(ref _uiBusy, 0);
                 }
-            }, DispatcherPriority.Render);
+            }, DispatcherPriority.Background);
         }
 
         static void UyvyToBgra(nint src, int stride, byte[] dst, int w, int h)
