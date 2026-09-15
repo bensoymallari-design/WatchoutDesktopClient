@@ -20,6 +20,15 @@ public class LiveCompositeTests
     }
 
     [Fact]
+    public void StackFeedsFollowsLayerSwapSoLaterLayerStaysInFront()
+    {
+        Assert.Equal(new[] { "ndi1", "ndi2" }, LiveComposite.StackFeeds([("ndi1", 101), ("ndi2", 102)], [100]));
+        Assert.Equal(new[] { "ndi2", "ndi1" }, LiveComposite.StackFeeds([("ndi1", 102), ("ndi2", 101)], [100]));
+        Assert.Equal("ndi1", LiveComposite.StackFeeds([("ndi2", 101), ("ndi1", 102)], [100])[^1]);
+        Assert.Equal(new[] { "ndi2" }, LiveComposite.StackFeeds([("ndi1", 101), ("ndi2", 102)], [101]));
+    }
+
+    [Fact]
     public void StickIgnoresOnePixelJitter()
     {
         Assert.Equal(1920, LiveComposite.Stick(1921, 1920));

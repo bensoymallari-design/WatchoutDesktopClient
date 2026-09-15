@@ -22,6 +22,13 @@ public static class LiveComposite
         liveZs.Where(z => ScreenOverlayOnOutput(z, videoZs)).OrderBy(z => z).ToArray();
 
     /// <summary>
+    /// Raise order for named live feeds after a layer swap. Last id is the front-most
+    /// HWND (later timeline layer). Stable when two feeds share a z.
+    /// </summary>
+    public static string[] StackFeeds(IReadOnlyList<(string Id, int Z)> feeds, IReadOnlyList<int> videoZs) =>
+        feeds.Where(f => ScreenOverlayOnOutput(f.Z, videoZs)).OrderBy(f => f.Z).Select(f => f.Id).ToArray();
+
+    /// <summary>
     /// Ignore 1-pixel jitter from PointToScreen / layout rounding so the overlay
     /// does not recreate its DIB and flash every frame.
     /// </summary>

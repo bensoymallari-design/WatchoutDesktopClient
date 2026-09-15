@@ -24,9 +24,11 @@ public sealed class CaptureLayer : HwndHost
     const int WsExLayered = 0x00080000;
     const int WsExNoActivate = 0x08000000;
     const int WsExTransparent = 0x00000020;
+    const uint SwpNosize = 0x0001;
     const uint SwpNomove = 0x0002;
     const uint SwpNoActivate = 0x0010;
     const uint SwpHideWindow = 0x0080;
+    static readonly IntPtr HwndTop = IntPtr.Zero;
     static readonly IntPtr HwndBottom = new(1);
 
     string? _deviceId;
@@ -47,6 +49,7 @@ public sealed class CaptureLayer : HwndHost
     long _lastBitsMs;
     double _overlayDipW;
     double _overlayDipH;
+    Action? _restack;
 
     public CaptureLayer()
     {
@@ -70,6 +73,7 @@ public sealed class CaptureLayer : HwndHost
         _overlay = null;
         _wantOverlay = false;
         _childHidden = false;
+        _restack = null;
     }
 
     public string? DeviceId
@@ -100,7 +104,29 @@ public sealed class CaptureLayer : HwndHost
         }
     }
 
-    public void RaiseOverlay() => _overlay?.Raise();
+    public void OnRestack(Action? restack) => _restack = restack;
+
+    /// <summary>
+    /// Bring this live HWND to the front of the NDI/capture band. Stage child
+    /// windows ignore Canvas.ZIndex when a cue only changes timeline layer, so
+    /// StageSurface raises back-to-front after every layer swap and blit.
+    /// </summary>
+    public void RaiseOverlay()
+    {
+        if (_output)
+        {
+            _overlay?.Raise();
+            return;
+        }
+        if (_hwnd == IntPtr.Zero || _childHidden) return;
+        SetWindowPos(_hwnd, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate);
+    }
+
+    public void SendBehind()
+    {
+        if (_output || _hwnd == IntPtr.Zero) return;
+        SetWindowPos(_hwnd, HwndBottom, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpNoActivate);
+    }
 
     public void SetOverlayDipSize(double width, double height)
     {
@@ -165,6 +191,7 @@ public sealed class CaptureLayer : HwndHost
         {
             _syncing = false;
         }
+        _restack?.Invoke();
     }
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
@@ -297,6 +324,7 @@ public sealed class CaptureLayer : HwndHost
         var alpha = (byte)Math.Clamp(Opacity * 255, 0, 255);
         _overlay ??= new LiveOverlayWindow();
         _overlay.PresentChild(_hwnd, _bmp, w, h, alpha, bitsDirty: true);
+        _restack?.Invoke();
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
