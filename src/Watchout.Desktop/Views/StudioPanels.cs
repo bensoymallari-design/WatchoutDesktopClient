@@ -512,8 +512,8 @@ public class DevicesPanel : UserControl
             Margin = new Thickness(0, 8, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
-                ? "Only one OS screen detected. Extend HDMI / MCTRL4K / NovaStar (Win+P), then Find screens."
-                : "Controllers and TVs show up as OS screens. Assign screens copies their size and desktop layout onto the Stage. On each Display row pick which controller it uses. Select a Display, then Use size or Output here.",
+                ? "Only one OS screen detected. Extend HDMI / MCTRL4K / NovaStar (Win+P), then Find screens. Output on the laptop looks blurry and the wall stays black."
+                : "Controllers and TVs show up as OS screens. Assign screens copies their size onto the Stage. On each Display row pick the MCTRL / NovaStar / HDMI screen — not the Producer laptop — then Output. Output here on a monitor row sends that canvas to that screen.",
         });
 
         _root.Children.Add(Header("AUDIO"));

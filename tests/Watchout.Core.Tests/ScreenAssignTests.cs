@@ -73,4 +73,26 @@ public class ScreenAssignTests
         Assert.Equal(1920, mapped[0].Width);
         Assert.Equal(2560, mapped[1].Width);
     }
+
+    [Fact]
+    public void ResolveOutputSkipsTheProducerLaptopWhenAControllerExists()
+    {
+        var laptop = new OutputScreen { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080, Left = 0 };
+        var wall = new OutputScreen { Id = "mctrl", Label = "MCTRL4K", Width = 1920, Height = 1080, Left = 1920 };
+        var screens = new List<OutputScreen> { laptop, wall };
+        var display = new Display { Id = "d1", Name = "Display 1", Channel = 1, ScreenId = laptop.Id };
+
+        var auto = ScreenAssign.ResolveOutputScreen(display, screens, null, out var skipped);
+        Assert.True(skipped);
+        Assert.Equal("mctrl", auto!.Id);
+
+        var explicitLaptop = ScreenAssign.ResolveOutputScreen(display, screens, laptop, out skipped);
+        Assert.False(skipped);
+        Assert.Equal("1", explicitLaptop!.Id);
+
+        display.ScreenId = wall.Id;
+        var pinned = ScreenAssign.ResolveOutputScreen(display, screens, null, out skipped);
+        Assert.False(skipped);
+        Assert.Equal("mctrl", pinned!.Id);
+    }
 }

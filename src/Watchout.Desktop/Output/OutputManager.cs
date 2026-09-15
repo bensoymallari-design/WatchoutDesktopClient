@@ -12,16 +12,19 @@ public sealed class OutputManager
 
     public void Open(Display display, OutputScreen? screen = null, bool fullscreen = true)
     {
+        var screens = Monitors.List();
+        var target = ScreenAssign.ResolveOutputScreen(display, screens, screen, out var skippedProducer);
+        if (target is null)
+        {
+            App.Session.Log("No OS screen to output on. Win+P → Extend, then Find screens.", "warn");
+            return;
+        }
         if (_windows.TryGetValue(display.Id, out var existing))
         {
+            existing.PlaceOnScreen();
             existing.Activate();
             return;
         }
-        var screens = Monitors.List();
-        var target = screen
-                     ?? (display.ScreenId is { } sid ? screens.FirstOrDefault(s => s.Id == sid) : null)
-                     ?? ScreenAssign.PreferredOutputScreen(screens, display.Channel)
-                     ?? screens[0];
         var playAudio = OutputShouldPlayAudio(target, screens);
         var win = new OutputWindow(display, target, playAudio);
         win.Closed += (_, _) =>
@@ -33,15 +36,12 @@ public sealed class OutputManager
         _windows[display.Id] = win;
         App.Session.LiveOutputs.Add(display.Id);
         win.Show();
-        if (fullscreen)
-        {
-            win.Left = target.Left;
-            win.Top = target.Top;
-            win.Width = target.Width;
-            win.Height = target.Height;
-            win.WindowState = WindowState.Maximized;
-        }
-        App.Session.Log($"Output {display.Name} → {target.Label} ({target.Width}×{target.Height}) · DXVA H.264 · audio {(playAudio ? "on" : "muted")}");
+        if (fullscreen) win.PlaceOnScreen();
+        if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
+            App.Session.Log($"{display.Name} is on the Producer laptop — the wall stays black. On the Display row pick the MCTRL / NovaStar / HDMI screen, then Output.", "warn");
+        else if (skippedProducer)
+            App.Session.Log($"{display.Name} was aimed at the laptop — Output went to {target.Label} so the wall gets picture.");
+        App.Session.Log($"Output {display.Name} → {target.Label} ({target.Width}×{target.Height} at {target.Left},{target.Top}) · DXVA H.264 · audio {(playAudio ? "on" : "muted")}");
     }
 
     public void Close(string displayId)
@@ -58,12 +58,8 @@ public sealed class OutputManager
 
     public void OpenAll(IEnumerable<Display> displays)
     {
-        var screens = Monitors.List();
         foreach (var display in displays.Where(d => d.Enabled))
-        {
-            var screen = ScreenAssign.ScreenForDisplay(display, screens);
-            Open(display, screen);
-        }
+            Open(display);
     }
 
     public void PushShow(Show? show)

@@ -44,6 +44,7 @@ public sealed class StageSurface : Canvas
     {
         ClipToBounds = true;
         SnapsToDevicePixels = true;
+        UseLayoutRounding = true;
         Focusable = true;
         Background = new SolidColorBrush(Color.FromRgb(17, 17, 17));
         AllowDrop = true;
@@ -381,6 +382,7 @@ public sealed class StageSurface : Canvas
         if (ViewDisplay is { } d)
         {
             var scale = Math.Min(ActualWidth / Math.Max(1, d.Width), ActualHeight / Math.Max(1, d.Height));
+            if (Math.Abs(scale - 1) < 0.03) scale = 1;
             return (d.X, d.Y, scale > 0 ? scale : 1);
         }
         var cam = App.Session.Camera;
