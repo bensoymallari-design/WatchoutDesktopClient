@@ -176,7 +176,7 @@ sealed class MfGpuDecoder : IDisposable
                 DiscardOnBufferOverflow = true,
                 BufferDuration = TimeSpan.FromSeconds(1),
             };
-            var wave = new WaveOutEvent { DesiredLatency = 80 };
+            var wave = Watchout.Desktop.Engine.AudioEngine.CreatePlayer();
             wave.Init(_pcm);
             _wave = wave;
         }

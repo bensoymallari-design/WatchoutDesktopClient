@@ -32,6 +32,15 @@ public static class GpuEngine
     public static bool Available { get { lock (Gate) return _started && !_failed && _gpu is not null; } }
     public static string? LastError { get { lock (Gate) return _error; } }
 
+    public static string Describe()
+    {
+        lock (Gate)
+        {
+            if (_gpu is not null) return $"D3D11 {_gpu.Level} compositor · DXVA";
+            return _error ?? "off";
+        }
+    }
+
     public static bool TryStart()
     {
         lock (Gate)
