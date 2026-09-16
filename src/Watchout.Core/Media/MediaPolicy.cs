@@ -2,16 +2,20 @@ namespace Watchout.Core.Media;
 
 public static class MediaPolicy
 {
-    public const long CopyLimitBytes = 2L * 1024 * 1024 * 1024;
+    public const long CopyLimitBytes = 64L * 1024 * 1024;
     public const long FullProxyLimitBytes = 8L * 1024 * 1024 * 1024;
 
+    /// <summary>
+    /// Copy small stills into the library. 4K masters stay as links — copying them
+    /// into %AppData% fills the drive, especially after delete-and-reimport.
+    /// </summary>
     public static bool ShouldCopyOnImport(long bytes) => bytes > 0 && bytes < CopyLimitBytes;
 
     public static bool ShouldBuildFullProxy(long bytes, double width = 0, double height = 0)
     {
         if (bytes >= FullProxyLimitBytes) return false;
         var px = Math.Max(0, width) * Math.Max(0, height);
-        if (px >= 3800 * 2100 && bytes >= 4L * 1024 * 1024 * 1024) return false;
+        if (px >= 3800 * 2100) return false;
         return true;
     }
 

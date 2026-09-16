@@ -43,6 +43,7 @@ public sealed class StageSurface : Canvas
     bool _panArmed;
     bool _dragArmed;
     bool _dropping;
+    int _decoderEpoch = -1;
     Point _panStart;
     (double X, double Y, double Zoom) _panCam;
 
@@ -96,15 +97,9 @@ public sealed class StageSurface : Canvas
         };
         Unloaded += (_, _) =>
         {
-            foreach (var v in _videos.Values) { try { v.Stop(); v.Close(); } catch { /* ignore */ } }
-            _videos.Clear();
-            _playing.Clear();
-            _primed.Clear();
-            _lastSeek.Clear();
-            _lastPos.Clear();
-            _lastAdvance.Clear();
-            _dead.Clear();
-            _ended.Clear();
+            DropAllMedia();
+            _layers.Clear();
+            _chrome.Clear();
         };
     }
 
@@ -162,12 +157,9 @@ public sealed class StageSurface : Canvas
         var show = SurfaceShow;
         if (show is null)
         {
+            DropAllMedia();
             Children.Clear();
             _layers.Clear();
-            _videos.Clear();
-            _playing.Clear();
-            _primed.Clear();
-            _lastSeek.Clear();
             _chrome.Clear();
             return;
         }
@@ -249,25 +241,17 @@ public sealed class StageSurface : Canvas
         var show = SurfaceShow;
         if (show is null) return;
 
+        if (session.DecoderEpoch != _decoderEpoch)
+        {
+            DropAllMedia();
+            _decoderEpoch = session.DecoderEpoch;
+        }
+
         var (originX, originY, scale) = Viewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();
         foreach (var stale in _layers.Keys.Where(id => !liveIds.Contains(id)).ToList())
-        {
-            Children.Remove(_layers[stale]);
-            _layers.Remove(stale);
-            _playing.Remove(stale);
-            _primed.Remove(stale);
-            _lastSeek.Remove(stale);
-            _lastPos.Remove(stale);
-            _lastAdvance.Remove(stale);
-            _dead.Remove(stale);
-            _ended.Remove(stale);
-            if (_videos.Remove(stale, out var dead))
-            {
-                try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
-            }
-        }
+            DropMedia(stale);
 
         var z = 0;
         foreach (var ev in live)
@@ -277,22 +261,7 @@ public sealed class StageSurface : Canvas
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
             if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset) || ChromaChanged(el, ev.Cue) || _dead.Contains(ev.Cue.Id))
             {
-                if (el is not null)
-                {
-                    Children.Remove(el);
-                    _layers.Remove(ev.Cue.Id);
-                    _playing.Remove(ev.Cue.Id);
-                    _primed.Remove(ev.Cue.Id);
-                    _lastSeek.Remove(ev.Cue.Id);
-                    _lastPos.Remove(ev.Cue.Id);
-                    _lastAdvance.Remove(ev.Cue.Id);
-                    _dead.Remove(ev.Cue.Id);
-                    _ended.Remove(ev.Cue.Id);
-                    if (_videos.Remove(ev.Cue.Id, out var dead))
-                    {
-                        try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
-                    }
-                }
+                if (el is not null) DropMedia(ev.Cue.Id);
                 el = BuildLayer(ev, asset, mapped, show);
                 if (el is null) continue;
                 _layers[ev.Cue.Id] = el;
@@ -360,6 +329,29 @@ public sealed class StageSurface : Canvas
         foreach (var el in stack)
             el.OnRestack(stack.Count > 1 ? Restack : null);
         Restack();
+    }
+
+    void DropAllMedia()
+    {
+        foreach (var id in _videos.Keys.ToList())
+            DropMedia(id);
+    }
+
+    void DropMedia(string id)
+    {
+        if (_layers.Remove(id, out var el))
+            Children.Remove(el);
+        _playing.Remove(id);
+        _primed.Remove(id);
+        _lastSeek.Remove(id);
+        _lastPos.Remove(id);
+        _lastAdvance.Remove(id);
+        _dead.Remove(id);
+        _ended.Remove(id);
+        if (_videos.Remove(id, out var dead))
+        {
+            try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
+        }
     }
 
     IEnumerable<int> VideoZs()

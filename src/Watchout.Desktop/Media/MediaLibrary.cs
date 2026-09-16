@@ -24,7 +24,7 @@ public static class MediaLibrary
             if (linked)
             {
                 dest = src;
-                session.Log($"Linking {Path.GetFileName(src)} ({MediaPolicy.FormatBytes(bytes)}) — playing from the original disk file", "warn");
+                session.Log($"Linking {Path.GetFileName(src)} ({MediaPolicy.FormatBytes(bytes)}) — playing from the original disk file, not copying into AppData", "warn");
             }
             else
             {
