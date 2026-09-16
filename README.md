@@ -1,8 +1,8 @@
 # WatchMe (native Windows)
 
-WatchMe is a **.NET 8 WPF** show composer: Stage, Timeline, Assets, Runner outputs, and **live HDMI/SDI capture**. It replaces [WatchOutElctron](https://github.com/bensoymallari-design/WatchOutElctron). Video is **H.264 through Windows Media Foundation + DXVA**, not a VP9/WebM proxy inside Chromium.
+WatchMe is a **.NET 8 WPF** show composer: Stage, Timeline, Assets, Runner outputs, **NDI**, and **live HDMI/SDI capture**. It replaces [WatchOutElctron](https://github.com/bensoymallari-design/WatchOutElctron). Video is **H.264 through Windows Media Foundation + DXVA**, not a VP9/WebM proxy inside Chromium.
 
-Electron could not hardware-decode H.264 the way a show PC needs, so the old app transcoded every clip to WebM. This client does not.
+Build and install from **`main`**. You do not need an old `cursor/…` branch to get the installer.
 
 ## Why not Electron
 
@@ -13,13 +13,15 @@ Electron could not hardware-decode H.264 the way a show PC needs, so the old app
 | Software VP9 on laptops | DXVA / D3D11 hardware decode |
 | HAP / ProRes / DXV → WebM | HAP / Resolume DXV / ProRes → optional **H.264 MP4** (NVENC, AMF, QSV, or libx264) |
 | Frameless `BrowserWindow` outputs | Frameless WPF windows on each monitor |
-| No capture-card ingest | HDMI/SDI capture (Elgato, Blackmagic, Magewell, USB, NDI Webcam Input) |
+| No capture-card ingest | HDMI/SDI capture (Elgato, Blackmagic, Magewell, USB) plus **NDI** |
 
 ## Codecs
 
 **Play natively (DXVA):** H.264/AVC, H.265/HEVC, MPEG-2, WMV, JPEG/PNG stills, WAV, AAC, MP3.
 
-**Live capture:** HDMI/SDI from one or **many** capture cards at the same time. Send Resolume Program Out (or any mixer) into each card, then **Live → Connect All Capture Cards**. Each card gets its own Stage display and timeline layer. The same sessions are shared on Runner outputs.
+**Live NDI:** Resolume (or any NDI sender) at the source size — including **3840×2160**. Put the NDI cue on a **later timeline layer** than the H.264 clip so it sits in front on Stage and Output. Later layer = front.
+
+**Live capture:** HDMI/SDI from one or **many** cards at the same time (Elgato, Blackmagic, Magewell, USB, NDI Webcam Input). **Live → Connect All Capture Cards**. Each card gets a Stage display. The same session is shared on Runner outputs. A camera in front of video works if that cue is on a later layer than the file.
 
 **Optional H.264 transcode (never WebM):** HAP, Resolume DXV, ProRes, DNx, CineForm. Needs [ffmpeg](https://ffmpeg.org/) on PATH. The encoder is `h264_nvenc` (NVIDIA), `h264_amf` (AMD), `h264_qsv` (Intel), or `libx264`.
 
@@ -27,86 +29,111 @@ Huge masters (over 2 GB) are **linked**, not copied. 100 GB 4K files stream from
 
 Opening an old Electron `.watch.json` prefers the original H.264 file over a leftover `.webm` sidecar.
 
+Loop a file with **Loop** checked. The decoder restarts when the clip hits the end so Stage and the wall do not go black.
+
 ## Resolume → WatchMe
 
-1. In Resolume, set **Output → Advanced Output** (or Preview/Program) to the HDMI/SDI output that feeds each capture card. You can run several Resolume outputs into several cards.
-2. Plug those cables into Elgato / Blackmagic / Magewell / USB HDMI dongles on the WatchMe PC.
-3. Open WatchMe → **Live → Connect All Capture Cards** (or pick several in **Connect Capture Cards…**).
-4. Each card becomes a live layer on its own Stage display. Map extra HDMI monitors in Devices, then **Output all displays**.
+**NDI (typical)**
 
-USB bandwidth (not WatchMe) is what usually caps how many Elgato-style dongles you can run; DeckLink / Magewell PCIe cards scale further. WatchMe opens one Media Foundation session per device and drops frames if the UI thread is busy, so 5×1080p is expected to work on a show PC.
+1. Install [NDI Runtime / NDI Tools](https://ndi.video/tools/) on the WatchMe PC.
+2. In Resolume, enable NDI output at the composition size (for example 3840×2160, High / full NDI).
+3. WatchMe → **Assets → NDI** (or **Live**) → pick the Resolume source. Drag it onto a timeline layer **in front of** the video.
+4. **Devices** → assign the wall screen (not the laptop) → **Output**.
+5. Check the log for `NDI … 3840×2160 60p`. If it says 1920×1080, Resolume is sending HD.
 
-Alternatively: enable **NDI** in Resolume, run **NDI Webcam Input**, and connect that virtual camera from the same Devices list.
+**HDMI / SDI capture cards**
 
-## Install on your Windows laptop (to build)
+1. In Resolume, send Advanced Output (or Preview/Program) to the HDMI/SDI that feeds each card.
+2. Plug those cables into Elgato / Blackmagic / Magewell / USB capture on the WatchMe PC.
+3. WatchMe → **Live → Connect All Capture Cards** (or **Connect Capture Cards…**).
+4. Map extra HDMI monitors in Devices, then **Output all displays**.
 
-WatchMe is a **Windows-only** WPF app. You cannot build the desktop EXE on a Mac.
+USB bandwidth (not WatchMe) usually caps how many Elgato-style dongles you can run; DeckLink / Magewell PCIe cards scale further.
 
-**Required**
+4K NDI is copied on the CPU onto Stage and Output. It will not feel as fluid as Resolume’s GPU output. A stronger PC drops fewer frames; it does not match Arena.
 
-1. **Windows 10 (1809 / version 17763 or later)** or **Windows 11**, 64-bit.
-2. **Git** — [https://git-scm.com/download/win](https://git-scm.com/download/win)
-3. **.NET 8 SDK** (the SDK, not only the Runtime) — [https://dotnet.microsoft.com/download/dotnet/8.0](https://dotnet.microsoft.com/download/dotnet/8.0)  
-   Pick **SDK 8.0.x / Windows x64**. This includes WPF so you can compile `WatchMe.exe`.  
-   Or install **Visual Studio 2022** (17.8 or later) with the **.NET desktop development** workload — that also installs the SDK.
+## Install WatchMe on any Windows PC (`WatchMe-Setup.exe`)
 
-In PowerShell, confirm:
+Do this on a **Windows** machine. You cannot build the desktop EXE on a Mac.
+
+**Build PC (once)**
+
+```powershell
+winget install Git.Git
+winget install Microsoft.DotNet.SDK.8
+winget install JRSoftware.InnoSetup
+```
+
+Close PowerShell, open a new window, then:
 
 ```powershell
 dotnet --version
 ```
 
-You should see `8.0.…`. If `dotnet` is not found, close and reopen the terminal after installing.
+You should see `8.0.…`.
 
-**Optional**
-
-- **ffmpeg** on PATH — only if you import HAP, Resolume DXV, or ProRes. H.264 MP4 plays without it.  
-  `winget install Gyan.FFmpeg` or [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
-- Capture-card **drivers** (Elgato, Blackmagic Desktop Video, Magewell) if you will ingest Resolume over HDMI/SDI.
-
-**Get the code and run**
+**Get `main` and build the installer**
 
 ```powershell
 git clone https://github.com/bensoymallari-design/WatchoutDesktopClient.git
 cd WatchoutDesktopClient
-git checkout cursor/watchme-installer-0b08
+git checkout main
+git pull
+powershell -ExecutionPolicy Bypass -File setup\build.ps1
+```
+
+That writes **`dist\WatchMe-Setup.exe`**. Copy that one file to a USB stick or the show PC and double-click it. No extra .NET install is required on the show PC — the setup bundles the runtime. Optionally tick **Create a desktop shortcut**.
+
+If you already cloned the repo:
+
+```powershell
+cd path\to\WatchoutDesktopClient
+git checkout main
+git pull
+powershell -ExecutionPolicy Bypass -File setup\build.ps1
+```
+
+**Show PC extras (not inside the installer)**
+
+| Need | For |
+| --- | --- |
+| Nothing extra | H.264 videos, Stage, Output |
+| [NDI Runtime](https://ndi.video/tools/) | Resolume / NDI live |
+| Capture-card drivers | HDMI/SDI cards |
+| ffmpeg (`winget install Gyan.FFmpeg`) | HAP / DXV / ProRes import only |
+
+Minimum OS: **Windows 10 1809** or Windows 11, 64-bit.
+
+GitHub Actions also uploads a **WatchMe-Setup** artifact on each Windows build of `main`.
+
+## Portable folder (no installer)
+
+```powershell
+git checkout main
+dotnet publish src\Watchout.Desktop\Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
+```
+
+Copy the **entire** `publish` folder. Run `WatchMe.exe` inside it. Do not copy only the exe.
+
+## Run from source
+
+```powershell
+git checkout main
 dotnet restore
 dotnet test tests/Watchout.Core.Tests/Watchout.Core.Tests.csproj
 dotnet run --project src/Watchout.Desktop/Watchout.Desktop.csproj -c Release
 ```
 
-Publish a folder you can copy to a show PC (no extra .NET install needed on that PC):
-
-```powershell
-dotnet publish src/Watchout.Desktop/Watchout.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
-```
-
-`publish\WatchMe.exe` is the portable app (copy the whole `publish` folder). It does **not** need .NET installed on the show PC.
-
 Visual Studio: open `Watchout.sln`, set **Watchout.Desktop** as startup project, press F5.
-
-## Installer (`WatchMe-Setup.exe`)
-
-You can also install WatchMe like a normal Windows program (Program Files or per-user, Start Menu, uninstall from Settings).
-
-On a **Windows** PC with the .NET 8 SDK plus [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File setup\build.ps1
-```
-
-That writes `dist\WatchMe-Setup.exe`. Double-click it on the laptop or show PC. No extra .NET install is required — the setup bundles the runtime.
-
-CI also uploads **WatchMe-Setup** as a GitHub Actions artifact on each Windows build.
 
 ## Workflow
 
 1. **New Show** or **Demo Show** (3-wide LED wall).
-2. **Assets → Import** an H.264 MP4, or drag files onto Assets. Then **drag the asset onto a Stage display** (or onto the Timeline). It should appear immediately — press **Space** or **Play**.
-3. Drag the clip on **Stage** to snap it; drag the amber handles to resize. **Fit wall** / **Fit display** on the Stage toolbar.
-4. **Devices → Map extra monitors to Stage**, then **Output all displays**. Win+P → Extend.
+2. **Assets → Import** an H.264 MP4, or drag files onto Assets. Then **drag the asset onto a Stage display** (or onto the Timeline). Press **Space** or **Play**.
+3. Drag the clip on **Stage** to snap it; drag the amber handles to resize. **Fit wall** / **Fit display** / **Fit to media**.
+4. **Devices → Find screens** / **Assign screens**. Pick the LED wall, TV, or processor (Colorlight, NovaStar, any extra HDMI) — not the Producer laptop. Then **Output**.
 5. Click the Stage, press **Space**. Esc stops (or closes outputs).
-6. For Resolume: **Live → Connect All Capture Cards**. Five cards → five live displays.
+6. For Resolume NDI: **Assets → NDI**. For cards: **Live → Connect All Capture Cards**.
 
 Shows save as `.watchme.json`. Old `.watch.json` files still open.
 
@@ -128,7 +155,8 @@ Settings live in `%AppData%\WatchMe`.
 ## Project layout
 
 - `src/Watchout.Core` — show model, timeline, stage math, H.264/DXVA media policy (tested on any OS)
-- `src/Watchout.Desktop` — WPF Producer + fullscreen Runner outputs + capture hub (Windows)
+- `src/Watchout.Desktop` — WPF Producer + fullscreen Runner outputs + NDI + capture hub (Windows)
+- `setup/` — Inno Setup script and `build.ps1` for `WatchMe-Setup.exe`
 - `tests/Watchout.Core.Tests` — xUnit
 
 WatchMe version **1.0.0**.
