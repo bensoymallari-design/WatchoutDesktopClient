@@ -96,6 +96,13 @@ public class GpuLayerMathTests
         Assert.False(GpuSourceLifetime.KeepLastFrame(false, 0));
         Assert.False(GpuSourceLifetime.KeepLastFrame(true, 1));
         Assert.True(GpuSourceLifetime.KeepLastFrame(true, 0));
+        Assert.True(GpuSourceLifetime.FreezeIdleWhilePlaying(true, 0));
+        Assert.False(GpuSourceLifetime.FreezeIdleWhilePlaying(true, 1));
+        Assert.False(GpuSourceLifetime.FreezeIdleWhilePlaying(false, 0));
+        Assert.True(GpuSourceLifetime.OutputMustFlip(true, true));
+        Assert.False(GpuSourceLifetime.OutputMustFlip(false, true));
+        Assert.False(GpuSourceLifetime.ClearToBlack(0));
+        Assert.True(GpuSourceLifetime.ClearToBlack(1));
     }
 
     [Fact]

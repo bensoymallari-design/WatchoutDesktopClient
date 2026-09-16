@@ -411,8 +411,10 @@ public sealed class StageSurface : Canvas
             Children.Insert(0, _gpu);
             SetZIndex(_gpu, 1);
         }
-        if (LayoutDiffers(_gpu.Width, ActualWidth)) _gpu.Width = Math.Max(2, ActualWidth);
-        if (LayoutDiffers(_gpu.Height, ActualHeight)) _gpu.Height = Math.Max(2, ActualHeight);
+        if (LayoutDiffers(_gpu.Width, ActualWidth) || _gpu.Width < 8)
+            _gpu.Width = Math.Max(2, ActualWidth > 8 ? ActualWidth : ViewDisplay?.Width ?? 2);
+        if (LayoutDiffers(_gpu.Height, ActualHeight) || _gpu.Height < 8)
+            _gpu.Height = Math.Max(2, ActualHeight > 8 ? ActualHeight : ViewDisplay?.Height ?? 2);
         SetLeft(_gpu, 0);
         SetTop(_gpu, 0);
         _gpu.Present(draws, ViewDisplay, PlayAudio, keepLastFrame);

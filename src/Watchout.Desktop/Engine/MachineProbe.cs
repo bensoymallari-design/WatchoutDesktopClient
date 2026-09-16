@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Vortice.DXGI;
 using Watchout.Core.Machine;
-using Watchout.Desktop.Gpu;
 
 namespace Watchout.Desktop.Engine;
 
@@ -75,11 +74,6 @@ public static class MachineProbe
 
     static (string Name, long Used, long Budget) ReadGpu()
     {
-        if (GpuEngine.Available)
-        {
-            var live = GpuEngine.VideoMemory();
-            if (live.Budget > 0 || live.Name.Length > 0) return live;
-        }
         try
         {
             using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();

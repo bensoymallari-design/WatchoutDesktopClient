@@ -227,6 +227,7 @@ public sealed class ProducerSession
             _ => "Stop",
         });
         Changed?.Invoke();
+        PlaybackChanged?.Invoke();
     }
 
     /// <summary>

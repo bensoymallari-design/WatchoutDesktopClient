@@ -32,6 +32,8 @@ public partial class App : Application
             args.Handled = false;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, _) => ReleaseHardware();
+        Session.PlaybackChanged += () =>
+            GpuEngine.KickForPlay(Session.Show?.Timelines.Any(t => t.Playback == PlaybackState.Play) == true);
         if (e.Args.Any(a => a.Equals("--release-displays", StringComparison.OrdinalIgnoreCase)))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
