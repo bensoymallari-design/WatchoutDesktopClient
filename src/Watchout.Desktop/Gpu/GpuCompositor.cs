@@ -199,6 +199,11 @@ sealed class GpuCompositor : IDisposable
         var ctx = _gpu.Context;
         ctx.OMSetRenderTargets(rtv);
         ctx.RSSetViewport(new Viewport(0, 0, width, height));
+        var ready = 0;
+        foreach (var draw in draws)
+            if (_srvs.ContainsKey(draw.SourceKey)) ready++;
+        if (!GpuSourceLifetime.ClearToBlack(ready))
+            return;
         ctx.ClearRenderTargetView(rtv, new Color4(0, 0, 0, 1));
         ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         ctx.IASetInputLayout(_layout);

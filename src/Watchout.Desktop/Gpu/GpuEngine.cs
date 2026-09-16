@@ -90,8 +90,11 @@ public static class GpuEngine
         {
             lock (Gate)
             {
+                var playing = keepLastFrame || draws.Any(d => d.Playing);
                 if (keepLastFrame && draws.Count == 0) return true;
-                SyncSources(draws, playAudio);
+                SyncSources(draws, playAudio, playing);
+                var ready = draws.Count(d => _comp.Has(d.SourceKey));
+                if (!GpuSourceLifetime.ClearToBlack(ready) && keepLastFrame) return true;
                 var frame = _comp.RenderStage(bmp.PixelWidth, bmp.PixelHeight, draws);
                 bmp.WritePixels(new Int32Rect(0, 0, frame.Width, frame.Height), frame.Pixels, frame.Width * 4, 0);
                 return true;
@@ -113,15 +116,18 @@ public static class GpuEngine
         {
             lock (Gate)
             {
-                if (keepLastFrame && draws.Count == 0) return true;
-                SyncSources(draws, playAudio);
+                var playing = keepLastFrame || draws.Any(d => d.Playing);
                 if (!Swaps.TryGetValue(hwnd, out var swap) || swap.Width != width || swap.Height != height)
                 {
                     swap?.Dispose();
                     swap = OutputSwap.Create(_gpu, hwnd, width, height);
                     Swaps[hwnd] = swap;
                 }
-                _comp.Render(swap.Rtv, width, height, draws, display);
+                if (draws.Count > 0 || !GpuSourceLifetime.FreezeIdleWhilePlaying(playing, draws.Count))
+                    SyncSources(draws, playAudio, playing);
+                var ready = draws.Count(d => _comp.Has(d.SourceKey));
+                if (GpuSourceLifetime.ClearToBlack(ready))
+                    _comp.Render(swap.Rtv, width, height, draws, display);
                 PresentSwap(swap);
                 return true;
             }
@@ -133,6 +139,23 @@ public static class GpuEngine
         }
     }
 
+    public static void KickForPlay(bool playing)
+    {
+        if (!playing) return;
+        lock (Gate)
+        {
+            foreach (var key in Files.Keys.ToList())
+            {
+                var decoder = Files[key];
+                if (!decoder.Dead && !decoder.Stalled) continue;
+                decoder.Dispose();
+                Files.Remove(key);
+                _comp?.Drop(key);
+                Rebuilt.Remove(key);
+            }
+        }
+    }
+
     public static void DropOutput(nint hwnd)
     {
         lock (Gate)
@@ -141,10 +164,10 @@ public static class GpuEngine
         }
     }
 
-    static void SyncSources(IReadOnlyList<GpuDraw> draws, bool playAudio)
+    static void SyncSources(IReadOnlyList<GpuDraw> draws, bool playAudio, bool playing)
     {
         var live = draws.Select(d => d.SourceKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        AgeIdle(live);
+        AgeIdle(live, playing);
 
         foreach (var draw in draws)
         {
@@ -180,6 +203,8 @@ public static class GpuEngine
         if (Files.TryGetValue(draw.SourceKey, out var decoder)
             && (decoder.Dead || (draw.Playing && decoder.Stalled)))
         {
+            if (decoder.Dead && decoder.Error is { Length: > 0 } err)
+                NoteDecode(draw.SourceKey, err);
             if (Rebuilt.TryGetValue(draw.SourceKey, out var at)
                 && (DateTime.UtcNow - at).TotalSeconds < 2)
                 return decoder.Dead ? null : decoder;
@@ -193,16 +218,37 @@ public static class GpuEngine
         var path = draw.SourceKey.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
             ? draw.SourceKey["file:".Length..]
             : draw.SourceKey;
-        if (!File.Exists(path)) return null;
+        if (!File.Exists(path))
+        {
+            NoteMissing(path);
+            return null;
+        }
         decoder = new MfGpuDecoder(new Uri(Path.GetFullPath(path)).AbsoluteUri, playAudio);
         Files[draw.SourceKey] = decoder;
         Idle[draw.SourceKey] = 0;
         return decoder;
     }
 
-    static void AgeIdle(HashSet<string> live)
+    static readonly HashSet<string> MissingLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    static readonly HashSet<string> DecodeLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    static void NoteMissing(string path)
+    {
+        if (!MissingLogged.Add(path)) return;
+        App.Session.Log($"Output has no file to play — {path}", "error");
+    }
+
+    static void NoteDecode(string key, string error)
+    {
+        if (!DecodeLogged.Add(key + error)) return;
+        App.Session.Log($"DXVA could not play {key}: {error} — try another H.264 MP4, or Stop then Play", "error");
+    }
+
+    static void AgeIdle(HashSet<string> live, bool playing)
     {
         foreach (var key in live) Idle[key] = 0;
+        if (GpuSourceLifetime.FreezeIdleWhilePlaying(playing, live.Count)) return;
         foreach (var key in Idle.Keys.ToList())
         {
             if (live.Contains(key)) continue;
@@ -280,12 +326,14 @@ public static class GpuEngine
         }
         catch (SharpGenException ex) when (ex.HResult == unchecked((int)0x887A000A))
         {
-            // DXGI_ERROR_WAS_STILL_DRAWING — keep the last frame instead of freezing Close/uninstall.
+            try { swap.Chain.Present(0, PresentFlags.None); }
+            catch { /* keep last flipped frame */ }
         }
     }
 
     static void Recover(Exception ex)
     {
+        App.Session.Log($"Output GPU recovered after {ex.Message} — Play again if the wall stays black", "warn");
         lock (Gate)
         {
             _error = ex.Message;
@@ -364,6 +412,7 @@ sealed class OutputSwap : IDisposable
         catch { /* factory optional */ }
         using var back = chain.GetBuffer<ID3D11Texture2D>(0);
         var rtv = gpu.Device.CreateRenderTargetView(back);
+        gpu.Context.ClearRenderTargetView(rtv, new Vortice.Mathematics.Color4(0, 0, 0, 1));
         return new OutputSwap(chain, rtv, width, height);
     }
 

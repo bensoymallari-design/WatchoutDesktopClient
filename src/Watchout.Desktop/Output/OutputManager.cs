@@ -21,7 +21,7 @@ public sealed class OutputManager
         }
         if (_windows.TryGetValue(display.Id, out var existing))
         {
-            existing.PlaceOnScreen();
+            existing.PlaceOnScreen(refresh: true);
             existing.Activate();
             return;
         }
@@ -79,7 +79,7 @@ public sealed class OutputManager
         }
     }
 
-    public void PushClock(Show? _) { /* StageSurface listens to Session.Changed */ }
+    public void PushClock(Show? _) { /* StageSurface listens to Session.Clock */ }
 
     static bool OutputShouldPlayAudio(OutputScreen target, IReadOnlyList<OutputScreen> screens)
     {
