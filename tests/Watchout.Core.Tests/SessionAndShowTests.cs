@@ -228,19 +228,19 @@ public class SessionAndShowTests
     }
 
     [Fact]
-    public void PlayAndStopBumpTheDecoderEpoch()
+    public void PlayAndStopKeepTheWarmDecoder()
     {
         var session = new ProducerSession();
         session.NewShow();
         Assert.Equal(0, session.DecoderEpoch);
         session.Play();
-        Assert.Equal(1, session.DecoderEpoch);
+        Assert.Equal(0, session.DecoderEpoch);
         session.Play();
-        Assert.Equal(2, session.DecoderEpoch);
+        Assert.Equal(0, session.DecoderEpoch);
         session.Pause();
-        Assert.Equal(2, session.DecoderEpoch);
+        Assert.Equal(0, session.DecoderEpoch);
         session.Stop();
-        Assert.Equal(3, session.DecoderEpoch);
+        Assert.Equal(0, session.DecoderEpoch);
     }
 
     [Fact]
@@ -291,6 +291,23 @@ public class SessionAndShowTests
         Assert.Equal(0, changes);
         Assert.Equal(4, layouts);
         Assert.Equal(10, session.Camera.X);
+    }
+
+    [Fact]
+    public void StageLayoutBusyHoldsUntilReleased()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var layouts = 0;
+        session.LayoutChanged += () => layouts++;
+        session.SetStageLayoutBusy(true);
+        Assert.True(session.StageLayoutBusy);
+        Assert.Equal(1, layouts);
+        session.SetStageLayoutBusy(true);
+        Assert.Equal(1, layouts);
+        session.SetStageLayoutBusy(false);
+        Assert.False(session.StageLayoutBusy);
+        Assert.Equal(2, layouts);
     }
 
     [Fact]
