@@ -6,13 +6,11 @@ namespace Watchout.Core.Tests;
 public class MediaPolicyTests
 {
     [Fact]
-    public void HundredGbMastersAreLinked()
+    public void ImportNeverCopiesMasters()
     {
-        var hundredGb = 100L * 1024 * 1024 * 1024;
-        Assert.False(MediaPolicy.ShouldCopyOnImport(hundredGb));
+        Assert.False(MediaPolicy.ShouldCopyOnImport(8L * 1024 * 1024));
         Assert.False(MediaPolicy.ShouldCopyOnImport(500L * 1024 * 1024));
-        Assert.True(MediaPolicy.ShouldCopyOnImport(8L * 1024 * 1024));
-        Assert.False(MediaPolicy.ShouldCopyOnImport(MediaPolicy.CopyLimitBytes));
+        Assert.False(MediaPolicy.ShouldCopyOnImport(100L * 1024 * 1024 * 1024));
     }
 
     [Fact]

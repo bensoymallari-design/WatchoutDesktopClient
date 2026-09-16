@@ -6,10 +6,14 @@ public static class MediaPolicy
     public const long FullProxyLimitBytes = 8L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// Copy small stills into the library. 4K masters stay as links — copying them
-    /// into %AppData% fills the drive, especially after delete-and-reimport.
+    /// Never copy masters into %AppData%. Play from the original path (Resolume-style).
+    /// Copying 4K on import is what filled the drive.
     /// </summary>
-    public static bool ShouldCopyOnImport(long bytes) => bytes > 0 && bytes < CopyLimitBytes;
+    public static bool ShouldCopyOnImport(long bytes)
+    {
+        _ = bytes;
+        return false;
+    }
 
     public static bool ShouldBuildFullProxy(long bytes, double width = 0, double height = 0)
     {

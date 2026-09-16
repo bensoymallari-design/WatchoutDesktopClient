@@ -25,7 +25,7 @@ Build and install from **`main`**. You do not need an old `cursor/…` branch to
 
 **Optional H.264 transcode (never WebM):** HAP, Resolume DXV, ProRes, DNx, CineForm. Needs [ffmpeg](https://ffmpeg.org/) on PATH. The encoder is `h264_nvenc` (NVIDIA), `h264_amf` (AMD), `h264_qsv` (Intel), or `libx264`.
 
-Huge masters (over 2 GB) are **linked**, not copied. 100 GB 4K files stream from disk.
+Imported clips are **linked**, not copied into AppData. 4K files stream from the original disk path.
 
 Opening an old Electron `.watch.json` prefers the original H.264 file over a leftover `.webm` sidecar.
 
