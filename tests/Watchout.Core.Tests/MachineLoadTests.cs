@@ -20,12 +20,31 @@ public class MachineLoadTests
         Assert.Equal(LoadLevel.Tight, MachineLoad.Grade(tightGpu));
         Assert.Contains("1080p", MachineLoad.Headline(tightGpu));
 
-        var fullRam = Sample(cpu: 10, ramUsed: 15, ramTotal: 16, gpuUsed: 1, gpuTotal: 8);
+        var fullRam = Sample(cpu: 10, ramUsed: 15.5, ramTotal: 16, gpuUsed: 1, gpuTotal: 8);
         Assert.Equal(LoadLevel.Full, MachineLoad.Grade(fullRam));
         Assert.False(MachineLoad.CanLoadMore(fullRam));
         Assert.False(MachineLoad.CanLoadAnother4K(fullRam));
-        Assert.Contains("do not add", MachineLoad.Headline(fullRam), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RAM is gone", MachineLoad.Headline(fullRam), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("System memory is full", MachineLoad.Advice(fullRam));
+    }
+
+    [Fact]
+    public void EightGigLaptopPlaying4KIsNotA1080pWarning()
+    {
+        var laptop = Sample(cpu: 2, ramUsed: 6.5, ramTotal: 7.7, gpuUsed: 0.3, gpuTotal: 3.5);
+        Assert.Equal(LoadLevel.Ok, MachineLoad.CpuLevel(laptop));
+        Assert.Equal(LoadLevel.Ok, MachineLoad.GpuLevel(laptop));
+        Assert.Equal(LoadLevel.Ok, MachineLoad.Grade(laptop));
+        Assert.True(MachineLoad.CanLoadAnother4K(laptop));
+        Assert.Contains("room to load", MachineLoad.Headline(laptop), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("1080p", MachineLoad.Headline(laptop));
+
+        var ramTight = Sample(cpu: 2, ramUsed: 7.0, ramTotal: 7.7, gpuUsed: 0.3, gpuTotal: 3.5);
+        Assert.Equal(LoadLevel.Tight, MachineLoad.RamLevel(ramTight));
+        Assert.Equal(LoadLevel.Tight, MachineLoad.Grade(ramTight));
+        Assert.True(MachineLoad.CanLoadAnother4K(ramTight));
+        Assert.Contains("RAM is high", MachineLoad.Headline(ramTight), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("1080p", MachineLoad.Headline(ramTight));
     }
 
     [Fact]
@@ -91,12 +110,12 @@ public class MachineLoadTests
     [Fact]
     public void WarnLineNamesTheFullMeters()
     {
-        var s = Sample(cpu: 94, ramUsed: 15, ramTotal: 16, gpuUsed: 7.5, gpuTotal: 8);
+        var s = Sample(cpu: 94, ramUsed: 15.5, ramTotal: 16, gpuUsed: 7.5, gpuTotal: 8);
         var line = MachineLoad.WarnLine(s);
         Assert.Contains("CPU  94%", line);
         Assert.Contains("RAM", line);
         Assert.Contains("GPU", line);
-        Assert.Contains("do not add", line, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Full", line);
     }
 
     static MachineSample Sample(double cpu, double ramUsed, double ramTotal, double gpuUsed, double gpuTotal) =>

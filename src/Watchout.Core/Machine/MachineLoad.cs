@@ -47,8 +47,8 @@ public static class MachineLoad
 {
     public const double CpuTight = 75;
     public const double CpuFull = 90;
-    public const double RamTight = 80;
-    public const double RamFull = 92;
+    public const double RamTight = 88;
+    public const double RamFull = 95;
     public const double GpuTight = 75;
     public const double GpuFull = 90;
     public const long FourKHeadroomBytes = 512L * 1024 * 1024;
@@ -125,14 +125,22 @@ public static class MachineLoad
         return true;
     }
 
-    public static string Headline(MachineSample s) => Grade(s) switch
+    public static string Headline(MachineSample s)
     {
-        LoadLevel.Full => "Full — do not add another 4K clip or Stage output",
-        LoadLevel.Tight => CanLoadAnother4K(s)
-            ? "Tight — another 1080p is safer than another 4K"
-            : "Tight — another 4K clip may hitch or freeze",
-        _ => "OK — room to load more Stage / video",
-    };
+        var gpu = GpuLevel(s);
+        var ram = RamLevel(s);
+        var cpu = CpuLevel(s);
+        if (gpu == LoadLevel.Full) return "Full — GPU memory is gone; stop Output or drop a layer";
+        if (ram == LoadLevel.Full) return "Full — RAM is gone; close other apps";
+        if (cpu == LoadLevel.Full) return "Full — CPU is maxed; pause or drop a live layer";
+        if (gpu == LoadLevel.Tight)
+            return CanLoadAnother4K(s)
+                ? "Tight — GPU is busy; another 1080p is safer than another 4K"
+                : "Tight — GPU is busy; another 4K may hitch";
+        if (ram == LoadLevel.Tight) return "Tight — RAM is high; close browsers (this 4K is still OK)";
+        if (cpu == LoadLevel.Tight) return "Tight — CPU is busy; another 4K may hitch";
+        return "OK — room to load more Stage / video";
+    }
 
     public static string Advice(MachineSample s)
     {
@@ -148,7 +156,7 @@ public static class MachineLoad
         if (gpu == LoadLevel.Tight)
             return "GPU is busy. One more 1080p is safer than another 4K.";
         if (ram == LoadLevel.Tight)
-            return "RAM is high. Close browsers before adding another clip.";
+            return "RAM is high (Windows + other apps). Close browsers. This laptop can still run 4K — Resolume does; WatchMe copies frames in RAM so the bar fills faster.";
         if (cpu == LoadLevel.Tight)
             return "CPU is busy. Another 4K file may hitch Stage and the wall.";
         if (s.Show.FourK >= 1.8)
