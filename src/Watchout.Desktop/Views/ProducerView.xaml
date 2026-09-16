@@ -110,12 +110,12 @@
       </Grid>
     </DockPanel>
 
-    <TabControl Grid.Row="2" Grid.Column="4" Background="#1C1C1C" BorderBrush="#111" Foreground="#E8E6E3">
-      <TabItem Header="Layers">
-        <views:LayersPanel x:Name="Layers"/>
-      </TabItem>
+    <TabControl x:Name="StudioBottom" Grid.Row="2" Grid.Column="4" Background="#1C1C1C" BorderBrush="#111" Foreground="#E8E6E3" SelectedIndex="0">
       <TabItem Header="Devices">
         <views:DevicesPanel x:Name="Devices"/>
+      </TabItem>
+      <TabItem Header="Layers">
+        <views:LayersPanel x:Name="Layers"/>
       </TabItem>
       <TabItem Header="Log">
         <views:LogPanel x:Name="Log"/>

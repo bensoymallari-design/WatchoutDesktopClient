@@ -29,6 +29,8 @@ public partial class ProducerView : UserControl
         App.Session.TimelineViewChanged += () => Dispatcher.BeginInvoke(SyncTimelineScroll);
         Loaded += (_, _) =>
         {
+            StudioBottom.SelectedIndex = 0;
+            Devices.Reload();
             SyncChrome();
             SyncTimelineScroll();
         };
