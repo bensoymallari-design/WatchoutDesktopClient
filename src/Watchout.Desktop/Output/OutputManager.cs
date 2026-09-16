@@ -39,7 +39,7 @@ public sealed class OutputManager
         win.Show();
         if (fullscreen) win.PlaceOnScreen();
         App.Session.NoteLiveOutputsChanged();
-        App.Session.Log("Output owns the H.264 decoder — Stage shows a still so 4K is not decoded twice");
+        App.Session.Log("Output on the GPU compositor — Stage shares the same H.264 decode");
         if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
             App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)

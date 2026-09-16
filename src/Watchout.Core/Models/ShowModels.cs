@@ -73,6 +73,14 @@ public enum OptimizePreset
     Broadcast
 }
 
+public enum BlendMode
+{
+    Normal,
+    Add,
+    Multiply,
+    Screen
+}
+
 public enum AccessRole
 {
     Producer,
@@ -207,6 +215,7 @@ public sealed class Cue
     public double WipeFeather { get; set; } = 8;
     public double Temperature { get; set; }
     public double Exposure { get; set; }
+    public BlendMode Blend { get; set; } = BlendMode.Normal;
     public bool ChromaKeyEnabled { get; set; }
     public string ChromaKeyColor { get; set; } = "#00FF00";
     public double ChromaKeyTolerance { get; set; } = 28;

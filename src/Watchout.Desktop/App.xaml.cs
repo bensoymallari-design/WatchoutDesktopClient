@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Models;
 using Watchout.Core.Persistence;
+using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Media;
 using Watchout.Desktop.Output;
 
@@ -25,8 +26,12 @@ public partial class App : Application
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
         LoadRecents();
         LoadSettings();
-        Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through Media Foundation / DXVA. HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
+        Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through a D3D11 compositor (Media Foundation / DXVA). HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
         Session.Log($"Media folder {Path.Combine(DataDir(), "media")} — 4K files stay on the original disk. Delete leftover copies here if the drive filled up.");
+        if (GpuEngine.TryStart())
+            Session.Log("GPU compositor — one DXVA decode shared by Stage and Output. Blend Add/Multiply/Screen, crop, wipe, chroma, and resize happen on the GPU.");
+        else if (GpuEngine.LastError is { Length: > 0 } gpuErr)
+            Session.Log("GPU compositor off — " + gpuErr + ". Falling back to MediaElement DXVA.", "warn");
         if (Settings.GpuPreference != GpuPreference.Auto)
             Session.Log($"GPU preference {Settings.GpuPreference} — pin WatchMe.exe in Windows Graphics settings. WPF cannot switch adapters itself.");
         _clock.Tick += OnClock;
@@ -92,6 +97,7 @@ public partial class App : Application
         Outputs.CloseAll();
         CaptureHub.Shutdown();
         NdiHub.Shutdown();
+        GpuEngine.Shutdown();
         PersistRecents();
         base.OnExit(e);
     }
