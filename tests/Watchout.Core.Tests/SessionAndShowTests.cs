@@ -92,6 +92,98 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void LoopWrapsAtLastClipWhenTimelineIsADayLong()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/wall.mp4", "/library/wall.mp4", probe, 1, true);
+        session.ApplyImported(media);
+        var cue = session.AddCueFromAsset(media.Id, start: 0)!;
+        var tl = session.ActiveTimeline!;
+        tl.Duration = LiveSources.LiveCueDurationMs;
+        tl.Loop = true;
+        tl.Playhead = 0;
+        session.SetPlayback(tl.Id, PlaybackState.Play);
+        session.Tick(12_500);
+        Assert.Equal(PlaybackState.Play, tl.Playback);
+        Assert.True(tl.Playhead < 10_000);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+    }
+
+    [Fact]
+    public void PlayAndSpaceSnapBackWhenPlayheadIsPastTheClip()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 605_271, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/4k.mp4", "/library/4k.mp4", probe, 1, true);
+        session.ApplyImported(media);
+        var cue = session.AddCueFromAsset(media.Id, start: 0)!;
+        var tl = session.ActiveTimeline!;
+        tl.Duration = LiveSources.LiveCueDurationMs;
+        tl.Loop = true;
+        tl.Playhead = 730_758;
+        Assert.DoesNotContain(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+
+        session.SetPlayback(tl.Id, PlaybackState.Play);
+        Assert.Equal(PlaybackState.Play, tl.Playback);
+        Assert.True(tl.Playhead < 605_271);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+
+        tl.Playhead = 730_758;
+        Assert.Equal(PlaybackState.Play, PlaybackClock.ToggleTarget(tl));
+        session.TogglePlay();
+        Assert.Equal(PlaybackState.Play, tl.Playback);
+        Assert.True(tl.Playhead < 605_271);
+
+        tl.Playhead = 730_758;
+        session.Stop(tl.Id);
+        Assert.Equal(PlaybackState.Stop, tl.Playback);
+        Assert.Equal(0, tl.Playhead);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+    }
+
+    [Fact]
+    public void OnceStopsAtLastClipWhenTimelineIsLonger()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/once.mp4", "/library/once.mp4", probe, 1, true);
+        session.ApplyImported(media);
+        session.AddCueFromAsset(media.Id, start: 0);
+        var tl = session.ActiveTimeline!;
+        tl.Duration = LiveSources.LiveCueDurationMs;
+        tl.Loop = false;
+        tl.Playhead = 0;
+        session.SetPlayback(tl.Id, PlaybackState.Play);
+        session.Tick(12_000);
+        Assert.Equal(PlaybackState.Stop, tl.Playback);
+        Assert.Equal(10_000, tl.Playhead);
+    }
+
+    [Fact]
+    public void LiveOnlyTimelineStillLoopsOnShowDuration()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.ApplyImported(LiveSources.NdiAsset("CAM 1", null));
+        var ndi = session.Show!.Assets.Single(a => a.Kind == AssetKind.Ndi);
+        session.AddCueFromAsset(ndi.Id);
+        var tl = session.ActiveTimeline!;
+        tl.Duration = 120_000;
+        tl.Loop = true;
+        tl.Playhead = 0;
+        Assert.Equal(120_000, PlaybackClock.LoopSpan(tl));
+        session.SetPlayback(tl.Id, PlaybackState.Play);
+        session.Tick(150_000);
+        Assert.Equal(PlaybackState.Play, tl.Playback);
+        Assert.True(tl.Playhead < 120_000);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show), e => e.Cue.AssetId == ndi.Id);
+    }
+
+    [Fact]
     public void TickUsesClockNotFullUiRebuild()
     {
         var session = new ProducerSession();

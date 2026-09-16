@@ -231,7 +231,7 @@ public sealed class ProducerSession
     {
         var tl = ActiveTimeline;
         if (tl is null) return;
-        SetPlayback(tl.Id, tl.Playback == PlaybackState.Play ? PlaybackState.Pause : PlaybackState.Play);
+        SetPlayback(tl.Id, PlaybackClock.ToggleTarget(tl));
     }
 
     public void Play(string? timelineId = null) => SetPlayback(timelineId ?? ActiveTimelineId, PlaybackState.Play);
@@ -1333,7 +1333,7 @@ public sealed class ProducerSession
         UpdateTimeline(tl.Id, t =>
         {
             t.Duration = duration;
-            if (t.Playhead > duration) t.Playhead = duration;
+            if (t.Playhead >= duration) t.Playhead = 0;
         });
         TimelineScroll = 0;
         ClampTimelineView();

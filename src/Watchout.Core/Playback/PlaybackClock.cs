@@ -12,12 +12,13 @@ public static class PlaybackClock
         {
             if (!tl.Enabled || tl.Playback != PlaybackState.Play) continue;
             tl.Playhead += dtMs * (tl.Rate <= 0 ? 1 : tl.Rate);
-            if (tl.Playhead >= tl.Duration)
+            var span = LoopSpan(tl);
+            if (tl.Playhead >= span)
             {
-                if (tl.Loop) tl.Playhead = WrapPlayhead(tl.Playhead, tl.Duration);
+                if (tl.Loop) tl.Playhead = WrapPlayhead(tl.Playhead, span);
                 else
                 {
-                    tl.Playhead = tl.Duration;
+                    tl.Playhead = span;
                     tl.Playback = PlaybackState.Stop;
                 }
             }
@@ -26,8 +27,47 @@ public static class PlaybackClock
 
     public static void SetPlayback(Models.Timeline timeline, PlaybackState state)
     {
-        timeline.Playback = state;
         if (state == PlaybackState.Stop) timeline.Playhead = 0;
+        else if (state == PlaybackState.Play) timeline.Playhead = SnapToPlayable(timeline);
+        timeline.Playback = state;
+    }
+
+    /// <summary>
+    /// Space/Play while already running pauses — unless the clock has run off the
+    /// last clip, in which case Play must snap back onto media instead of freezing
+    /// on a black Stage and Output.
+    /// </summary>
+    public static PlaybackState ToggleTarget(Models.Timeline timeline)
+    {
+        if (timeline.Playback != PlaybackState.Play) return PlaybackState.Play;
+        return timeline.Playhead >= LoopSpan(timeline) ? PlaybackState.Play : PlaybackState.Pause;
+    }
+
+    /// <summary>
+    /// Loop and stop against the last finite clip, not a leftover 24 h timeline
+    /// length from an NDI/capture cue. Day-long live cues stay on screen because
+    /// they are free-running; H.264 hides the instant playhead &gt;= cue end.
+    /// </summary>
+    public static double LoopSpan(Models.Timeline timeline)
+    {
+        var duration = Math.Max(1, timeline.Duration);
+        var content = TimelineMath.ContentEnd(timeline.Cues);
+        if (content <= 0) return duration;
+        return Math.Min(duration, content);
+    }
+
+    /// <summary>
+    /// Play from empty time past the last clip jumps back onto media so Stage
+    /// and Output light up again.
+    /// </summary>
+    public static double SnapToPlayable(Models.Timeline timeline)
+    {
+        var span = LoopSpan(timeline);
+        var playhead = timeline.Playhead;
+        if (double.IsNaN(playhead) || double.IsInfinity(playhead) || playhead < 0) playhead = 0;
+        if (playhead >= span)
+            playhead = timeline.Loop ? WrapPlayhead(playhead, span) : 0;
+        return playhead;
     }
 
     /// <summary>
