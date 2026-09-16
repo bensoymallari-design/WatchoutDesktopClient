@@ -31,6 +31,7 @@ public sealed class WhatsNewWindow : Window
                     "Startup splash — Resolume-style boot: Initializing framework, application controller, audio engine, video engine, display, NDI, capture, codec. Those engines actually start before Welcome opens (WASAPI, D3D11 compositor, screens, NDI Runtime, capture cards, ffmpeg).\n" +
                     "Black screen while PLAY — Stage and Output no longer drop the shared H.264 decoder when one Present is empty. Loop wrap snaps back onto the clip, the last frame is held, and a stalled DXVA decoder is rebuilt instead of leaving a black wall.\n" +
                     "Devices tab — Producer opens on Devices (screens, capture, audio) in the lower-right, not Layers. Layers and Log are still there.\n" +
+                    "Stage canvas — while Output is live, Stage does not run a second 4K decode (that froze laptops). Each display shows its name in the center (Display 1) and “Output live — picture is on the wall.” Close Output to preview video on Stage again.\n" +
                     "GPU compositor — D3D11 + Media Foundation DXVA, one decode shared by Stage and Output (Resolume / WATCHOUT style). Resize, crop, wipe, chroma, and blend (Normal / Add / Multiply / Screen) run on the GPU so the wall does not hitch.\n" +
                     "Blind edit — Output holds a snapshot while you change Producer. Ctrl+T Take to Output.\n" +
                     "WATCHOUT 6 import — File → Import. JSON, XML, or a zip with JSON inside. Binary Dataton .watch is reported, not decoded.\n" +
