@@ -6,6 +6,7 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Watchout.Core.Gpu;
 using Watchout.Core.Models;
+using Watchout.Desktop.Interop;
 using Watchout.Desktop.Media;
 
 namespace Watchout.Desktop.Gpu;
@@ -117,11 +118,13 @@ public static class GpuEngine
             lock (Gate)
             {
                 var playing = keepLastFrame || draws.Any(d => d.Playing);
+                var child = NativeWindow.IsChild(hwnd);
                 if (!Swaps.TryGetValue(hwnd, out var swap) || swap.Width != width || swap.Height != height)
                 {
                     swap?.Dispose();
-                    swap = OutputSwap.Create(_gpu, hwnd, width, height);
+                    swap = OutputSwap.Create(_gpu, hwnd, width, height, child);
                     Swaps[hwnd] = swap;
+                    NoteSwap(hwnd, width, height, swap.Flip, child);
                 }
                 if (draws.Count > 0 || !GpuSourceLifetime.FreezeIdleWhilePlaying(playing, draws.Count))
                     SyncSources(draws, playAudio, playing);
@@ -132,9 +135,18 @@ public static class GpuEngine
                 return true;
             }
         }
-        catch (Exception ex)
+        catch (SharpGenException ex) when (OutputViewMath.TearGpuOnPresentError(ex.HResult))
         {
             Recover(ex);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            lock (Gate)
+            {
+                if (Swaps.Remove(hwnd, out var swap)) swap.Dispose();
+            }
+            NoteSwapRetry(ex.Message);
             return false;
         }
     }
@@ -176,6 +188,8 @@ public static class GpuEngine
                 case GpuSourceKind.File:
                     var decoder = FileDecoder(draw, playAudio);
                     if (decoder is null) break;
+                    if (decoder.UsedSoftwareFallback)
+                        NoteSoftware(draw.SourceKey);
                     decoder.Sync(draw.MediaTimeMs, draw.Playing, draw.Loop, draw.Volume, playAudio);
                     if (decoder.TryCopyFrame(out var pixels, out var w, out var h, out var stride, out var dirty)
                         && (dirty || _comp is null || !_comp.Has(draw.SourceKey)))
@@ -233,6 +247,10 @@ public static class GpuEngine
 
     static readonly HashSet<string> DecodeLogged = new(StringComparer.OrdinalIgnoreCase);
 
+    static readonly HashSet<string> SoftwareLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    static readonly HashSet<string> SwapLogged = new(StringComparer.OrdinalIgnoreCase);
+
     static void NoteMissing(string path)
     {
         if (!MissingLogged.Add(path)) return;
@@ -243,6 +261,28 @@ public static class GpuEngine
     {
         if (!DecodeLogged.Add(key + error)) return;
         App.Session.Log($"DXVA could not play {key}: {error} — try another H.264 MP4, or Stop then Play", "error");
+    }
+
+    static void NoteSoftware(string key)
+    {
+        if (!SoftwareLogged.Add(key)) return;
+        App.Session.Log($"Playing {key} without DXVA hardware transforms — RGB32 still runs on this GPU");
+    }
+
+    static void NoteSwap(nint hwnd, int w, int h, bool flip, bool child)
+    {
+        var key = $"{hwnd}:{w}x{h}:{flip}:{child}";
+        if (!SwapLogged.Add(key)) return;
+        App.Session.Log($"Output swap {w}×{h} {(flip ? "flip" : "blt")} {(child ? "child HWND" : "window")}");
+    }
+
+    static DateTime _swapRetryUtc;
+
+    static void NoteSwapRetry(string message)
+    {
+        if ((DateTime.UtcNow - _swapRetryUtc).TotalSeconds < 2) return;
+        _swapRetryUtc = DateTime.UtcNow;
+        App.Session.Log($"Output swap retry after {message}", "warn");
     }
 
     static void AgeIdle(HashSet<string> live, bool playing)
@@ -349,6 +389,8 @@ public static class GpuEngine
         Stills.Clear();
         Idle.Clear();
         Rebuilt.Clear();
+        SoftwareLogged.Clear();
+        SwapLogged.Clear();
         foreach (var hold in LiveHolds)
         {
             if (hold.Key.StartsWith("ndi:", StringComparison.OrdinalIgnoreCase))
@@ -381,16 +423,31 @@ sealed class OutputSwap : IDisposable
     public ID3D11RenderTargetView Rtv { get; }
     public int Width { get; }
     public int Height { get; }
+    public bool Flip { get; }
 
-    OutputSwap(IDXGISwapChain1 chain, ID3D11RenderTargetView rtv, int w, int h)
+    OutputSwap(IDXGISwapChain1 chain, ID3D11RenderTargetView rtv, int w, int h, bool flip)
     {
         Chain = chain;
         Rtv = rtv;
         Width = w;
         Height = h;
+        Flip = flip;
     }
 
-    public static OutputSwap Create(GpuDevice gpu, nint hwnd, int width, int height)
+    public static OutputSwap Create(GpuDevice gpu, nint hwnd, int width, int height, bool child)
+    {
+        var wantFlip = OutputViewMath.FlipModelAllowed(child);
+        try
+        {
+            return CreateCore(gpu, hwnd, width, height, wantFlip);
+        }
+        catch when (wantFlip)
+        {
+            return CreateCore(gpu, hwnd, width, height, flip: false);
+        }
+    }
+
+    static OutputSwap CreateCore(GpuDevice gpu, nint hwnd, int width, int height, bool flip)
     {
         var desc = new SwapChainDescription1
         {
@@ -399,9 +456,9 @@ sealed class OutputSwap : IDisposable
             Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0),
             BufferUsage = Usage.RenderTargetOutput,
-            BufferCount = 2,
+            BufferCount = flip ? 2u : 1u,
             Scaling = Scaling.Stretch,
-            SwapEffect = SwapEffect.FlipDiscard,
+            SwapEffect = flip ? SwapEffect.FlipDiscard : SwapEffect.Discard,
             AlphaMode = AlphaMode.Ignore,
         };
         var chain = gpu.Factory.CreateSwapChainForHwnd(gpu.Device, hwnd, desc);
@@ -413,7 +470,7 @@ sealed class OutputSwap : IDisposable
         using var back = chain.GetBuffer<ID3D11Texture2D>(0);
         var rtv = gpu.Device.CreateRenderTargetView(back);
         gpu.Context.ClearRenderTargetView(rtv, new Vortice.Mathematics.Color4(0, 0, 0, 1));
-        return new OutputSwap(chain, rtv, width, height);
+        return new OutputSwap(chain, rtv, width, height, flip);
     }
 
     public void Dispose()

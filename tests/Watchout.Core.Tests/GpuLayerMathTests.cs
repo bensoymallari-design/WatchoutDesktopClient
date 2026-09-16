@@ -117,6 +117,30 @@ public class GpuLayerMathTests
     }
 
     [Fact]
+    public void OutputPresentsAtTheScreenSizeNotThe64HostStub()
+    {
+        var nested = OutputViewMath.PresentSize(64, 64, 3840, 2160, 3840, 2160);
+        Assert.Equal(3840, nested.W);
+        Assert.Equal(2160, nested.H);
+        var dip = OutputViewMath.DipToPixels(2560, 1440, 1.5);
+        Assert.Equal(3840, dip.W);
+        Assert.Equal(2160, dip.H);
+        Assert.True(OutputViewMath.HostNeedsResize(64, 64, 3840, 2160));
+        Assert.False(OutputViewMath.HostNeedsResize(3840, 2160, 3840, 2160));
+        Assert.False(OutputViewMath.FlipModelAllowed(hwndIsChild: true));
+        Assert.True(OutputViewMath.FlipModelAllowed(hwndIsChild: false));
+        Assert.True(OutputViewMath.PreferTopLevelHwnd(64, 64, 3840, 2160));
+        Assert.False(OutputViewMath.PreferTopLevelHwnd(3840, 2160, 3840, 2160));
+        Assert.True(OutputViewMath.RetryOpenWithoutHardwareTransforms(true));
+        Assert.False(OutputViewMath.RetryOpenWithoutHardwareTransforms(false));
+        Assert.True(OutputViewMath.TearGpuOnPresentError(unchecked((int)0x887A0005)));
+        Assert.False(OutputViewMath.TearGpuOnPresentError(unchecked((int)0x887A0001)));
+        var widget = OutputViewMath.PresentSize(1920, 1080, 0, 0, 0, 0);
+        Assert.Equal(1920, widget.W);
+        Assert.Equal(1080, widget.H);
+    }
+
+    [Fact]
     public void BlendModeRoundTripsInShowJson()
     {
         var session = new ProducerSession();
