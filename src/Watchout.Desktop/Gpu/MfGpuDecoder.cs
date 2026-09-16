@@ -26,11 +26,34 @@ sealed class MfGpuDecoder : IDisposable
     bool _wantAudio;
     BufferedWaveProvider? _pcm;
     IWavePlayer? _wave;
+    DateTime _lastFrameUtc = DateTime.UtcNow;
     string? _error;
 
     public string? Error { get { lock (_gate) return _error; } }
     public bool Ready { get { lock (_gate) return _ready; } }
     public double DurationMs { get { lock (_gate) return _durationMs; } }
+    public bool Dead
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_error is not null) return true;
+                return _thread is { IsAlive: false };
+            }
+        }
+    }
+    public bool Stalled
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (!_playing || !_ready) return false;
+                return (DateTime.UtcNow - _lastFrameUtc).TotalMilliseconds >= VideoSync.StallMs;
+            }
+        }
+    }
 
     public MfGpuDecoder(string fileUrl, bool audio)
     {
@@ -100,6 +123,7 @@ sealed class MfGpuDecoder : IDisposable
                 }
                 Pump(target, playing, loop);
                 if (!playing) Thread.Sleep(12);
+                else Thread.Sleep(8);
             }
         }
         catch (Exception ex)
@@ -222,10 +246,14 @@ sealed class MfGpuDecoder : IDisposable
         if ((flags & MfNative.EndOfStream) != 0)
         {
             if (sample is not null) Marshal.ReleaseComObject(sample);
-            if (_loop) Seek(reader, 0);
+            if (_loop || _playing) Seek(reader, 0);
             return;
         }
-        if (sample is null) return;
+        if (sample is null)
+        {
+            Thread.Sleep(4);
+            return;
+        }
         try
         {
             if (stream == MfNative.AudioStream || stream == 1)
@@ -246,6 +274,7 @@ sealed class MfGpuDecoder : IDisposable
                     _frameTime100ns = time;
                     _ready = true;
                     _dirty = true;
+                    _lastFrameUtc = DateTime.UtcNow;
                 }
             }
             finally

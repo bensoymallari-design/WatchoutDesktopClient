@@ -29,6 +29,7 @@ public sealed class WhatsNewWindow : Window
                     "Linear wipe — angle, feather, completion. Temperature and Exposure overlays. Chroma key on stills with Stage eyedropper. Playback speed. Placeholder cues. Replace media (keep old / new size / fit). Display image mask. Pixel-perfect placement. Auto-start.\n\n" +
                     "Added in this update:\n" +
                     "Startup splash — Resolume-style boot: Initializing framework, application controller, audio engine, video engine, display, NDI, capture, codec. Those engines actually start before Welcome opens (WASAPI, D3D11 compositor, screens, NDI Runtime, capture cards, ffmpeg).\n" +
+                    "Black screen while PLAY — Stage and Output no longer drop the shared H.264 decoder when one Present is empty. Loop wrap snaps back onto the clip, the last frame is held, and a stalled DXVA decoder is rebuilt instead of leaving a black wall.\n" +
                     "GPU compositor — D3D11 + Media Foundation DXVA, one decode shared by Stage and Output (Resolume / WATCHOUT style). Resize, crop, wipe, chroma, and blend (Normal / Add / Multiply / Screen) run on the GPU so the wall does not hitch.\n" +
                     "Blind edit — Output holds a snapshot while you change Producer. Ctrl+T Take to Output.\n" +
                     "WATCHOUT 6 import — File → Import. JSON, XML, or a zip with JSON inside. Binary Dataton .watch is reported, not decoded.\n" +

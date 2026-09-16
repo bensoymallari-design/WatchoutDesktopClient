@@ -15,7 +15,7 @@ public static class PlaybackClock
             var span = LoopSpan(tl);
             if (tl.Playhead >= span)
             {
-                if (tl.Loop) tl.Playhead = WrapPlayhead(tl.Playhead, span);
+                if (tl.Loop) tl.Playhead = SnapToPlayable(tl);
                 else
                 {
                     tl.Playhead = span;
@@ -79,7 +79,7 @@ public static class PlaybackClock
         {
             if (cue.Type != CueType.Media || hidden.Contains(cue.LayerId)) continue;
             var ev = Tweens.EvaluateCue(cue, playhead, timeline.Cues);
-            if (ev is not null && ev.Opacity > 0.5) return true;
+            if (ev is not null && ev.Opacity > 0) return true;
         }
         return false;
     }
@@ -127,7 +127,7 @@ public static class PlaybackClock
         var list = new List<EvaluatedCue>();
         foreach (var tl in show.Timelines.Where(t => t.Enabled))
         {
-            foreach (var ev in VisibleCues(tl).Where(e => e.Cue.Type == CueType.Media && e.Opacity > 0.5))
+            foreach (var ev in VisibleCues(tl).Where(e => e.Cue.Type == CueType.Media && e.Opacity > 0))
             {
                 var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
                 if (asset is { Kind: AssetKind.Composition } && asset.Children.Count > 0)
@@ -155,7 +155,7 @@ public static class PlaybackClock
         foreach (var child in asset.Children)
         {
             var ev = Tweens.EvaluateCue(child, parent.LocalTime, asset.Children);
-            if (ev is null || ev.Opacity <= 0.5) continue;
+            if (ev is null || ev.Opacity <= 0) continue;
             var copy = ShowSerializer.LoadCue(ShowSerializer.SaveCue(child));
             copy.Id = $"{parent.Cue.Id}/{child.Id}";
             list.Add(new EvaluatedCue

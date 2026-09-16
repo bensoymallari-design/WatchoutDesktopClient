@@ -349,10 +349,11 @@ public sealed class StageSurface : Canvas
         foreach (var el in stack)
             el.OnRestack(stack.Count > 1 ? Restack : null);
         Restack();
-        PresentGpu(gpuDraws, gpuOn);
+        var playing = show.Timelines.Any(t => t.Enabled && t.Playback == PlaybackState.Play);
+        PresentGpu(gpuDraws, gpuOn, GpuSourceLifetime.KeepLastFrame(playing, gpuDraws.Count));
     }
 
-    void PresentGpu(List<Watchout.Core.Gpu.GpuDraw> draws, bool gpuOn)
+    void PresentGpu(List<Watchout.Core.Gpu.GpuDraw> draws, bool gpuOn, bool keepLastFrame)
     {
         if (!gpuOn)
         {
@@ -373,7 +374,7 @@ public sealed class StageSurface : Canvas
         if (LayoutDiffers(_gpu.Height, ActualHeight)) _gpu.Height = Math.Max(2, ActualHeight);
         SetLeft(_gpu, 0);
         SetTop(_gpu, 0);
-        _gpu.Present(draws, ViewDisplay, PlayAudio);
+        _gpu.Present(draws, ViewDisplay, PlayAudio, keepLastFrame);
     }
 
     void DropAllMedia()
