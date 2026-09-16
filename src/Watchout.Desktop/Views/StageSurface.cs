@@ -183,13 +183,14 @@ public sealed class StageSurface : Canvas
             var r = Map(display.X, display.Y, display.Width, display.Height, originX, originY, scale);
             var selected = session.Selection.Kind == SelectionKind.Display && session.Selection.Ids.Contains(display.Id);
             var hover = display.Id == _hoverDisplayId;
+            var outputLive = session.LiveOutputs.Contains(display.Id) || session.StageYieldsFileDecoder;
             var border = new Border
             {
                 Width = Math.Max(2, r.Width),
                 Height = Math.Max(2, r.Height),
                 BorderBrush = new SolidColorBrush(hover ? Color.FromRgb(74, 222, 128) : selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(80, 80, 80)),
                 BorderThickness = new Thickness(hover || selected ? 3 : 1),
-                Background = new SolidColorBrush(hover ? Color.FromArgb(50, 74, 222, 128) : Color.FromArgb(28, 48, 48, 48)),
+                Background = new SolidColorBrush(hover ? Color.FromArgb(50, 74, 222, 128) : Color.FromArgb(40, 20, 20, 20)),
                 IsHitTestVisible = false,
             };
             SetLeft(border, r.X);
@@ -197,23 +198,56 @@ public sealed class StageSurface : Canvas
             SetZIndex(border, 0);
             Children.Add(border);
             _chrome.Add(border);
+
             var cap = LiveSources.CaptureNameOnDisplay(show, display.Id);
-            var key = display.Role == DisplayRole.Key ? $"  ·  KEY {Math.Max(1, display.KeyChannel)}" : "";
-            var label = new TextBlock
+            var key = display.Role == DisplayRole.Key ? $"KEY {Math.Max(1, display.KeyChannel)}" : "";
+            var hud = new StackPanel
             {
-                Text = cap is null
-                    ? session.StageEditMode == StageEditMode.Displays || selected
-                        ? $"{display.Name}{key}  {display.Width:0}×{display.Height:0}  ·  canvas"
-                        : $"{display.Name}{key}  {display.Width:0}×{display.Height:0}"
-                    : $"{display.Name}{key}  ·  {cap}",
-                Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
-                FontSize = 11,
+                Width = Math.Max(2, r.Width),
                 IsHitTestVisible = false,
             };
-            SetLeft(label, r.X + 6);
-            SetTop(label, r.Y + 4);
-            Children.Add(label);
-            _chrome.Add(label);
+            hud.Children.Add(new TextBlock
+            {
+                Text = "STAGE",
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromArgb(180, 245, 166, 35)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+            hud.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(display.Name) ? "Display" : display.Name,
+                FontSize = Math.Clamp(r.Height * 0.09, 18, 42),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromArgb(235, 245, 166, 35)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            var sub = cap
+                ?? (outputLive
+                    ? $"{display.Width:0}×{display.Height:0}  ·  Output live — picture is on the wall"
+                    : string.IsNullOrEmpty(key)
+                        ? $"{display.Width:0}×{display.Height:0}"
+                        : $"{display.Width:0}×{display.Height:0}  ·  {key}");
+            hud.Children.Add(new TextBlock
+            {
+                Text = sub,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(180, 175, 168)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(8, 8, 8, 0),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            var hudH = Math.Min(120, Math.Max(64, r.Height * 0.28));
+            SetLeft(hud, r.X);
+            SetTop(hud, r.Y + Math.Max(0, (r.Height - hudH) / 2));
+            SetZIndex(hud, 200);
+            Children.Add(hud);
+            _chrome.Add(hud);
             if (selected)
                 DrawHandles(r, 30);
         }
@@ -269,6 +303,13 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
+            // Output already owns the H.264 decoder. Leave Stage as the labeled
+            // display canvas so a second 4K DXVA / GPU readback cannot freeze the PC.
+            if (GpuLayerMath.StageYieldsFilePreview(Editing, session.StageYieldsFileDecoder, asset))
+            {
+                if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
+                continue;
+            }
             if (gpuOn && asset is not null && GpuLayerMath.UsesGpu(asset))
             {
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
@@ -355,7 +396,7 @@ public sealed class StageSurface : Canvas
 
     void PresentGpu(List<Watchout.Core.Gpu.GpuDraw> draws, bool gpuOn, bool keepLastFrame)
     {
-        if (!gpuOn)
+        if (!gpuOn || (Editing && draws.Count == 0))
         {
             if (_gpu is not null)
             {
@@ -467,11 +508,7 @@ public sealed class StageSurface : Canvas
             return Placeholder(native, asset.Name, asset.Color);
 
         if (Editing && App.Session.StageYieldsFileDecoder)
-        {
-            var still = MediaLibrary.LoadStill(asset);
-            if (still is null) return Placeholder(native, $"{asset.Name}\nplaying on Output", asset.Color);
-            return new Image { Source = still, Stretch = Stretch.Fill, Width = native.W, Height = native.H, IsHitTestVisible = false };
-        }
+            return null;
 
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
