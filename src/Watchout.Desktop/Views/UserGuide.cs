@@ -25,6 +25,8 @@ public sealed class UserGuideWindow : Window
                 LineHeight = 22,
                 Text =
                     "WatchMe maps the WATCHOUT 7.8 Producer workflow onto a native Windows app. Pull origin/main (or this branch) to get it — missing a menu usually means the laptop is still on an older build.\n\n" +
+                    "Startup\n" +
+                    "Launch shows a splash that names each engine and starts it: folders/settings, the 60 Hz show controller, WASAPI audio, D3D11/DXVA video, attached screens, NDI Runtime, HDMI/SDI capture cards, ffmpeg. Welcome opens after that boot, so Play is not the first time those drivers wake up. Help → About lists which steps came up.\n\n" +
                     "Stage and Output\n" +
                     "Cues bind to displays by position on the canvas, not a DisplayId field. Output is any extra OS screen (Win+P Extend). Pick the wall/TV, not the Producer laptop. Esc closes Output. A D3D11 compositor decodes each H.264 file once (Media Foundation / DXVA) and draws Stage plus every wall from that texture — resize and blend stay on the GPU.\n\n" +
                     "Blind edit\n" +

@@ -27,6 +27,8 @@ Build and install from **`main`**. You do not need an old `cursor/…` branch to
 
 Imported clips are **linked**, not copied into AppData. 4K files stream from the original disk path.
 
+Launch shows a Resolume-style splash that **initializes the engines** before Welcome: framework (folders/settings), application controller (60 Hz clock), WASAPI audio, D3D11/DXVA video, displays, NDI Runtime, capture cards, ffmpeg. Those are real startups, not labels. Help → About lists which ones came up.
+
 Opening an old Electron `.watch.json` prefers the original H.264 file over a leftover `.webm` sidecar.
 
 Loop a file with **Loop** checked. The decoder restarts when the clip hits the end so Stage and the wall do not go black.

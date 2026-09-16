@@ -73,6 +73,11 @@ public static class NdiRuntime
         return list.OrderBy(a => a.Name).ToList();
     }
 
+    public static bool Warm()
+    {
+        lock (Gate) return EnsureLoaded();
+    }
+
     static bool EnsureLoaded()
     {
         if (_ready) return true;
