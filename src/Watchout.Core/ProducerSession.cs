@@ -32,6 +32,7 @@ public sealed class ProducerSession
     public double TimelineViewHeight { get; private set; } = 200;
     public string? HoverCueId { get; set; }
     public HashSet<string> LiveOutputs { get; } = [];
+    public int DecoderEpoch { get; private set; }
 
     readonly List<string> _history = [];
     readonly List<string> _future = [];
@@ -218,11 +219,15 @@ public sealed class ProducerSession
             : Show.Timelines.Where(t => t.Id == timelineId);
         foreach (var tl in targets)
             PlaybackClock.SetPlayback(tl, state);
+        if (state is PlaybackState.Play or PlaybackState.Stop)
+            DecoderEpoch++;
         Log(state switch
         {
-            PlaybackState.Play => "Play — DXVA H.264 outputs follow this clock",
+            PlaybackState.Play => DecoderEpoch <= 1
+                ? "Play — DXVA H.264 outputs follow this clock"
+                : "Play — restarting the H.264 decoder",
             PlaybackState.Pause => "Pause",
-            _ => "Stop",
+            _ => "Stop — released the H.264 decoder",
         });
         Changed?.Invoke();
     }

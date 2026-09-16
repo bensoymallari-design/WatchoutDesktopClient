@@ -228,6 +228,22 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void PlayAndStopBumpTheDecoderEpoch()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        Assert.Equal(0, session.DecoderEpoch);
+        session.Play();
+        Assert.Equal(1, session.DecoderEpoch);
+        session.Play();
+        Assert.Equal(2, session.DecoderEpoch);
+        session.Pause();
+        Assert.Equal(2, session.DecoderEpoch);
+        session.Stop();
+        Assert.Equal(3, session.DecoderEpoch);
+    }
+
+    [Fact]
     public void LiveCueMoveUsesLayoutNotFullRebuild()
     {
         var session = new ProducerSession();

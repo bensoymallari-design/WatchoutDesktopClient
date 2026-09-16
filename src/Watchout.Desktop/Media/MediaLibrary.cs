@@ -19,19 +19,8 @@ public static class MediaLibrary
         {
             if (!File.Exists(src)) continue;
             var bytes = new FileInfo(src).Length;
-            var linked = !MediaPolicy.ShouldCopyOnImport(bytes);
-            string dest;
-            if (linked)
-            {
-                dest = src;
-                session.Log($"Linking {Path.GetFileName(src)} ({MediaPolicy.FormatBytes(bytes)}) — playing from the original disk file", "warn");
-            }
-            else
-            {
-                dest = Path.Combine(root, $"{Ids.New("file")}{Path.GetExtension(src)}");
-                File.Copy(src, dest, true);
-                session.Log($"Copying {Path.GetFileName(src)} ({MediaPolicy.FormatBytes(bytes)}) into the media library");
-            }
+            var dest = src;
+            session.Log($"Linking {Path.GetFileName(src)} ({MediaPolicy.FormatBytes(bytes)}) — playing from the original disk file, not copying into AppData");
 
             var probe = await FfmpegTools.ProbeAsync(dest);
             if (Codecs.ExtOf(src) == "wav" && WavHeader.TryReadFile(dest, out var wav))
@@ -65,7 +54,7 @@ public static class MediaLibrary
                 session.Log($"Using prepared H.264 next to {Path.GetFileName(src)} — DXVA playback starts immediately");
             }
 
-            var media = MediaImport.FromProbe(src, dest, probe, bytes, linked);
+            var media = MediaImport.FromProbe(src, dest, probe, bytes, linked: true);
             if (prepared is not null)
             {
                 media.ProxyPath = prepared;
