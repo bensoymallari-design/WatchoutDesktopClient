@@ -11,12 +11,22 @@ public static class VideoSync
     public const double SeekCooldownMs = 1000;
     public const double ScrubSeekMs = 120;
 
+    public const double StallMs = 4000;
+
     public static bool SeekOnPlayStart(double driftMs) => driftMs > StartSeekMs;
 
     public static bool ReseekWhilePlaying(double driftMs, double msSinceSeek) =>
         msSinceSeek >= SeekCooldownMs && driftMs > PlayReseekMs;
 
     public static bool SeekWhileIdle(double driftMs) => driftMs > ScrubSeekMs;
+
+    /// <summary>
+    /// DXVA can freeze after a long 4K run (around an hour of dual Stage+Output
+    /// decode). Position stops advancing and new Play() on the same MediaElement
+    /// stays black — rebuild the decoder.
+    /// </summary>
+    public static bool DecoderStalled(bool playing, double msSinceAdvance, double msSinceSeek) =>
+        playing && msSinceSeek >= StallMs && msSinceAdvance >= StallMs;
 
     /// <summary>
     /// Timeline loop jumped the clock backward. The file decoder is still at EOF

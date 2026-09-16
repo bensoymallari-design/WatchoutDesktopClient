@@ -448,6 +448,8 @@ public sealed class ProducerSession
                 if (end > tl.Duration)
                     tl.Duration = TimelineMath.ExtendDurationTo(tl.Duration, end);
                 ApplyRevealTime(cue.Start, end);
+                if (tl.Playback == PlaybackState.Play && !PlaybackClock.HasVisibleMediaCue(tl, tl.Playhead))
+                    tl.Playhead = cue.Start;
             }
             var layerIndex = tl.Layers.FindIndex(l => l.Id == layer.Id);
             if (layerIndex >= 0) ApplyRevealLayer(layerIndex);

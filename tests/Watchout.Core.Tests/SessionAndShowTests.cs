@@ -145,6 +145,33 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void PuttingTheClipBackWhilePlayheadIsPastSnapsOntoIt()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/wall.mp4", "/library/wall.mp4", probe, 1, true);
+        session.ApplyImported(media);
+        var first = session.AddCueFromAsset(media.Id, start: 0)!;
+        var tl = session.ActiveTimeline!;
+        tl.Duration = LiveSources.LiveCueDurationMs;
+        tl.Loop = true;
+        tl.Playhead = 3_600_000;
+        session.SetPlayback(tl.Id, PlaybackState.Play);
+        Assert.True(tl.Playhead < 10_000);
+
+        session.DeleteSelected();
+        Assert.DoesNotContain(tl.Cues, c => c.Id == first.Id);
+        tl.Playhead = 3_600_000;
+        Assert.False(PlaybackClock.HasVisibleMediaCue(tl, tl.Playhead));
+        var again = session.AddCueFromAsset(media.Id, start: 0)!;
+        Assert.Equal(0, tl.Playhead);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == again.Id);
+        Assert.Equal(0, PlaybackClock.LoopFileTime(3_600_000, 10_000));
+        Assert.Equal(500, PlaybackClock.LoopFileTime(10_500, 10_000));
+    }
+
+    [Fact]
     public void OnceStopsAtLastClipWhenTimelineIsLonger()
     {
         var session = new ProducerSession();

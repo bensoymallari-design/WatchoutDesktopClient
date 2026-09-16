@@ -35,4 +35,13 @@ public class VideoSyncTests
         Assert.True(VideoSync.RestartAfterWrap(21_000, 16));
         Assert.False(VideoSync.RestartAfterWrap(16, 21_000));
     }
+
+    [Fact]
+    public void DecoderStalledAfterTheClockStopsAdvancing()
+    {
+        Assert.False(VideoSync.DecoderStalled(false, 10_000, 10_000));
+        Assert.False(VideoSync.DecoderStalled(true, 500, 10_000));
+        Assert.False(VideoSync.DecoderStalled(true, 10_000, 500));
+        Assert.True(VideoSync.DecoderStalled(true, 5_000, 5_000));
+    }
 }

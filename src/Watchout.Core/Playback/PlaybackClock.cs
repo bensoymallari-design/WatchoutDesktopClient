@@ -67,7 +67,31 @@ public static class PlaybackClock
         if (double.IsNaN(playhead) || double.IsInfinity(playhead) || playhead < 0) playhead = 0;
         if (playhead >= span)
             playhead = timeline.Loop ? WrapPlayhead(playhead, span) : 0;
+        if (!HasVisibleMediaCue(timeline, playhead))
+            playhead = TimelineMath.FirstFiniteMediaStart(timeline.Cues);
         return playhead;
+    }
+
+    public static bool HasVisibleMediaCue(Models.Timeline timeline, double playhead)
+    {
+        var hidden = timeline.Layers.Where(l => !l.Enabled).Select(l => l.Id).ToHashSet();
+        foreach (var cue in timeline.Cues)
+        {
+            if (cue.Type != CueType.Media || hidden.Contains(cue.LayerId)) continue;
+            var ev = Tweens.EvaluateCue(cue, playhead, timeline.Cues);
+            if (ev is not null && ev.Opacity > 0.5) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Loop the H.264 file inside a longer cue. After ~1 hour the clock can still
+    /// sit inside a leftover day-long bar while the decoder is already at EOF.
+    /// </summary>
+    public static double LoopFileTime(double localMs, double fileDurationMs)
+    {
+        if (fileDurationMs <= 1) return Math.Max(0, localMs);
+        return WrapPlayhead(localMs, fileDurationMs);
     }
 
     /// <summary>
