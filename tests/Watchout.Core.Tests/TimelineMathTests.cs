@@ -67,6 +67,11 @@ public class TimelineMathTests
         Assert.Equal(22_000, TimelineMath.ContentEnd([shortClip, longClip, live, marker]));
         Assert.Equal(22_000, TimelineMath.FitDuration(22_000));
         Assert.InRange(TimelineMath.FitZoom(22_000, 780, 120), 0.02, 0.04);
+        var hour = Cue("hour", "l1", 0, 90 * 60 * 1000);
+        Assert.Equal(90 * 60 * 1000, TimelineMath.ContentEnd([hour, live]));
+        Assert.Equal(0, TimelineMath.FirstFiniteMediaStart([live, marker]));
+        Assert.Equal(0, TimelineMath.FirstFiniteMediaStart([longClip, shortClip]));
+        Assert.Equal(2_000, TimelineMath.FirstFiniteMediaStart([longClip]));
     }
 
     [Fact]

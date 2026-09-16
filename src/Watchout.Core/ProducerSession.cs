@@ -231,7 +231,7 @@ public sealed class ProducerSession
     {
         var tl = ActiveTimeline;
         if (tl is null) return;
-        SetPlayback(tl.Id, tl.Playback == PlaybackState.Play ? PlaybackState.Pause : PlaybackState.Play);
+        SetPlayback(tl.Id, PlaybackClock.ToggleTarget(tl));
     }
 
     public void Play(string? timelineId = null) => SetPlayback(timelineId ?? ActiveTimelineId, PlaybackState.Play);
@@ -448,6 +448,8 @@ public sealed class ProducerSession
                 if (end > tl.Duration)
                     tl.Duration = TimelineMath.ExtendDurationTo(tl.Duration, end);
                 ApplyRevealTime(cue.Start, end);
+                if (tl.Playback == PlaybackState.Play && !PlaybackClock.HasVisibleMediaCue(tl, tl.Playhead))
+                    tl.Playhead = cue.Start;
             }
             var layerIndex = tl.Layers.FindIndex(l => l.Id == layer.Id);
             if (layerIndex >= 0) ApplyRevealLayer(layerIndex);
@@ -1333,7 +1335,7 @@ public sealed class ProducerSession
         UpdateTimeline(tl.Id, t =>
         {
             t.Duration = duration;
-            if (t.Playhead > duration) t.Playhead = duration;
+            if (t.Playhead >= duration) t.Playhead = 0;
         });
         TimelineScroll = 0;
         ClampTimelineView();

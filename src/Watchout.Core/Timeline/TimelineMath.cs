@@ -6,7 +6,8 @@ public static class TimelineMath
 {
     public static double CueEnd(Cue cue) => cue.Start + Math.Max(0, cue.Duration);
 
-    public const double LiveLengthMs = 3_600_000;
+    /// <summary>Day-long live NDI/capture cues. Finite H.264 clips (including 1 hour+ files) stay in ContentEnd.</summary>
+    public const double LiveLengthMs = 24 * 60 * 60 * 1000;
     public const double LaneHeight = 28;
     public const double RulerHeight = 22;
     public const double HeaderWidth = 120;
@@ -108,12 +109,26 @@ public static class TimelineMath
         double end = 0;
         foreach (var cue in cues)
         {
-            if (cue.Type == CueType.Marker) continue;
-            if (cue.Duration >= LiveLengthMs) continue;
+            if (!IsFiniteMedia(cue)) continue;
             end = Math.Max(end, CueEnd(cue));
         }
         return end;
     }
+
+    /// <summary>Start of the earliest finite clip, or 0 when the timeline is live-only.</summary>
+    public static double FirstFiniteMediaStart(IEnumerable<Cue> cues)
+    {
+        var start = double.PositiveInfinity;
+        foreach (var cue in cues)
+        {
+            if (!cue.Enabled || !IsFiniteMedia(cue)) continue;
+            start = Math.Min(start, cue.Start);
+        }
+        return double.IsInfinity(start) ? 0 : start;
+    }
+
+    public static bool IsFiniteMedia(Cue cue) =>
+        cue.Type != CueType.Marker && !cue.FreeRunning && cue.Duration < LiveLengthMs;
 
     public static double FitDuration(double contentEndMs) =>
         Math.Max(1000, Math.Ceiling(contentEndMs));
