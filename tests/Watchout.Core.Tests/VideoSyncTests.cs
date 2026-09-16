@@ -27,4 +27,12 @@ public class VideoSyncTests
         Assert.False(VideoSync.SeekWhileIdle(40));
         Assert.True(VideoSync.SeekWhileIdle(200));
     }
+
+    [Fact]
+    public void RestartAfterWrapWhenDecoderIsStillAtTheEnd()
+    {
+        Assert.False(VideoSync.RestartAfterWrap(100, 80));
+        Assert.True(VideoSync.RestartAfterWrap(21_000, 16));
+        Assert.False(VideoSync.RestartAfterWrap(16, 21_000));
+    }
 }
