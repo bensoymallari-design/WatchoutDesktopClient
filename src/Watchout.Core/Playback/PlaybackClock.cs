@@ -14,7 +14,7 @@ public static class PlaybackClock
             tl.Playhead += dtMs * (tl.Rate <= 0 ? 1 : tl.Rate);
             if (tl.Playhead >= tl.Duration)
             {
-                if (tl.Loop) tl.Playhead %= Math.Max(1, tl.Duration);
+                if (tl.Loop) tl.Playhead = WrapPlayhead(tl.Playhead, tl.Duration);
                 else
                 {
                     tl.Playhead = tl.Duration;
@@ -28,6 +28,21 @@ public static class PlaybackClock
     {
         timeline.Playback = state;
         if (state == PlaybackState.Stop) timeline.Playhead = 0;
+    }
+
+    /// <summary>
+    /// Keep a looping playhead inside [0, duration). <c>%</c> can return
+    /// <paramref name="duration"/> itself after a long run, which hides the last
+    /// clip (evaluate uses playhead &gt;= end) and leaves Stage and Output black.
+    /// </summary>
+    public static double WrapPlayhead(double playhead, double duration)
+    {
+        var span = Math.Max(1, duration);
+        if (double.IsNaN(playhead) || double.IsInfinity(playhead) || playhead < 0) return 0;
+        if (playhead < span) return playhead;
+        var wrapped = playhead % span;
+        if (wrapped <= 0 || wrapped >= span - 0.5) return 0;
+        return wrapped;
     }
 
     public static IReadOnlyList<EvaluatedCue> VisibleCues(Models.Timeline timeline)

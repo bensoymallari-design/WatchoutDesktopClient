@@ -20,6 +20,8 @@ public sealed class StageSurface : Canvas
     readonly Dictionary<string, MediaElement> _videos = [];
     readonly HashSet<string> _playing = [];
     readonly HashSet<string> _primed = [];
+    readonly HashSet<string> _dead = [];
+    readonly HashSet<string> _ended = [];
     readonly Dictionary<string, DateTime> _lastSeek = [];
     readonly List<UIElement> _chrome = [];
     bool _clockQueued;
@@ -97,6 +99,8 @@ public sealed class StageSurface : Canvas
             _playing.Clear();
             _primed.Clear();
             _lastSeek.Clear();
+            _dead.Clear();
+            _ended.Clear();
         };
     }
 
@@ -251,6 +255,8 @@ public sealed class StageSurface : Canvas
             _playing.Remove(stale);
             _primed.Remove(stale);
             _lastSeek.Remove(stale);
+            _dead.Remove(stale);
+            _ended.Remove(stale);
             if (_videos.Remove(stale, out var dead))
             {
                 try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -263,7 +269,7 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
-            if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset) || ChromaChanged(el, ev.Cue))
+            if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset) || ChromaChanged(el, ev.Cue) || _dead.Contains(ev.Cue.Id))
             {
                 if (el is not null)
                 {
@@ -272,6 +278,8 @@ public sealed class StageSurface : Canvas
                     _playing.Remove(ev.Cue.Id);
                     _primed.Remove(ev.Cue.Id);
                     _lastSeek.Remove(ev.Cue.Id);
+                    _dead.Remove(ev.Cue.Id);
+                    _ended.Remove(ev.Cue.Id);
                     if (_videos.Remove(ev.Cue.Id, out var dead))
                     {
                         try { dead.Stop(); dead.Close(); } catch { /* ignore */ }
@@ -428,7 +436,18 @@ public sealed class StageSurface : Canvas
             Width = native.W,
             Height = native.H,
         };
-        video.MediaFailed += (_, e) => App.Session.Log($"Media Foundation could not play {asset.Name}: {e.ErrorException.Message}", "error");
+        video.MediaFailed += (_, e) =>
+        {
+            App.Session.Log($"Media Foundation could not play {asset.Name}: {e.ErrorException.Message}", "error");
+            _dead.Add(ev.Cue.Id);
+            _playing.Remove(ev.Cue.Id);
+        };
+        video.MediaEnded += (_, _) =>
+        {
+            _playing.Remove(ev.Cue.Id);
+            _primed.Remove(ev.Cue.Id);
+            _ended.Add(ev.Cue.Id);
+        };
         video.MediaOpened += (_, _) =>
         {
             App.Session.Log($"{asset.Name} · Media Foundation / DXVA opened {System.IO.Path.GetFileName(file)}");
@@ -472,7 +491,9 @@ public sealed class StageSurface : Canvas
             {
                 if (_playing.Add(cueId))
                 {
-                    if (VideoSync.SeekOnPlayStart(drift))
+                    if (_ended.Remove(cueId)
+                        || VideoSync.SeekOnPlayStart(drift)
+                        || VideoSync.RestartAfterWrap(video.Position.TotalMilliseconds, target.TotalMilliseconds))
                     {
                         video.Position = target;
                         _lastSeek[cueId] = DateTime.UtcNow;
@@ -481,10 +502,12 @@ public sealed class StageSurface : Canvas
                     _primed.Add(cueId);
                     return;
                 }
-                if (VideoSync.ReseekWhilePlaying(drift, sinceSeek))
+                if (VideoSync.RestartAfterWrap(video.Position.TotalMilliseconds, target.TotalMilliseconds)
+                    || VideoSync.ReseekWhilePlaying(drift, sinceSeek))
                 {
                     video.Position = target;
                     _lastSeek[cueId] = DateTime.UtcNow;
+                    video.Play();
                 }
                 return;
             }
@@ -494,6 +517,7 @@ public sealed class StageSurface : Canvas
                 {
                     video.Stop();
                     _lastSeek.Remove(cueId);
+                    _ended.Remove(cueId);
                 }
                 return;
             }

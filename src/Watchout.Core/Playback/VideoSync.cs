@@ -17,4 +17,11 @@ public static class VideoSync
         msSinceSeek >= SeekCooldownMs && driftMs > PlayReseekMs;
 
     public static bool SeekWhileIdle(double driftMs) => driftMs > ScrubSeekMs;
+
+    /// <summary>
+    /// Timeline loop jumped the clock backward. The file decoder is still at EOF
+    /// (or far ahead) and WPF will not draw again unless we Play() from the new time.
+    /// </summary>
+    public static bool RestartAfterWrap(double decoderMs, double targetMs) =>
+        decoderMs - targetMs > PlayReseekMs;
 }

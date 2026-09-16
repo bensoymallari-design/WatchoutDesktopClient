@@ -79,6 +79,10 @@ public class SessionAndShowTests
         session.Tick(2500);
         Assert.Equal(PlaybackState.Play, tl.Playback);
         Assert.True(tl.Playhead < 1000);
+        Assert.Equal(0, PlaybackClock.WrapPlayhead(1000, 1000));
+        Assert.Equal(0, PlaybackClock.WrapPlayhead(2000, 1000));
+        Assert.Equal(500, PlaybackClock.WrapPlayhead(1500, 1000));
+        Assert.True(PlaybackClock.WrapPlayhead(1000.0000001, 1000) < 1);
 
         tl.Loop = false;
         tl.Playhead = 0;
