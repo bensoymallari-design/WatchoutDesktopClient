@@ -55,7 +55,10 @@ public sealed class OutputManager
 
     public void CloseAll()
     {
-        foreach (var win in _windows.Values.ToList()) win.Close();
+        foreach (var win in _windows.Values.ToList())
+        {
+            try { win.Close(); } catch { /* hung DXGI */ }
+        }
         _windows.Clear();
     }
 

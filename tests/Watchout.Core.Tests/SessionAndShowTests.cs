@@ -112,6 +112,28 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void LoopWrapSnapsOntoAClipThatDoesNotStartAtZero()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/later.mp4", "/library/later.mp4", probe, 1, true);
+        session.ApplyImported(media);
+        var cue = session.AddCueFromAsset(media.Id, start: 2_000)!;
+        var tl = session.ActiveTimeline!;
+        tl.Duration = 12_000;
+        tl.Loop = true;
+        tl.Playhead = 0;
+        session.SetPlayback(tl.Id, PlaybackState.Play);
+        session.Tick(12_500);
+        Assert.Equal(PlaybackState.Play, tl.Playback);
+        Assert.True(tl.Playhead >= 2_000);
+        Assert.True(tl.Playhead < 12_000);
+        Assert.Contains(PlaybackClock.VisibleMedia(session.Show!), e => e.Cue.Id == cue.Id);
+        Assert.True(PlaybackClock.HasVisibleMediaCue(tl, tl.Playhead));
+    }
+
+    [Fact]
     public void PlayAndSpaceSnapBackWhenPlayheadIsPastTheClip()
     {
         var session = new ProducerSession();

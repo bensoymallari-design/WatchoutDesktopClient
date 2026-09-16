@@ -92,6 +92,7 @@ sealed class GpuCompositor : IDisposable
     readonly Dictionary<string, ID3D11Texture2D> _textures = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ID3D11ShaderResourceView> _srvs = new(StringComparer.OrdinalIgnoreCase);
     ID3D11Texture2D? _stageTex;
+    ID3D11Texture2D? _stageStaging;
     ID3D11RenderTargetView? _stageRtv;
     int _stageW, _stageH;
     byte[]? _stageBits;
@@ -185,6 +186,8 @@ sealed class GpuCompositor : IDisposable
         }
     }
 
+    public bool Has(string key) => _srvs.ContainsKey(key);
+
     public void Drop(string key)
     {
         if (_textures.Remove(key, out var tex)) tex.Dispose();
@@ -237,6 +240,7 @@ sealed class GpuCompositor : IDisposable
         {
             _stageRtv?.Dispose();
             _stageTex?.Dispose();
+            _stageStaging?.Dispose();
             _stageTex = _gpu.Device.CreateTexture2D(new Texture2DDescription
             {
                 Width = (uint)width,
@@ -249,24 +253,24 @@ sealed class GpuCompositor : IDisposable
                 BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
             });
             _stageRtv = _gpu.Device.CreateRenderTargetView(_stageTex);
+            _stageStaging = _gpu.Device.CreateTexture2D(new Texture2DDescription
+            {
+                Width = (uint)width,
+                Height = (uint)height,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = Format.B8G8R8A8_UNorm,
+                SampleDescription = new SampleDescription(1, 0),
+                Usage = ResourceUsage.Staging,
+                CPUAccessFlags = CpuAccessFlags.Read,
+            });
             _stageW = width;
             _stageH = height;
             _stageBits = new byte[width * height * 4];
         }
         Render(_stageRtv!, width, height, draws, null);
-        using var staging = _gpu.Device.CreateTexture2D(new Texture2DDescription
-        {
-            Width = (uint)width,
-            Height = (uint)height,
-            MipLevels = 1,
-            ArraySize = 1,
-            Format = Format.B8G8R8A8_UNorm,
-            SampleDescription = new SampleDescription(1, 0),
-            Usage = ResourceUsage.Staging,
-            CPUAccessFlags = CpuAccessFlags.Read,
-        });
-        _gpu.Context.CopyResource(staging, _stageTex);
-        var mapped = _gpu.Context.Map(staging, 0, MapMode.Read);
+        _gpu.Context.CopyResource(_stageStaging!, _stageTex);
+        var mapped = _gpu.Context.Map(_stageStaging!, 0, MapMode.Read);
         try
         {
             var dest = _stageBits!;
@@ -276,7 +280,7 @@ sealed class GpuCompositor : IDisposable
         }
         finally
         {
-            _gpu.Context.Unmap(staging, 0);
+            _gpu.Context.Unmap(_stageStaging!, 0);
         }
         return new WriteableBitmapPresent(_stageBits!, width, height);
     }
@@ -345,6 +349,7 @@ sealed class GpuCompositor : IDisposable
         _textures.Clear();
         _stageRtv?.Dispose();
         _stageTex?.Dispose();
+        _stageStaging?.Dispose();
         foreach (var b in _blend) b.Dispose();
         _depth.Dispose();
         _raster.Dispose();

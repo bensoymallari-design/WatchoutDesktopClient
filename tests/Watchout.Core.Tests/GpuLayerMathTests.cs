@@ -88,6 +88,17 @@ public class GpuLayerMathTests
     }
 
     [Fact]
+    public void EmptyPresentWhilePlayingKeepsTheLastFrame()
+    {
+        Assert.False(GpuSourceLifetime.ReleaseAfterIdle(0));
+        Assert.False(GpuSourceLifetime.ReleaseAfterIdle(GpuSourceLifetime.HoldFrames - 1));
+        Assert.True(GpuSourceLifetime.ReleaseAfterIdle(GpuSourceLifetime.HoldFrames));
+        Assert.False(GpuSourceLifetime.KeepLastFrame(false, 0));
+        Assert.False(GpuSourceLifetime.KeepLastFrame(true, 1));
+        Assert.True(GpuSourceLifetime.KeepLastFrame(true, 0));
+    }
+
+    [Fact]
     public void BlendModeRoundTripsInShowJson()
     {
         var session = new ProducerSession();

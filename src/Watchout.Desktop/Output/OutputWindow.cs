@@ -48,6 +48,11 @@ public sealed class OutputWindow : Window
         SourceInitialized += (_, _) => PlaceOnScreen();
         Loaded += (_, _) => PlaceOnScreen(refresh: true);
         DpiChanged += (_, _) => PlaceOnScreen(refresh: true);
+        Closing += (_, _) =>
+        {
+            Topmost = false;
+            Hide();
+        };
     }
 
     public void BindDisplay(Display display) => _surface.ViewDisplay = display;

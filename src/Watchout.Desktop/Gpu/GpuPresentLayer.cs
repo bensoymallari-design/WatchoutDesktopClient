@@ -31,7 +31,7 @@ public sealed class GpuPresentLayer : Grid
         }
     }
 
-    public void Present(IReadOnlyList<GpuDraw> draws, Display? display, bool playAudio)
+    public void Present(IReadOnlyList<GpuDraw> draws, Display? display, bool playAudio, bool keepLastFrame = false)
     {
         var w = Math.Max(2, (int)Math.Round(ActualWidth > 1 ? ActualWidth : Width));
         var h = Math.Max(2, (int)Math.Round(ActualHeight > 1 ? ActualHeight : Height));
@@ -39,7 +39,7 @@ public sealed class GpuPresentLayer : Grid
         {
             var hwnd = _host.Handle;
             if (hwnd != IntPtr.Zero)
-                GpuEngine.PresentOutput(hwnd, w, h, draws, display, playAudio);
+                GpuEngine.PresentOutput(hwnd, w, h, draws, display, playAudio, keepLastFrame);
             return;
         }
         if (_image is null) return;
@@ -48,7 +48,7 @@ public sealed class GpuPresentLayer : Grid
             _bmp = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
             _image.Source = _bmp;
         }
-        GpuEngine.PresentStage(_bmp, draws, playAudio);
+        GpuEngine.PresentStage(_bmp, draws, playAudio, keepLastFrame);
     }
 }
 

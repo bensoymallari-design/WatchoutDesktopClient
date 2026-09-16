@@ -141,6 +141,15 @@ public partial class MainWindow : Window
 
     void WhatsNew_Click(object sender, RoutedEventArgs e) => WhatsNewWindow.ShowDialog(this);
     void Guide_Click(object sender, RoutedEventArgs e) => UserGuideWindow.ShowDialog(this);
+    void ResetDisplays_Click(object sender, RoutedEventArgs e)
+    {
+        App.ReleaseHardware();
+        App.Session.Log("Reset HDMI / wall displays — Windows Extend was re-applied. If the wall is still black, reboot once.");
+        MessageBox.Show(this,
+            "Windows display mode was reset to Extend.\n\nIf the HDMI wall is still black, reboot this PC once. Killing WatchMe while Output was up can leave the GPU HDMI link stuck until reboot. Unplug HDMI for 10 seconds after the reboot if it is still dark.",
+            "Reset displays",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
     void Prefs_Click(object sender, RoutedEventArgs e)
     {
         PrefsWindow.ShowDialog(this);

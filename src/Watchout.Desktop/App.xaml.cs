@@ -7,6 +7,7 @@ using Watchout.Core.Models;
 using Watchout.Core.Persistence;
 using Watchout.Desktop.Engine;
 using Watchout.Desktop.Gpu;
+using Watchout.Desktop.Interop;
 using Watchout.Desktop.Media;
 using Watchout.Desktop.Output;
 using Watchout.Desktop.Views;
@@ -25,6 +26,19 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        DispatcherUnhandledException += (_, args) =>
+        {
+            ReleaseHardware();
+            args.Handled = false;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => ReleaseHardware();
+        if (e.Args.Any(a => a.Equals("--release-displays", StringComparison.OrdinalIgnoreCase)))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            ReleaseHardware();
+            Shutdown();
+            return;
+        }
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         var splash = new SplashWindow();
@@ -45,6 +59,15 @@ public partial class App : Application
         main.Show();
         splash.Close();
         main.Activate();
+    }
+
+    internal static void ReleaseHardware()
+    {
+        try { Outputs.CloseAll(); } catch { /* hung output */ }
+        try { CaptureHub.Shutdown(); } catch { /* capture */ }
+        try { NdiHub.Shutdown(); } catch { /* ndi */ }
+        try { GpuEngine.Shutdown(); } catch { /* dxgi */ }
+        try { DisplayReset.Restore(); } catch { /* display mode */ }
     }
 
     void StartClock()
@@ -117,10 +140,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        Outputs.CloseAll();
-        CaptureHub.Shutdown();
-        NdiHub.Shutdown();
-        GpuEngine.Shutdown();
+        ReleaseHardware();
         PersistRecents();
         base.OnExit(e);
     }
