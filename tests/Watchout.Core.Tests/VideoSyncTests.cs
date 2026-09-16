@@ -44,4 +44,14 @@ public class VideoSyncTests
         Assert.False(VideoSync.DecoderStalled(true, 10_000, 500));
         Assert.True(VideoSync.DecoderStalled(true, 5_000, 5_000));
     }
+
+    [Fact]
+    public void OutputVideoLayoutHoldsWhileStageIsBusy()
+    {
+        Assert.False(VideoSync.HoldOutputVideoLayout(false, true));
+        Assert.False(VideoSync.HoldOutputVideoLayout(true, false));
+        Assert.True(VideoSync.HoldOutputVideoLayout(true, true));
+        Assert.False(VideoSync.VideoLayoutChanged(100, 101));
+        Assert.True(VideoSync.VideoLayoutChanged(100, 104));
+    }
 }

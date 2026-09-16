@@ -21,6 +21,22 @@ public static class VideoSync
     public static bool SeekWhileIdle(double driftMs) => driftMs > ScrubSeekMs;
 
     /// <summary>
+    /// Resizing the DXVA HWND on Output every mouse-move while a Stage cue is
+    /// dragged makes the wall hitch several seconds behind. Keep the last
+    /// Output video rectangle until the mouse is up.
+    /// </summary>
+    public static bool HoldOutputVideoLayout(bool outputSurface, bool stageLayoutBusy) =>
+        outputSurface && stageLayoutBusy;
+
+    /// <summary>
+    /// Ignore 1–2 px jitter so EVR is not rebuilt while the cue sits still.
+    /// </summary>
+    public const double VideoLayoutSlopPx = 2;
+
+    public static bool VideoLayoutChanged(double current, double next) =>
+        double.IsNaN(current) || double.IsNaN(next) || Math.Abs(current - next) > VideoLayoutSlopPx;
+
+    /// <summary>
     /// DXVA can freeze after a long 4K run (around an hour of dual Stage+Output
     /// decode). Position stops advancing and new Play() on the same MediaElement
     /// stays black — rebuild the decoder.

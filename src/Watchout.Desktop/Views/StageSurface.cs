@@ -561,19 +561,14 @@ public sealed class StageSurface : Canvas
                 }
                 return;
             }
-            if (playback == PlaybackState.Stop)
+            if (_playing.Remove(cueId))
             {
-                if (_playing.Remove(cueId))
-                {
-                    video.Stop();
-                    _lastSeek.Remove(cueId);
-                    _lastPos.Remove(cueId);
-                    _lastAdvance.Remove(cueId);
-                    _ended.Remove(cueId);
-                }
-                return;
+                video.Pause();
+                _lastSeek.Remove(cueId);
+                _lastPos.Remove(cueId);
+                _lastAdvance.Remove(cueId);
+                _ended.Remove(cueId);
             }
-            if (_playing.Remove(cueId)) video.Pause();
             if (_primed.Add(cueId))
             {
                 video.Play();
@@ -701,14 +696,18 @@ public sealed class StageSurface : Canvas
     {
         var w = Math.Max(1, mapped.Width);
         var h = Math.Max(1, mapped.Height);
-        if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
-        if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
+        if (el is MediaElement && VideoSync.HoldOutputVideoLayout(!Editing, App.Session.StageLayoutBusy))
+            return;
         if (el is MediaElement)
         {
-            if (LayoutDiffers(el.Width, w)) el.Width = w;
-            if (LayoutDiffers(el.Height, h)) el.Height = h;
+            if (VideoSync.VideoLayoutChanged(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
+            if (VideoSync.VideoLayoutChanged(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
+            if (VideoSync.VideoLayoutChanged(el.Width, w)) el.Width = w;
+            if (VideoSync.VideoLayoutChanged(el.Height, h)) el.Height = h;
             return;
         }
+        if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
+        if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
         if (el is CaptureLayer live && ViewDisplay is not null)
         {
             live.SetOverlayDipSize(w, h);
@@ -797,6 +796,7 @@ public sealed class StageSurface : Canvas
         _dragArmed = false;
         _panArmed = false;
         _panning = false;
+        App.Session.SetStageLayoutBusy(false);
         ReleaseMouseCapture();
     }
 
@@ -833,6 +833,7 @@ public sealed class StageSurface : Canvas
                 _resizeDisplay = true;
                 _resizeStart = StageGeometry.DisplayRect(show.Displays.First(d => d.Id == hit.Id));
                 _dragStart = e.GetPosition(this);
+                App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
                 return;
             case StageHitKind.CueHandle:
@@ -844,6 +845,7 @@ public sealed class StageSurface : Canvas
                 var asset = show.Assets.FirstOrDefault(a => a.Id == ev?.Cue.AssetId);
                 _resizeStart = ev is null ? default : StageGeometry.CueRect(ev, asset);
                 _dragStart = e.GetPosition(this);
+                App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
                 return;
             case StageHitKind.Cue:
@@ -853,6 +855,7 @@ public sealed class StageSurface : Canvas
                 _dragCueId = hit.Id;
                 _dragStart = e.GetPosition(this);
                 _dragCueOrigin = new Point(cue?.Position.X ?? 0, cue?.Position.Y ?? 0);
+                App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
                 return;
             case StageHitKind.Display:
@@ -862,6 +865,7 @@ public sealed class StageSurface : Canvas
                 _dragStart = e.GetPosition(this);
                 _dragDisplayOrigin = new Point(display.X, display.Y);
                 _dragArmed = true;
+                App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
                 return;
             default:
