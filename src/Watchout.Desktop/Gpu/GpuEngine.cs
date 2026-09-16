@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using SharpGen.Runtime;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Watchout.Core.Gpu;
@@ -111,7 +112,7 @@ public static class GpuEngine
                     Swaps[hwnd] = swap;
                 }
                 _comp.Render(swap.Rtv, width, height, draws, display);
-                swap.Chain.Present(1, PresentFlags.None);
+                PresentSwap(swap);
                 return true;
             }
         }
@@ -261,6 +262,18 @@ public static class GpuEngine
         _comp!.UploadBgra(key, pixels, w, h, stride);
     }
 
+    static void PresentSwap(OutputSwap swap)
+    {
+        try
+        {
+            swap.Chain.Present(1, PresentFlags.DoNotWait);
+        }
+        catch (SharpGenException ex) when (ex.HResult == unchecked((int)0x887A000A))
+        {
+            // DXGI_ERROR_WAS_STILL_DRAWING — keep the last frame instead of freezing Close/uninstall.
+        }
+    }
+
     static void Recover(Exception ex)
     {
         lock (Gate)
@@ -334,6 +347,11 @@ sealed class OutputSwap : IDisposable
             AlphaMode = AlphaMode.Ignore,
         };
         var chain = gpu.Factory.CreateSwapChainForHwnd(gpu.Device, hwnd, desc);
+        try
+        {
+            gpu.Factory.MakeWindowAssociation(hwnd, WindowAssociationFlags.IgnoreAltEnter | WindowAssociationFlags.IgnoreAll);
+        }
+        catch { /* factory optional */ }
         using var back = chain.GetBuffer<ID3D11Texture2D>(0);
         var rtv = gpu.Device.CreateRenderTargetView(back);
         return new OutputSwap(chain, rtv, width, height);
@@ -341,6 +359,7 @@ sealed class OutputSwap : IDisposable
 
     public void Dispose()
     {
+        try { Chain.SetFullscreenState(false); } catch { /* already windowed */ }
         Rtv.Dispose();
         Chain.Dispose();
     }

@@ -49,3 +49,25 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch WatchMe"; Flags: nowait postinstall skipifsilent
+
+[Code]
+procedure KillWatchMe;
+var
+  ResultCode: Integer;
+begin
+  { Output is a topmost black window on the wall. A hung DXVA/DXGI Present
+    ignores WM_CLOSE, so uninstall would leave that screen black. }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#MyAppExeName} /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  KillWatchMe;
+  Result := True;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  KillWatchMe;
+  Result := True;
+end;
