@@ -53,6 +53,10 @@ public class MachineLoadTests
     {
         Assert.Equal("2.0 GB", MachineLoad.Bytes(2L * 1024 * 1024 * 1024));
         Assert.Equal("512 MB", MachineLoad.Bytes(512L * 1024 * 1024));
+        Assert.Equal("5.7 / 7.7 GB", MachineLoad.PairBytes(
+            (long)(5.7 * 1024 * 1024 * 1024), (long)(7.7 * 1024 * 1024 * 1024)));
+        Assert.Equal("0.2 / 3.5 GB", MachineLoad.PairBytes(
+            159L * 1024 * 1024, (long)(3.5 * 1024 * 1024 * 1024)));
         var show = ShowFactory.EmptyShow();
         var clip = ShowFactory.EmptyAsset(new Asset
         {

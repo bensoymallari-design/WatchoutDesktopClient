@@ -167,17 +167,28 @@ public static class MachineLoad
 
     public static string CpuValue(MachineSample s) => $"{s.CpuPercent:0}%";
 
-    public static string RamValue(MachineSample s) =>
-        s.RamTotalBytes <= 0 ? "—" : $"{Bytes(s.RamUsedBytes)} / {Bytes(s.RamTotalBytes)}";
+    public static string RamValue(MachineSample s) => PairBytes(s.RamUsedBytes, s.RamTotalBytes);
 
-    public static string GpuValue(MachineSample s) =>
-        s.GpuTotalBytes <= 0 ? "—" : $"{Bytes(s.GpuUsedBytes)} / {Bytes(s.GpuTotalBytes)}";
+    public static string GpuValue(MachineSample s) => PairBytes(s.GpuUsedBytes, s.GpuTotalBytes);
 
-    public static string DetailLine(MachineSample s)
+    public static string PairBytes(long used, long total)
     {
-        var gpu = string.IsNullOrWhiteSpace(s.GpuName) ? GpuLine(s) : $"{GpuLine(s)}  {s.GpuName}";
-        return $"{CpuLine(s)} · {RamLine(s)} · {gpu} · WatchMe {Bytes(s.ProcessBytes)} · {s.Show.Line()}";
+        if (total <= 0) return "—";
+        const double gb = 1024.0 * 1024 * 1024;
+        const double mb = 1024.0 * 1024;
+        if (total >= gb)
+            return $"{used / gb:0.0} / {total / gb:0.0} GB";
+        return $"{used / mb:0} / {total / mb:0} MB";
     }
+
+    public static string CaptionLine(MachineSample s)
+    {
+        var gpu = string.IsNullOrWhiteSpace(s.GpuName) ? "GPU" : s.GpuName.Trim();
+        return $"{gpu} · WatchMe {Bytes(s.ProcessBytes)} · {s.Show.Line()}";
+    }
+
+    public static string DetailLine(MachineSample s) =>
+        $"{CpuLine(s)} · {RamLine(s)} · {GpuLine(s)} · {CaptionLine(s)}";
 
     public static string Bytes(long n)
     {
