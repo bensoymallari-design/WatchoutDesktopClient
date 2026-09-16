@@ -110,16 +110,19 @@
       </Grid>
     </DockPanel>
 
-    <TabControl x:Name="StudioBottom" Grid.Row="2" Grid.Column="4" Background="#1C1C1C" BorderBrush="#111" Foreground="#E8E6E3" SelectedIndex="0">
-      <TabItem Header="Devices">
-        <views:DevicesPanel x:Name="Devices"/>
-      </TabItem>
-      <TabItem Header="Layers">
-        <views:LayersPanel x:Name="Layers"/>
-      </TabItem>
-      <TabItem Header="Log">
-        <views:LogPanel x:Name="Log"/>
-      </TabItem>
-    </TabControl>
+    <DockPanel Grid.Row="2" Grid.Column="4" Background="#1C1C1C">
+      <views:MachineStatusBar x:Name="MachineStatus" DockPanel.Dock="Top"/>
+      <TabControl x:Name="StudioBottom" Background="#1C1C1C" BorderBrush="#111" Foreground="#E8E6E3" SelectedIndex="0">
+        <TabItem Header="Devices">
+          <views:DevicesPanel x:Name="Devices"/>
+        </TabItem>
+        <TabItem Header="Layers">
+          <views:LayersPanel x:Name="Layers"/>
+        </TabItem>
+        <TabItem Header="Log">
+          <views:LogPanel x:Name="Log"/>
+        </TabItem>
+      </TabControl>
+    </DockPanel>
   </Grid>
 </UserControl>

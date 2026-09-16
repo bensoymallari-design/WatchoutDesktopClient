@@ -12,6 +12,32 @@ sealed class GpuDevice : IDisposable
     public IDXGIFactory2 Factory { get; }
     public FeatureLevel Level { get; }
 
+    public (string Name, long Used, long Budget) VideoMemory()
+    {
+        using var dxgi = Device.QueryInterface<IDXGIDevice>();
+        using var adapter = dxgi.GetAdapter();
+        var desc = adapter.Description;
+        var name = desc.Description ?? "";
+        var dedicated = ToLong(desc.DedicatedVideoMemory);
+        try
+        {
+            using var adapter3 = adapter.QueryInterface<IDXGIAdapter3>();
+            var info = adapter3.QueryVideoMemoryInfo(0, MemorySegmentGroup.Local);
+            var budget = info.Budget > 0 ? ToLong(info.Budget) : dedicated;
+            return (name, ToLong(info.CurrentUsage), budget);
+        }
+        catch
+        {
+            return (name, 0, dedicated);
+        }
+    }
+
+    static long ToLong(ulong n) => n > long.MaxValue ? long.MaxValue : (long)n;
+
+    static long ToLong(nint n) => n < 0 ? 0 : n;
+
+    static long ToLong(nuint n) => n > long.MaxValue ? long.MaxValue : (long)n;
+
     GpuDevice(ID3D11Device device, ID3D11DeviceContext context, IDXGIFactory2 factory, FeatureLevel level)
     {
         Device = device;

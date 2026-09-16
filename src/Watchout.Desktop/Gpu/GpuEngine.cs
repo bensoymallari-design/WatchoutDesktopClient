@@ -43,6 +43,16 @@ public static class GpuEngine
         }
     }
 
+    public static (string Name, long Used, long Budget) VideoMemory()
+    {
+        lock (Gate)
+        {
+            if (_gpu is null) return ("", 0, 0);
+            try { return _gpu.VideoMemory(); }
+            catch { return ("", 0, 0); }
+        }
+    }
+
     public static bool TryStart()
     {
         lock (Gate)
