@@ -28,6 +28,7 @@ public sealed class WhatsNewWindow : Window
                     "Already in the first 7.8 slice:\n" +
                     "Linear wipe — angle, feather, completion. Temperature and Exposure overlays. Chroma key on stills with Stage eyedropper. Playback speed. Placeholder cues. Replace media (keep old / new size / fit). Display image mask. Pixel-perfect placement. Auto-start.\n\n" +
                     "Added in this update:\n" +
+                    "GPU compositor — D3D11 + Media Foundation DXVA, one decode shared by Stage and Output (Resolume / WATCHOUT style). Resize, crop, wipe, chroma, and blend (Normal / Add / Multiply / Screen) run on the GPU so the wall does not hitch.\n" +
                     "Blind edit — Output holds a snapshot while you change Producer. Ctrl+T Take to Output.\n" +
                     "WATCHOUT 6 import — File → Import. JSON, XML, or a zip with JSON inside. Binary Dataton .watch is reported, not decoded.\n" +
                     "Key / Fill — each Display can be Fill or Key 1–4 (label + routing). Video is never OpacityMasked (that blacks DXVA).\n" +

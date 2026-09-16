@@ -437,8 +437,9 @@ public partial class MainWindow : Window
     {
         MessageBox.Show(this,
             $"{Brand.Name} {Brand.Version} — native .NET / WPF desktop.\n\n" +
-            "Video: Windows Media Foundation with DXVA/D3D11 hardware decode.\n" +
-            "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n\n" +
+            "Video: D3D11 compositor + Media Foundation DXVA (one decode, Stage + Output).\n" +
+            "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n" +
+            "Looks: blend Normal/Add/Multiply/Screen, crop, wipe, chroma, brightness/contrast/sat/hue on the GPU.\n\n" +
             "Show outputs: extra Windows screens — Colorlight / NovaStar / any LED processor, TVs, projectors. Win+P Extend, Find screens, pick the wall/TV (not Producer), then Output.\n" +
             "Cue tools: linear wipe, temperature, exposure, chroma-key eyedropper, playback speed, placeholder cues, replace-media sizing, display image masks, blind edit, group/ungroup, WATCHOUT 6 JSON import, Wake-on-LAN, asset revisions.\n" +
             "ST 2110 / NMOS, 10-bit HDR encodes, HAP encode, Notch LC → H.264, playback-node ping, PIN access, optimize presets, 65535-ch WAV downmix, LTC.\n" +

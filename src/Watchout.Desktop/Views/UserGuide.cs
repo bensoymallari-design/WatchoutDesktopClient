@@ -26,7 +26,7 @@ public sealed class UserGuideWindow : Window
                 Text =
                     "WatchMe maps the WATCHOUT 7.8 Producer workflow onto a native Windows app. Pull origin/main (or this branch) to get it — missing a menu usually means the laptop is still on an older build.\n\n" +
                     "Stage and Output\n" +
-                    "Cues bind to displays by position on the canvas, not a DisplayId field. Output is any extra OS screen (Win+P Extend). Pick the wall/TV, not the Producer laptop. Esc closes Output. H.264 stays a direct Canvas child so DXVA does not go black.\n\n" +
+                    "Cues bind to displays by position on the canvas, not a DisplayId field. Output is any extra OS screen (Win+P Extend). Pick the wall/TV, not the Producer laptop. Esc closes Output. A D3D11 compositor decodes each H.264 file once (Media Foundation / DXVA) and draws Stage plus every wall from that texture — resize and blend stay on the GPU.\n\n" +
                     "Blind edit\n" +
                     "Edit → Blind Edit freezes Output on a snapshot. Producer Stage, timeline, and playhead stay live. Ctrl+T Take to Output reclones the show (including playheads) onto the wall. Uncheck Blind Edit to follow Producer again.\n\n" +
                     "Key / Fill\n" +

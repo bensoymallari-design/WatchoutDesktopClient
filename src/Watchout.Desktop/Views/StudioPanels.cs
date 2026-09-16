@@ -840,7 +840,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Outputs decode H.264 with Windows Media Foundation / DXVA. Import MP4/MOV/H.264 directly. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture plays frames from the card, not a file.",
+            Text = "A D3D11 compositor decodes H.264 once (Media Foundation / DXVA) and shares it with Stage and Output. Import MP4/MOV/H.264 directly. Blend Add/Multiply/Screen, crop, wipe, and chroma run on the GPU. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture and NDI upload into the same scene.",
         });
         }
         finally
@@ -1120,6 +1120,7 @@ public class PropertiesPanel : UserControl
                 SelectionKind.Cue when show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => s.Selection.Ids.Contains(c.Id)) is { } cue =>
                     cue.Name + cue.AssetId + cue.Speed + cue.WipeCompletion + cue.WipeAngle + cue.WipeFeather
                     + cue.Temperature + cue.Exposure + cue.ChromaKeyEnabled + cue.ChromaKeyColor + s.PickingChroma
+                    + cue.Blend + cue.Brightness + cue.Contrast + cue.Saturation + cue.Hue
                     + show.Prefs.MediaReplaceMode + show.Prefs.AutoStart,
                 SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a =>
                     a.Name + a.Notes + a.ActiveRevisionId + a.Url + a.Revisions.Count,
@@ -1142,6 +1143,26 @@ public class PropertiesPanel : UserControl
             Field("Start ms", cue.Start.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Start = n); });
             Field("Duration ms", cue.Duration.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Duration = n); });
             Field("Opacity", cue.Opacity.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Opacity = n); });
+            var blendBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+            blendBox.Items.Add(new ComboBoxItem { Content = "Blend: Normal", Tag = BlendMode.Normal });
+            blendBox.Items.Add(new ComboBoxItem { Content = "Blend: Add", Tag = BlendMode.Add });
+            blendBox.Items.Add(new ComboBoxItem { Content = "Blend: Multiply", Tag = BlendMode.Multiply });
+            blendBox.Items.Add(new ComboBoxItem { Content = "Blend: Screen", Tag = BlendMode.Screen });
+            foreach (ComboBoxItem item in blendBox.Items)
+                if (Equals(item.Tag, cue.Blend)) blendBox.SelectedItem = item;
+            if (blendBox.SelectedItem is null) blendBox.SelectedIndex = 0;
+            var blendCue = cue.Id;
+            blendBox.SelectionChanged += (_, _) =>
+            {
+                if (_building) return;
+                if (blendBox.SelectedItem is ComboBoxItem item && item.Tag is BlendMode mode)
+                    s.UpdateCue(blendCue, c => c.Blend = mode);
+            };
+            _root.Children.Add(blendBox);
+            Field("Brightness", cue.Brightness.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Brightness = n); });
+            Field("Contrast", cue.Contrast.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Contrast = n); });
+            Field("Saturation", cue.Saturation.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Saturation = n); });
+            Field("Hue", cue.Hue.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Hue = n); });
             Field("Volume", cue.Volume.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Volume = n); });
             Field("X", cue.Position.X.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.X = n); });
             Field("Y", cue.Position.Y.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.Y = n); });

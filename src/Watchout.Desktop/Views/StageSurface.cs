@@ -6,10 +6,12 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Watchout.Core.Gpu;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Core.Playback;
 using Watchout.Core.Stage;
+using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Media;
 
 namespace Watchout.Desktop.Views;
@@ -46,6 +48,7 @@ public sealed class StageSurface : Canvas
     int _decoderEpoch = -1;
     Point _panStart;
     (double X, double Y, double Zoom) _panCam;
+    GpuPresentLayer? _gpu;
 
     public bool Editing { get; set; }
     public Display? ViewDisplay { get => _viewDisplay; set => _viewDisplay = value; }
@@ -100,6 +103,11 @@ public sealed class StageSurface : Canvas
             DropAllMedia();
             _layers.Clear();
             _chrome.Clear();
+            if (_gpu is not null)
+            {
+                Children.Remove(_gpu);
+                _gpu = null;
+            }
         };
     }
 
@@ -250,6 +258,8 @@ public sealed class StageSurface : Canvas
         var (originX, originY, scale) = Viewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();
+        var gpuDraws = new List<Watchout.Core.Gpu.GpuDraw>();
+        var gpuOn = GpuEngine.Available || GpuEngine.TryStart();
         foreach (var stale in _layers.Keys.Where(id => !liveIds.Contains(id)).ToList())
             DropMedia(stale);
 
@@ -259,6 +269,16 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
+            if (gpuOn && asset is not null && GpuLayerMath.UsesGpu(asset))
+            {
+                if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
+                var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
+                gpuDraws.Add(GpuLayerMath.FromCue(
+                    ev, asset, originX, originY, scale, Math.Max(1, ActualWidth), Math.Max(1, ActualHeight),
+                    tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true));
+                z++;
+                continue;
+            }
             if (!_layers.TryGetValue(ev.Cue.Id, out var el) || !LayerFits(el, asset) || ChromaChanged(el, ev.Cue) || _dead.Contains(ev.Cue.Id))
             {
                 if (el is not null) DropMedia(ev.Cue.Id);
@@ -329,6 +349,31 @@ public sealed class StageSurface : Canvas
         foreach (var el in stack)
             el.OnRestack(stack.Count > 1 ? Restack : null);
         Restack();
+        PresentGpu(gpuDraws, gpuOn);
+    }
+
+    void PresentGpu(List<Watchout.Core.Gpu.GpuDraw> draws, bool gpuOn)
+    {
+        if (!gpuOn)
+        {
+            if (_gpu is not null)
+            {
+                Children.Remove(_gpu);
+                _gpu = null;
+            }
+            return;
+        }
+        if (_gpu is null)
+        {
+            _gpu = new GpuPresentLayer(output: !Editing);
+            Children.Insert(0, _gpu);
+            SetZIndex(_gpu, 1);
+        }
+        if (LayoutDiffers(_gpu.Width, ActualWidth)) _gpu.Width = Math.Max(2, ActualWidth);
+        if (LayoutDiffers(_gpu.Height, ActualHeight)) _gpu.Height = Math.Max(2, ActualHeight);
+        SetLeft(_gpu, 0);
+        SetTop(_gpu, 0);
+        _gpu.Present(draws, ViewDisplay, PlayAudio);
     }
 
     void DropAllMedia()
