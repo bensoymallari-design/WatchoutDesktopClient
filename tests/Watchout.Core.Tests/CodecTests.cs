@@ -152,4 +152,16 @@ public class CodecTests
             Directory.Delete(dir, true);
         }
     }
+
+    [Fact]
+    public void FileUrlKeepsSpacesInThePath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Ultimate 4K clip.mp4");
+        var url = MediaImport.ToFileUrl(path);
+        Assert.StartsWith("file:", url, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("4K", url);
+        var back = Codecs.TryFileUrl(url);
+        Assert.NotNull(back);
+        Assert.Equal(Path.GetFullPath(path), Path.GetFullPath(back!));
+    }
 }

@@ -245,6 +245,18 @@ public sealed class ProducerSession
 
     public void Stop(string? timelineId = null) => SetPlayback(timelineId, PlaybackState.Stop);
 
+    /// <summary>
+    /// One DXVA decode of a 4K file. Stage plus Output both decoding the same
+    /// clip is what went black after a long run.
+    /// </summary>
+    public bool StageYieldsFileDecoder => LiveOutputs.Count > 0;
+
+    public void NoteLiveOutputsChanged()
+    {
+        DecoderEpoch++;
+        Changed?.Invoke();
+    }
+
     public void SetStageEditMode(StageEditMode mode)
     {
         if (StageEditMode == mode) return;

@@ -31,12 +31,15 @@ public sealed class OutputManager
         {
             _windows.Remove(display.Id);
             App.Session.LiveOutputs.Remove(display.Id);
+            App.Session.NoteLiveOutputsChanged();
             App.Session.Log($"Closed output {display.Name}");
         };
         _windows[display.Id] = win;
         App.Session.LiveOutputs.Add(display.Id);
         win.Show();
         if (fullscreen) win.PlaceOnScreen();
+        App.Session.NoteLiveOutputsChanged();
+        App.Session.Log("Output owns the H.264 decoder — Stage shows a still so 4K is not decoded twice");
         if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
             App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)

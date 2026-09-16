@@ -244,6 +244,19 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void LiveOutputTakesTheOnlyFileDecoder()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        Assert.False(session.StageYieldsFileDecoder);
+        session.LiveOutputs.Add("wall");
+        Assert.True(session.StageYieldsFileDecoder);
+        var epoch = session.DecoderEpoch;
+        session.NoteLiveOutputsChanged();
+        Assert.True(session.DecoderEpoch > epoch);
+    }
+
+    [Fact]
     public void LiveCueMoveUsesLayoutNotFullRebuild()
     {
         var session = new ProducerSession();

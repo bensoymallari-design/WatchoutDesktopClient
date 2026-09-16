@@ -420,6 +420,13 @@ public sealed class StageSurface : Canvas
         if (asset.Kind == AssetKind.Composition)
             return Placeholder(native, asset.Name, asset.Color);
 
+        if (Editing && App.Session.StageYieldsFileDecoder)
+        {
+            var still = MediaLibrary.LoadStill(asset);
+            if (still is null) return Placeholder(native, $"{asset.Name}\nplaying on Output", asset.Color);
+            return new Image { Source = still, Stretch = Stretch.Fill, Width = native.W, Height = native.H, IsHitTestVisible = false };
+        }
+
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
         if (file is null) return Placeholder(native, asset.Name, asset.Color);
@@ -438,7 +445,7 @@ public sealed class StageSurface : Canvas
         };
         video.MediaFailed += (_, e) =>
         {
-            App.Session.Log($"Media Foundation could not play {asset.Name}: {e.ErrorException.Message}", "error");
+            App.Session.Log($"Media Foundation could not play {asset.Name} ({file}): {e.ErrorException.Message}", "error");
             _dead.Add(ev.Cue.Id);
             _playing.Remove(ev.Cue.Id);
         };
@@ -485,12 +492,16 @@ public sealed class StageSurface : Canvas
         return (w, h);
     }
 
-    static bool LayerFits(FrameworkElement el, Asset? asset)
+    bool LayerFits(FrameworkElement el, Asset? asset)
     {
         if (el is CueLookHost host) return LayerFits(host.Media, asset);
         if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
+        if (Editing && App.Session.StageYieldsFileDecoder)
+            return el is Image or CueLookHost;
+        if (asset is { Kind: AssetKind.Video })
+            return el is MediaElement;
         return el is not CaptureLayer;
     }
 
@@ -692,6 +703,12 @@ public sealed class StageSurface : Canvas
         var h = Math.Max(1, mapped.Height);
         if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
         if (LayoutDiffers(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
+        if (el is MediaElement)
+        {
+            if (LayoutDiffers(el.Width, w)) el.Width = w;
+            if (LayoutDiffers(el.Height, h)) el.Height = h;
+            return;
+        }
         if (el is CaptureLayer live && ViewDisplay is not null)
         {
             live.SetOverlayDipSize(w, h);
