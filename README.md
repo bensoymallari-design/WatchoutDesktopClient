@@ -110,11 +110,11 @@ GitHub Actions also uploads a **WatchMe-Setup** artifact on each Windows build o
 
 ## Wall still black after closing or uninstalling WatchMe
 
-Output is a **topmost black window** on that HDMI/DP screen. Uninstalling used to delete files while `WatchMe.exe` was still covering the wall.
+Output is a **topmost black window** on that HDMI/DP screen. Uninstalling used to delete files while `WatchMe.exe` was still covering the wall. Win+P Duplicate/Extend **cannot** fix a stuck GPU HDMI mode.
 
 1. Esc (closes Output), or Task Manager → **End task WatchMe**.
-2. Run the new `WatchMe-Setup.exe` — setup **force-kills** WatchMe.exe before it copies files.
-3. If the monitor is still black and Task Manager shows no WatchMe, **reboot once** (GPU driver hang) and check **Win+P** is Extend.
+2. **Reboot the PC once** if the wall is still black with no WatchMe.exe. Then unplug HDMI for 10 seconds and plug it back.
+3. Run the new `WatchMe-Setup.exe` — setup kills WatchMe and re-applies Windows Extend. In the app: **Help → Reset HDMI / wall displays**.
 
 Do not pick the Producer laptop as the Output screen.
 

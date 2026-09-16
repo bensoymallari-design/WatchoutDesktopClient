@@ -30,7 +30,7 @@ public sealed class UserGuideWindow : Window
                     "Stage and Output\n" +
                     "Cues bind to displays by position on the canvas, not a DisplayId field. Output is any extra OS screen (Win+P Extend). Pick the wall/TV, not the Producer laptop. Esc closes Output. A D3D11 compositor decodes each H.264 file once (Media Foundation / DXVA) and draws Stage plus every wall from that texture — resize and blend stay on the GPU.\n\n" +
                     "Wall still black after closing or uninstalling WatchMe\n" +
-                    "Output is a topmost window on that HDMI/DP screen. If DXVA hangs, Windows uninstall can remove files while WatchMe.exe is still covering the wall. Press Esc, or Task Manager → End task WatchMe. The next installer force-kills WatchMe.exe before it copies files. If the monitor stays black after the process is gone, reboot once (GPU driver hang) and check Win+P is still Extend.\n\n" +
+                    "Output is a topmost window on that HDMI/DP screen. If DXVA hangs, Windows uninstall can remove files while WatchMe.exe is still covering the wall. Press Esc, or Task Manager → End task WatchMe. The next installer force-kills WatchMe.exe and re-applies Windows Extend. If Win+P Duplicate/Extend still shows a black HDMI wall, the GPU link is stuck — reboot once, then unplug HDMI for 10 seconds. Help → Reset HDMI / wall displays does the same restore.\n\n" +
                     "Blind edit\n" +
                     "Edit → Blind Edit freezes Output on a snapshot. Producer Stage, timeline, and playhead stay live. Ctrl+T Take to Output reclones the show (including playheads) onto the wall. Uncheck Blind Edit to follow Producer again.\n\n" +
                     "Key / Fill\n" +

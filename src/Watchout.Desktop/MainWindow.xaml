@@ -98,6 +98,7 @@
       <MenuItem Header="_Help">
         <MenuItem Header="What's New" Click="WhatsNew_Click"/>
         <MenuItem Header="User Guide (7.8 map)" Click="Guide_Click"/>
+        <MenuItem Header="Reset HDMI / wall displays" Click="ResetDisplays_Click"/>
         <MenuItem Header="About WatchMe" Click="About_Click"/>
       </MenuItem>
     </Menu>

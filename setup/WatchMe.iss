@@ -51,6 +51,11 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch WatchMe"; Flags: nowait postinstall skipifsilent
 
 [Code]
+function ChangeDisplaySettingsA(lpDevMode: Longint; dwFlags: DWORD): Longint;
+  external 'ChangeDisplaySettingsA@user32.dll stdcall';
+function SetDisplayConfig(pathCount: DWORD; paths: Longint; modeCount: DWORD; modes: Longint; flags: DWORD): Longint;
+  external 'SetDisplayConfig@user32.dll stdcall';
+
 procedure KillWatchMe;
 var
   ResultCode: Integer;
@@ -60,14 +65,27 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#MyAppExeName} /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
+procedure RestoreDisplays;
+var
+  ResultCode: Integer;
+begin
+  { DXGI exclusive / killed Present can leave HDMI at a mode Win+P will not fix. }
+  ChangeDisplaySettingsA(0, 0);
+  SetDisplayConfig(0, 0, 0, 0, $84);
+  Exec(ExpandConstant('{sys}\DisplaySwitch.exe'), '/extend', '', SW_HIDE, ewNoWait, ResultCode);
+end;
+
 function InitializeSetup(): Boolean;
 begin
   KillWatchMe;
+  RestoreDisplays;
   Result := True;
 end;
 
 function InitializeUninstall(): Boolean;
 begin
   KillWatchMe;
+  RestoreDisplays;
   Result := True;
 end;
+
