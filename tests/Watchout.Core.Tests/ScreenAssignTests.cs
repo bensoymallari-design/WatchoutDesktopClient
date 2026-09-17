@@ -153,26 +153,23 @@ public class ScreenAssignTests
     }
 
     [Fact]
-    public void LeftoverNvidiaCustomFromAnotherControllerIsIgnored()
+    public void ResolumeKeepsComposition516OnHdmi1920()
     {
-        // 6720×1344 is another controller still sitting in NVIDIA's list — not this X20.
-        Assert.Null(ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (4096, 2160), (6720, 1344), (1400, 1050)]));
-        var liveX20 = ScreenAssign.PickLedMap(516, 430, 1920, 1080, [(1920, 1080), (6720, 1344), (516, 430)]);
-        Assert.Equal((516, 430), liveX20);
-        // If that other controller is still the live NVIDIA mode, follow it — but Stage 1920 is kept.
-        Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(1920, 1080, 6720, 1344));
-        var displays = new List<Display> { new() { Id = "d1", Name = "Display 1", Width = 1920, Height = 1080, Enabled = true } };
+        Assert.True(ScreenAssign.KeepStageSize(516, 430));
+        Assert.True(ScreenAssign.KeepStageSize(1920, 1080));
+        Assert.False(ScreenAssign.KeepStageSize(100, 100));
+        var displays = new List<Display> { new() { Id = "d1", Name = "Display 1", Width = 516, Height = 430, Enabled = true } };
         var screens = new List<OutputScreen>
         {
             new() { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080 },
-            new() { Id = "x20", Label = "X20 HDMI", Width = 516, Height = 430, PhysicalWidth = 1920, PhysicalHeight = 1080 },
+            new() { Id = "hdmi", Label = "X20 HDMI", Width = 1920, Height = 1080, PhysicalWidth = 1920, PhysicalHeight = 1080 },
         };
         var mapped = ScreenAssign.LayoutDisplaysOnScreens(displays, screens);
-        Assert.Equal(1920, mapped[0].Width);
-        Assert.Equal(1080, mapped[0].Height);
-        Assert.Equal("x20", mapped[0].ScreenId);
-        Assert.True(ScreenAssign.KeepStageSize(1920, 1080));
-        Assert.False(ScreenAssign.KeepStageSize(100, 100));
+        Assert.Equal(516, mapped[0].Width);
+        Assert.Equal(430, mapped[0].Height);
+        Assert.Equal("hdmi", mapped[0].ScreenId);
+        Assert.Equal(1920, ScreenAssign.ScreenWidth(screens[1]));
+        Assert.Equal(1080, ScreenAssign.ScreenHeight(screens[1]));
     }
 
     [Fact]

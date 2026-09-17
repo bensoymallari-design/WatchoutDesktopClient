@@ -47,9 +47,9 @@ public static class ScreenAssign
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
     /// <summary>
-    /// Size of the Output HWND: the live NVIDIA/Windows mode. Stage canvas
-    /// stays yours (1920×1080, …); Output contain-fits it onto this size.
-    /// Leftover NVIDIA customs from another controller are not guessed.
+    /// Size of the Output HWND: the Windows monitor (1920×1080 HDMI). Stage
+    /// can be the LED map (516×430) and is drawn 1:1 top-left, like Resolume
+    /// Composition vs Screen. Leftover NVIDIA customs are not guessed.
     /// A laptop 150% DPI rectangle (2560) that matches EDID×scale stays on EDID (4K).
     /// </summary>
     public static int ScreenWidth(OutputScreen screen) => ScreenPixels(screen).W;
@@ -134,10 +134,8 @@ public static class ScreenAssign
     }
 
     /// <summary>
-    /// Live NVIDIA/Windows mode only. Colorlight X20 this show is 516×430;
-    /// 6720×1344 in the mode list is leftover from another controller and
-    /// must not be guessed. Stage stays 1920×1080 (or whatever you built);
-    /// Output contain-fits that canvas onto this live size.
+    /// Live NVIDIA/Windows mode only. Do not guess leftover 6720×1344.
+    /// The X20 LED map is the Stage size (516×430), not the 1920 HDMI screen.
     /// </summary>
     public static (int W, int H)? PickLedMap(
         int currentW, int currentH,
@@ -153,9 +151,8 @@ public static class ScreenAssign
     }
 
     /// <summary>
-    /// Keep a real Stage canvas (1920×1080, …) when assigning a controller.
-    /// Output contain-fits that canvas onto the live wall/TV. Only placeholder
-    /// 100×100 displays take the controller pixels.
+    /// Resolume composition size. Keep 516×430 (or 1920×1080) when assigning a
+    /// 1920 HDMI screen — do not overwrite the LED map with the monitor size.
     /// </summary>
     public static bool KeepStageSize(double width, double height) =>
         width >= 256 && height >= 256;
