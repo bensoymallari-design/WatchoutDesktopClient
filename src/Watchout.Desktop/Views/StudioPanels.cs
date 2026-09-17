@@ -840,7 +840,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "A D3D11 compositor decodes H.264 once (Media Foundation / DXVA) and shares it with Stage and Output. Import MP4/MOV/H.264 directly. Blend Add/Multiply/Screen, crop, wipe, and chroma run on the GPU. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture and NDI upload into the same scene.",
+            Text = "A D3D11 compositor decodes H.264 once (Media Foundation / DXVA DXGI textures) and keeps those frames on the GPU like Resolume. Blend Add/Multiply/Screen, crop, wipe, and chroma run on the GPU. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture and NDI still upload pixels into the same scene.",
         });
         }
         finally

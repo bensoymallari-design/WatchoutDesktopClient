@@ -436,7 +436,7 @@ public partial class MainWindow : Window
     {
         MessageBox.Show(this,
             $"{Brand.Title} {Brand.Version} — native .NET / WPF desktop.\n\n" +
-            "Video: D3D11 compositor + Media Foundation DXVA (one decode, Stage + Output).\n" +
+            "Video: D3D11 compositor + Media Foundation DXVA GPU surfaces (Resolume path — H.264 stays on the GPU).\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n" +
             "Looks: blend Normal/Add/Multiply/Screen, crop, wipe, chroma, brightness/contrast/sat/hue on the GPU.\n" +
             $"Startup: {Engine.AppBoot.Summary}\n\n" +

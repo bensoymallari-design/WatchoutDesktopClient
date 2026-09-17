@@ -67,7 +67,7 @@ public static class GpuLayerMath
     /// <summary>
     /// Producer Stage does not run a second H.264 decode while Output is live.
     /// That dual DXVA path is what froze 4K PCs. Stage shows a labeled canvas
-    /// instead; the wall keeps the only file decoder.
+    /// instead; the wall keeps the only file decoder (GPU DXGI surface).
     /// </summary>
     public static bool StageYieldsFilePreview(bool editing, bool outputLive, Asset? asset) =>
         editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;

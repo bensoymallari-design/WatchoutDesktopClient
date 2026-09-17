@@ -159,31 +159,60 @@ sealed class GpuCompositor : IDisposable
     public void UploadBgra(string key, byte[] pixels, int width, int height, int stride)
     {
         if (pixels.Length < stride || width < 2 || height < 2) return;
-        if (!_textures.TryGetValue(key, out var tex) || tex.Description.Width != (uint)width || tex.Description.Height != (uint)height)
-        {
-            tex?.Dispose();
-            if (_srvs.Remove(key, out var oldSrv)) oldSrv.Dispose();
-            tex = _gpu.Device.CreateTexture2D(new Texture2DDescription
-            {
-                Width = (uint)width,
-                Height = (uint)height,
-                MipLevels = 1,
-                ArraySize = 1,
-                Format = Format.B8G8R8A8_UNorm,
-                SampleDescription = new SampleDescription(1, 0),
-                Usage = ResourceUsage.Default,
-                BindFlags = BindFlags.ShaderResource,
-            });
-            _textures[key] = tex;
-            _srvs[key] = _gpu.Device.CreateShaderResourceView(tex);
-        }
         unsafe
         {
             fixed (byte* p = pixels)
-            {
-                _gpu.Context.UpdateSubresource(tex, 0, null, (IntPtr)p, (uint)stride, (uint)(stride * height));
-            }
+                UploadBgra(key, (IntPtr)p, width, height, stride);
         }
+    }
+
+    public void UploadBgra(string key, IntPtr pixels, int width, int height, int stride)
+    {
+        if (pixels == IntPtr.Zero || width < 2 || height < 2 || stride < width * 4) return;
+        var tex = EnsureBgra(key, width, height);
+        _gpu.Enter();
+        try { _gpu.Context.UpdateSubresource(tex, 0, null, pixels, (uint)stride, (uint)(stride * height)); }
+        finally { _gpu.Leave(); }
+    }
+
+    /// <summary>
+    /// GPU→GPU copy of a DXVA/BGRA surface. No RGB32 trip through system RAM.
+    /// </summary>
+    public void BindGpu(string key, ID3D11Texture2D source)
+    {
+        var desc = source.Description;
+        var w = (int)desc.Width;
+        var h = (int)desc.Height;
+        if (w < 2 || h < 2) return;
+        var tex = EnsureBgra(key, w, h);
+        _gpu.Enter();
+        try { _gpu.Context.CopyResource(tex, source); }
+        finally { _gpu.Leave(); }
+    }
+
+    ID3D11Texture2D EnsureBgra(string key, int width, int height)
+    {
+        if (_textures.TryGetValue(key, out var tex)
+            && tex.Description.Width == (uint)width
+            && tex.Description.Height == (uint)height
+            && tex.Description.Format == Format.B8G8R8A8_UNorm)
+            return tex;
+        tex?.Dispose();
+        if (_srvs.Remove(key, out var oldSrv)) oldSrv.Dispose();
+        tex = _gpu.Device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)width,
+            Height = (uint)height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget,
+        });
+        _textures[key] = tex;
+        _srvs[key] = _gpu.Device.CreateShaderResourceView(tex);
+        return tex;
     }
 
     public bool Has(string key) => _srvs.ContainsKey(key);
@@ -195,6 +224,19 @@ sealed class GpuCompositor : IDisposable
     }
 
     public void Render(ID3D11RenderTargetView rtv, int width, int height, IReadOnlyList<GpuDraw> draws, Display? outputDisplay)
+    {
+        _gpu.Enter();
+        try
+        {
+            RenderCore(rtv, width, height, draws, outputDisplay);
+        }
+        finally
+        {
+            _gpu.Leave();
+        }
+    }
+
+    void RenderCore(ID3D11RenderTargetView rtv, int width, int height, IReadOnlyList<GpuDraw> draws, Display? outputDisplay)
     {
         var ctx = _gpu.Context;
         ctx.OMSetRenderTargets(rtv);
@@ -274,18 +316,26 @@ sealed class GpuCompositor : IDisposable
             _stageBits = new byte[width * height * 4];
         }
         Render(_stageRtv!, width, height, draws, null);
-        _gpu.Context.CopyResource(_stageStaging!, _stageTex);
-        var mapped = _gpu.Context.Map(_stageStaging!, 0, MapMode.Read);
+        _gpu.Enter();
         try
         {
-            var dest = _stageBits!;
-            var row = width * 4;
-            for (var y = 0; y < height; y++)
-                Marshal.Copy(mapped.DataPointer + y * (int)mapped.RowPitch, dest, y * row, row);
+            _gpu.Context.CopyResource(_stageStaging!, _stageTex);
+            var mapped = _gpu.Context.Map(_stageStaging!, 0, MapMode.Read);
+            try
+            {
+                var dest = _stageBits!;
+                var row = width * 4;
+                for (var y = 0; y < height; y++)
+                    Marshal.Copy(mapped.DataPointer + y * (int)mapped.RowPitch, dest, y * row, row);
+            }
+            finally
+            {
+                _gpu.Context.Unmap(_stageStaging!, 0);
+            }
         }
         finally
         {
-            _gpu.Context.Unmap(_stageStaging!, 0);
+            _gpu.Leave();
         }
         return new WriteableBitmapPresent(_stageBits!, width, height);
     }

@@ -117,6 +117,23 @@ public class GpuLayerMathTests
     }
 
     [Fact]
+    public void ResolumePathPrefersDxgiTexturesOverRgb32RamCopies()
+    {
+        Assert.Equal(GpuFrameSource.DxgiTexture, GpuResidentPath.Choose(true, true));
+        Assert.Equal(GpuFrameSource.DxgiTexture, GpuResidentPath.Choose(true, false));
+        Assert.Equal(GpuFrameSource.CpuPixels, GpuResidentPath.Choose(false, true));
+        Assert.Equal(GpuFrameSource.None, GpuResidentPath.Choose(false, false));
+        Assert.True(GpuResidentPath.SkipStageCpuReadback(true, true));
+        Assert.False(GpuResidentPath.SkipStageCpuReadback(false, true));
+        Assert.False(GpuResidentPath.SkipStageCpuReadback(true, false));
+        Assert.True(GpuResidentPath.ReuseBuffer(1920 * 1080 * 4, 1920 * 1080 * 4));
+        Assert.False(GpuResidentPath.ReuseBuffer(16, 64));
+        Assert.False(GpuResidentPath.ReuseBuffer(64, 0));
+        Assert.Equal(128, GpuResidentPath.GrowBuffer(64, 100));
+        Assert.Equal(64, GpuResidentPath.GrowBuffer(64, 32));
+    }
+
+    [Fact]
     public void OutputPresentsAtTheScreenSizeNotThe64HostStub()
     {
         var nested = OutputViewMath.PresentSize(64, 64, 3840, 2160, 3840, 2160);

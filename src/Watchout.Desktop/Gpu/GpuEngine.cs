@@ -13,8 +13,8 @@ namespace Watchout.Desktop.Gpu;
 
 /// <summary>
 /// One D3D11 compositor for Stage and every Output. File decode (Media Foundation
-/// + DXVA) happens once; NDI/capture frames upload into the same GPU scene.
-/// Resize is a shader quad, not an EVR HWND rebuild.
+/// + DXVA DXGI surfaces) stays on the GPU like Resolume; NDI/capture still upload
+/// into the same scene. Resize is a shader quad, not an EVR HWND rebuild.
 /// </summary>
 public static class GpuEngine
 {
@@ -39,7 +39,8 @@ public static class GpuEngine
     {
         lock (Gate)
         {
-            if (_gpu is not null) return $"D3D11 {_gpu.Level} compositor · DXVA";
+            if (_gpu is not null)
+                return $"D3D11 {_gpu.Level} compositor · DXVA GPU";
             return _error ?? "off";
         }
     }
@@ -92,7 +93,7 @@ public static class GpuEngine
             lock (Gate)
             {
                 var playing = keepLastFrame || draws.Any(d => d.Playing);
-                if (keepLastFrame && draws.Count == 0) return true;
+                if (GpuResidentPath.SkipStageCpuReadback(draws.Count == 0, keepLastFrame)) return true;
                 SyncSources(draws, playAudio, playing);
                 var ready = draws.Count(d => _comp.Has(d.SourceKey));
                 if (!GpuSourceLifetime.ClearToBlack(ready) && keepLastFrame) return true;
@@ -205,9 +206,21 @@ public static class GpuEngine
                     if (decoder.UsedSoftwareFallback)
                         NoteSoftware(draw.SourceKey);
                     decoder.Sync(draw.MediaTimeMs, draw.Playing, draw.Loop, draw.Volume, playAudio);
-                    if (decoder.TryCopyFrame(out var pixels, out var w, out var h, out var stride, out var dirty)
-                        && (dirty || _comp is null || !_comp.Has(draw.SourceKey)))
-                        _comp!.UploadBgra(draw.SourceKey, pixels, w, h, stride);
+                    var gpuReady = decoder.TryBindGpu(out var gpuTex, out var gpuDirty);
+                    var cpuReady = decoder.TryCopyFrame(out var pixels, out var w, out var h, out var stride, out var cpuDirty);
+                    switch (GpuResidentPath.Choose(gpuReady && gpuTex is not null, cpuReady))
+                    {
+                        case GpuFrameSource.DxgiTexture:
+                            if (gpuDirty || _comp is null || !_comp.Has(draw.SourceKey))
+                                _comp!.BindGpu(draw.SourceKey, gpuTex!);
+                            if (decoder.UsedGpuSurfaces)
+                                NoteGpuSurface(draw.SourceKey);
+                            break;
+                        case GpuFrameSource.CpuPixels:
+                            if (cpuDirty || _comp is null || !_comp.Has(draw.SourceKey))
+                                _comp!.UploadBgra(draw.SourceKey, pixels, w, h, stride);
+                            break;
+                    }
                     break;
                 case GpuSourceKind.Still:
                     UploadStill(draw.SourceKey);
@@ -251,7 +264,7 @@ public static class GpuEngine
             NoteMissing(path);
             return null;
         }
-        decoder = new MfGpuDecoder(new Uri(Path.GetFullPath(path)).AbsoluteUri, playAudio);
+        decoder = new MfGpuDecoder(new Uri(Path.GetFullPath(path)).AbsoluteUri, playAudio, _gpu);
         Files[draw.SourceKey] = decoder;
         Idle[draw.SourceKey] = 0;
         return decoder;
@@ -281,10 +294,18 @@ public static class GpuEngine
         App.Session.Log($"DXVA could not play {key}: {error} — try another H.264 MP4, or Stop then Play", "error");
     }
 
+    static readonly HashSet<string> GpuSurfaceLogged = new(StringComparer.OrdinalIgnoreCase);
+
     static void NoteSoftware(string key)
     {
         if (!SoftwareLogged.Add(key)) return;
         App.Session.Log($"Playing {key} without DXVA hardware transforms — RGB32 still runs on this GPU");
+    }
+
+    static void NoteGpuSurface(string key)
+    {
+        if (!GpuSurfaceLogged.Add(key)) return;
+        App.Session.Log($"DXVA GPU texture — {key} stays on the GPU (Resolume path, no RGB32 RAM copy)");
     }
 
     static void NoteSwap(nint hwnd, int w, int h, bool flip, bool child)
@@ -381,12 +402,15 @@ public static class GpuEngine
     static void UploadLive(string key, WriteableBitmap? bmp)
     {
         if (bmp is null) return;
-        var w = bmp.PixelWidth;
-        var h = bmp.PixelHeight;
-        var stride = w * 4;
-        var pixels = new byte[stride * h];
-        bmp.CopyPixels(pixels, stride, 0);
-        _comp!.UploadBgra(key, pixels, w, h, stride);
+        bmp.Lock();
+        try
+        {
+            _comp!.UploadBgra(key, bmp.BackBuffer, bmp.PixelWidth, bmp.PixelHeight, bmp.BackBufferStride);
+        }
+        finally
+        {
+            bmp.Unlock();
+        }
     }
 
     static void PresentSwap(OutputSwap swap)
@@ -421,6 +445,7 @@ public static class GpuEngine
         Idle.Clear();
         Rebuilt.Clear();
         SoftwareLogged.Clear();
+        GpuSurfaceLogged.Clear();
         SwapLogged.Clear();
         WaitingLogged.Clear();
         _pictureLogged = false;

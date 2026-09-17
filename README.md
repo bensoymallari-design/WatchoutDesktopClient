@@ -1,6 +1,6 @@
 # WatchMe (native Windows)
 
-WatchMe is a **.NET 8 WPF** show composer: Stage, Timeline, Assets, Runner outputs, **NDI**, and **live HDMI/SDI capture**. It replaces [WatchOutElctron](https://github.com/bensoymallari-design/WatchOutElctron). Video is **H.264 through Windows Media Foundation + DXVA**, not a VP9/WebM proxy inside Chromium.
+WatchMe is a **.NET 8 WPF** show composer: Stage, Timeline, Assets, Runner outputs, **NDI**, and **live HDMI/SDI capture**. It replaces [WatchOutElctron](https://github.com/bensoymallari-design/WatchOutElctron). Video is **H.264 through Windows Media Foundation + DXVA on the GPU** (Resolume-style DXGI surfaces, not RGB32 copies through system RAM), not a VP9/WebM proxy inside Chromium.
 
 Build and install from **`main`**. You do not need an old `cursor/…` branch to get the installer.
 
@@ -52,7 +52,7 @@ Loop a file with **Loop** checked. The decoder restarts when the clip hits the e
 
 USB bandwidth (not WatchMe) usually caps how many Elgato-style dongles you can run; DeckLink / Magewell PCIe cards scale further.
 
-4K NDI is copied on the CPU onto Stage and Output. It will not feel as fluid as Resolume’s GPU output. A stronger PC drops fewer frames; it does not match Arena.
+4K NDI is copied on the CPU onto Stage and Output. H.264 files stay on the GPU (DXVA DXGI textures, Resolume-style). NDI will not feel as fluid as Resolume’s GPU output.
 
 ## Install WatchMe on any Windows PC (`WatchMe-Setup.exe`)
 
