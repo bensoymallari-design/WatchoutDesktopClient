@@ -99,7 +99,7 @@
         <MenuItem Header="What's New" Click="WhatsNew_Click"/>
         <MenuItem Header="User Guide (7.8 map)" Click="Guide_Click"/>
         <MenuItem Header="Reset HDMI / wall displays" Click="ResetDisplays_Click"/>
-        <MenuItem Header="About WatchMe" Click="About_Click"/>
+        <MenuItem Header="About WatchMe by jhon juben mallari" Click="About_Click"/>
       </MenuItem>
     </Menu>
     <StatusBar DockPanel.Dock="Bottom" Background="#1A1A1A" Foreground="#9A958D">
