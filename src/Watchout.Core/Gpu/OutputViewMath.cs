@@ -116,27 +116,20 @@ public static class OutputViewMath
         hresult == unchecked((int)0x887A0005) || hresult == unchecked((int)0x887A0007);
 
     /// <summary>
-    /// Resolume-style: Output is the live controller/TV pixels. Stretch the
-    /// Stage display to fill that dest — every cabinet pixel has picture, no
-    /// letterbox gap. When Stage already matches the wall (516×430 on an X20),
-    /// scale is 1:1.
+    /// Resolume Advanced Output: Screen = the Windows monitor (1920×1080).
+    /// Composition/Stage can be the LED map (516×430). Draw 1:1 at the display
+    /// origin (top-left) so Colorlight reads those pixels — black around it,
+    /// no stretch to fill 1920.
     /// </summary>
     public static (double OriginX, double OriginY, double ScaleX, double ScaleY) OutputViewport(
         double displayX, double displayY, double displayW, double displayH,
         int destW, int destH)
     {
-        var dw = Math.Max(1, displayW);
-        var dh = Math.Max(1, displayH);
-        var sx = destW / dw;
-        var sy = destH / dh;
-        if (sx <= 0) sx = 1;
-        if (sy <= 0) sy = 1;
-        if (Math.Abs(destW - dw) <= 1 && Math.Abs(destH - dh) <= 1)
-        {
-            sx = 1;
-            sy = 1;
-        }
-        return (displayX, displayY, sx, sy);
+        _ = displayW;
+        _ = displayH;
+        _ = destW;
+        _ = destH;
+        return (displayX, displayY, 1, 1);
     }
 
     /// <summary>

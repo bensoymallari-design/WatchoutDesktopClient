@@ -715,7 +715,7 @@ public class SessionAndShowTests
             PhysicalHeight = 1080,
             ScaleFactor = 1.5,
         });
-        Assert.Equal(3840, session.Show.Displays[0].Width);
+        Assert.Equal(1920, session.Show.Displays[0].Width);
         Assert.Equal(1080, session.Show.Displays[0].Height);
         session.CopyScreenSizeToDisplay(id, new OutputScreen
         {

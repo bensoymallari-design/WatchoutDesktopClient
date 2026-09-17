@@ -1252,7 +1252,8 @@ public sealed class ProducerSession
             if (d is null) return;
             ScreenAssign.ApplyAssignment(d, key);
             name = d.Name;
-            if (screen is not null && !ScreenAssign.IsAutoKey(key))
+            if (screen is not null && !ScreenAssign.IsAutoKey(key)
+                && !ScreenAssign.KeepStageSize(d.Width, d.Height))
             {
                 ScreenAssign.CopyScreenSize(d, screen);
                 copied = true;
@@ -1312,7 +1313,7 @@ public sealed class ProducerSession
                 Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label} (DPI scaled). The panel EDID is {screen.PhysicalWidth}×{screen.PhysicalHeight}. In Windows Display settings set that extra screen to {used.W}×{used.H}.", "warn");
                 continue;
             }
-            Log($"{screen.Label} live mode is {used.W}×{used.H} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}). Output follows that controller size and fills every pixel (Resolume-style, no gap). Assign / Use size copies {used.W}×{used.H} onto Stage for 1:1. Leftover NVIDIA 6720×1344 from another controller is ignored — this X20 is 516×430.");
+            Log($"{screen.Label} HDMI is {used.W}×{used.H}. Set Stage/Display to the LED map (516×430) like Resolume Composition — Output stays the 1920 screen and draws 516×430 1:1 top-left. Do not change NVIDIA to 516; do not select leftover 6720×1344.");
         }
     }
 

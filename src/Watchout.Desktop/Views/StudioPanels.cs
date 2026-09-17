@@ -736,7 +736,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "Like Resolume: Output follows the live controller/TV and fills every pixel — no black gap. Colorlight X20 516×430, a 1080 TV, 4K, any processor. Set NVIDIA X20 HDMI to 516×430 (not leftover 6720×1344). Assign / Use size copies that size onto Stage so it is 1:1; a 1920 Stage still fills the 516 wall.",
+                : "Like Resolume: HDMI/Screen stays 1920×1080. Set Stage (Composition) to the LED map 516×430. Output draws that 516×430 1:1 in the top-left of the 1920 screen — black around it, no stretch. Leave NVIDIA at 1920; do not pick leftover 6720×1344. Type Width 516 Height 430 on the Display (do not Use size from 1920).",
         });
 
         _root.Children.Add(Header("AUDIO"));
