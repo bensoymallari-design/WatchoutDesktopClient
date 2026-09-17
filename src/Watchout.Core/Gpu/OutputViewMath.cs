@@ -116,19 +116,27 @@ public static class OutputViewMath
         hresult == unchecked((int)0x887A0005) || hresult == unchecked((int)0x887A0007);
 
     /// <summary>
-    /// 1:1 Stage pixel → Output pixel. Stage 1920×1080 draws 1920×1080 on the
-    /// wall. A Colorlight X20 at 516×430 needs Stage set to 516×430 (Use size)
-    /// so every pixel stays intact — no contain-fit scaling.
+    /// Resolume-style: Output is the live controller/TV pixels. Stretch the
+    /// Stage display to fill that dest — every cabinet pixel has picture, no
+    /// letterbox gap. When Stage already matches the wall (516×430 on an X20),
+    /// scale is 1:1.
     /// </summary>
     public static (double OriginX, double OriginY, double ScaleX, double ScaleY) OutputViewport(
         double displayX, double displayY, double displayW, double displayH,
         int destW, int destH)
     {
-        _ = displayW;
-        _ = displayH;
-        _ = destW;
-        _ = destH;
-        return (displayX, displayY, 1, 1);
+        var dw = Math.Max(1, displayW);
+        var dh = Math.Max(1, displayH);
+        var sx = destW / dw;
+        var sy = destH / dh;
+        if (sx <= 0) sx = 1;
+        if (sy <= 0) sy = 1;
+        if (Math.Abs(destW - dw) <= 1 && Math.Abs(destH - dh) <= 1)
+        {
+            sx = 1;
+            sy = 1;
+        }
+        return (displayX, displayY, sx, sy);
     }
 
     /// <summary>

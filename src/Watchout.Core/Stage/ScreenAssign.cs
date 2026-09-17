@@ -47,10 +47,11 @@ public static class ScreenAssign
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
     /// <summary>
-    /// Size of the Output HWND: the live NVIDIA/Windows mode. Stage must use
-    /// the same pixels (Use size) so Output is 1:1. Leftover NVIDIA customs
-    /// from another controller are not guessed. A laptop 150% DPI rectangle
-    /// (2560) that matches EDID×scale stays on EDID (4K).
+    /// Size of the Output HWND: the live NVIDIA/Windows mode (Resolume: the
+    /// output follows the controller). Stage is stretched to fill those pixels
+    /// with no gap. Leftover NVIDIA customs from another controller are not
+    /// guessed. A laptop 150% DPI rectangle (2560) that matches EDID×scale
+    /// stays on EDID (4K).
     /// </summary>
     public static int ScreenWidth(OutputScreen screen) => ScreenPixels(screen).W;
 
@@ -136,7 +137,7 @@ public static class ScreenAssign
     /// <summary>
     /// Live NVIDIA/Windows mode only. This Colorlight X20 is 516×430;
     /// 6720×1344 in the mode list is leftover from another controller.
-    /// Copy that live size onto Stage so Output is pixel-for-pixel.
+    /// Output fills that live size (Resolume-style, no pixel gap).
     /// </summary>
     public static (int W, int H)? PickLedMap(
         int currentW, int currentH,
