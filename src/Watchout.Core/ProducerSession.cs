@@ -1252,8 +1252,7 @@ public sealed class ProducerSession
             if (d is null) return;
             ScreenAssign.ApplyAssignment(d, key);
             name = d.Name;
-            if (screen is not null && !ScreenAssign.IsAutoKey(key)
-                && !ScreenAssign.KeepStageSize(d.Width, d.Height))
+            if (screen is not null && !ScreenAssign.IsAutoKey(key))
             {
                 ScreenAssign.CopyScreenSize(d, screen);
                 copied = true;
@@ -1307,13 +1306,7 @@ public sealed class ProducerSession
     {
         foreach (var screen in screens.Where(ScreenAssign.WindowsModeDiffersFromController))
         {
-            var used = ScreenAssign.ScreenPixels(screen);
-            if (ScreenAssign.LooksLikeDpiScaledMode(screen))
-            {
-                Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label} (DPI scaled). The panel EDID is {screen.PhysicalWidth}×{screen.PhysicalHeight}. In Windows Display settings set that extra screen to {used.W}×{used.H}.", "warn");
-                continue;
-            }
-            Log($"{screen.Label} HDMI is {used.W}×{used.H}. Set Stage/Display to the LED map (516×430) like Resolume Composition — Output stays the 1920 screen and draws 516×430 1:1 top-left. Do not change NVIDIA to 516; do not select leftover 6720×1344.");
+            Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label}. The controller EDID is {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}. In Windows Display settings set that extra screen to {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}.", "warn");
         }
     }
 

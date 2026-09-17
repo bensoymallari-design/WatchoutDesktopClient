@@ -61,11 +61,9 @@ public static class OutputViewMath
     /// </summary>
     public static (int W, int H) PresentDest(int clientW, int clientH, int screenW, int screenH)
     {
-        // 64×64 stub HWND must not drive 4K. A Colorlight 516×430 (or smaller
-        // cabinet map) is a real window — never fall back to a 1920 client.
         if (clientW >= 256 && clientH >= 256)
         {
-            if (screenW >= MinHostPx && screenH >= MinHostPx)
+            if (screenW >= 256 && screenH >= 256)
                 return (Math.Min(clientW, screenW), Math.Min(clientH, screenH));
             return (clientW, clientH);
         }
@@ -116,20 +114,27 @@ public static class OutputViewMath
         hresult == unchecked((int)0x887A0005) || hresult == unchecked((int)0x887A0007);
 
     /// <summary>
-    /// Resolume Advanced Output: Screen = the Windows monitor (1920×1080).
-    /// Composition/Stage can be the LED map (516×430). Draw 1:1 at the display
-    /// origin (top-left) so Colorlight reads those pixels — black around it,
-    /// no stretch to fill 1920.
+    /// Map a show Display onto the Output wall in destination pixels.
+    /// Uniform contain so a cue that fills the Stage display shows the whole
+    /// picture on the wall. Stretching 3840 stage pixels into a 1920 HWND
+    /// was cropping (zoomed). Snap to 1:1 when sizes already match.
     /// </summary>
     public static (double OriginX, double OriginY, double ScaleX, double ScaleY) OutputViewport(
         double displayX, double displayY, double displayW, double displayH,
         int destW, int destH)
     {
-        _ = displayW;
-        _ = displayH;
-        _ = destW;
-        _ = destH;
-        return (displayX, displayY, 1, 1);
+        var dw = Math.Max(1, displayW);
+        var dh = Math.Max(1, displayH);
+        var sx = destW / dw;
+        var sy = destH / dh;
+        var s = Math.Min(sx, sy);
+        if (s <= 0) s = 1;
+        // Snap to 1:1 only when the wall is at least as big as the display.
+        // dest 3730 / display 3840 used to snap up to 1 and crop (looked zoomed).
+        if (Math.Abs(s - 1) < 0.03 && destW >= dw - 1 && destH >= dh - 1) s = 1;
+        var originX = displayX - (destW / s - dw) / 2;
+        var originY = displayY - (destH / s - dh) / 2;
+        return (originX, originY, s, s);
     }
 
     /// <summary>

@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Watchout.Core.Models;
-using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Interop;
 
@@ -24,12 +23,10 @@ public static class Monitors
             var current = CurrentMode(device);
             var currentW = current.W > 0 ? current.W : width;
             var currentH = current.H > 0 ? current.H : height;
-            var windows = ScreenAssign.WindowsModePixels(width, height, currentW, currentH);
-            var windowsW = windows.W;
-            var windowsH = windows.H;
+            var windowsW = currentW > 0 ? Math.Min(width, currentW) : width;
+            var windowsH = currentH > 0 ? Math.Min(height, currentH) : height;
             var physicalW = match.PreferredWidth > 0 ? match.PreferredWidth : currentW;
             var physicalH = match.PreferredHeight > 0 ? match.PreferredHeight : currentH;
-            var map = ScreenAssign.PickLedMap(windowsW, windowsH, physicalW, physicalH, AllModes(device));
             var label = !string.IsNullOrWhiteSpace(match.FriendlyName)
                 ? match.FriendlyName
                 : string.IsNullOrWhiteSpace(key)
@@ -45,8 +42,6 @@ public static class Monitors
                 Height = windowsH,
                 PhysicalWidth = physicalW,
                 PhysicalHeight = physicalH,
-                MappedWidth = map?.W ?? 0,
-                MappedHeight = map?.H ?? 0,
                 IsPrimary = primary,
                 ScaleFactor = DpiScale(hMonitor),
             });
@@ -75,20 +70,6 @@ public static class Monitors
         var mode = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
         if (!EnumDisplaySettings(device, EnumCurrentSettings, ref mode)) return (0, 0);
         return (mode.dmPelsWidth, mode.dmPelsHeight);
-    }
-
-    static List<(int W, int H)> AllModes(string device)
-    {
-        var list = new List<(int W, int H)>();
-        if (string.IsNullOrWhiteSpace(device)) return list;
-        for (var i = 0; ; i++)
-        {
-            var mode = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
-            if (!EnumDisplaySettings(device, i, ref mode)) break;
-            if (mode.dmPelsWidth < 64 || mode.dmPelsHeight < 64) continue;
-            list.Add((mode.dmPelsWidth, mode.dmPelsHeight));
-        }
-        return list.Distinct().ToList();
     }
 
     static double DpiScale(IntPtr hMonitor)
