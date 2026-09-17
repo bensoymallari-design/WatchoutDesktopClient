@@ -153,6 +153,38 @@ public class ScreenAssignTests
     }
 
     [Fact]
+    public void NvidiaCustomWindowsModeCopiesOntoStage()
+    {
+        Assert.Equal((3160, 2160), ScreenAssign.PickWindowsMode(3160, 2160, 1920, 1080));
+        Assert.Equal((3160, 2160), ScreenAssign.PickWindowsMode(0, 0, 1920, 1080, 3160, 2160));
+        Assert.Equal((3160, 2160), ScreenAssign.PickWindowsMode(3160, 2160, 3840, 2160));
+        var custom = new OutputScreen
+        {
+            Id = "hdmi",
+            Label = "Colorlight",
+            Width = 3160,
+            Height = 2160,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 2160,
+        };
+        Assert.Equal(3160, ScreenAssign.ScreenWidth(custom));
+        Assert.Equal(2160, ScreenAssign.ScreenHeight(custom));
+        var d = new Display { Width = 100, Height = 100 };
+        ScreenAssign.CopyScreenSize(d, custom);
+        Assert.Equal(3160, d.Width);
+        Assert.Equal(2160, d.Height);
+        Assert.Equal("Colorlight · wall/TV 3160×2160 (EDID 3840×2160)", ScreenAssign.ScreenChoiceLabel(custom));
+        var mapped = ScreenAssign.LayoutDisplaysOnScreens(
+            [new Display { Id = "d1", Name = "Display 1", Width = 100, Height = 100, Enabled = true }],
+            [
+                new() { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080 },
+                custom,
+            ]);
+        Assert.Equal(3160, mapped[0].Width);
+        Assert.Equal(2160, mapped[0].Height);
+    }
+
+    [Fact]
     public void ResolveOutputSkipsTheProducerLaptopWhenAControllerExists()
     {
         var laptop = new OutputScreen { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080, Left = 0 };

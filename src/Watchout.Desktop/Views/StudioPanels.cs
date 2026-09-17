@@ -737,7 +737,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Assign screens copies the Windows resolution of that extra screen onto the Stage (1920×1080 Windows → 1920×1080 Stage). On each Display row pick that wall/TV screen — not the Producer laptop — then Output. Set the extra screen in Windows Display settings to the size you want on Stage, then Assign screens or Use size.",
+                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Create an NVIDIA custom resolution if you need one, set that extra screen to it in Windows Display settings, then Find screens. Assign screens copies that Windows size onto the Stage (3160×2160 NVIDIA → 3160×2160 Stage). On each Display row pick that wall/TV screen — not the Producer laptop — then Output.",
         });
 
         _root.Children.Add(Header("AUDIO"));
