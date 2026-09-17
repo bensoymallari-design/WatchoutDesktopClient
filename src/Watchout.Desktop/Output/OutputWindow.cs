@@ -17,8 +17,17 @@ public sealed class OutputWindow : Window
     readonly StageSurface _surface;
     GpuOutputWall? _wall;
 
-    public int PixelWidth => OutputViewMath.PresentDest(_wall?.Width ?? 0, _wall?.Height ?? 0, _screen.Width, _screen.Height).W;
-    public int PixelHeight => OutputViewMath.PresentDest(_wall?.Width ?? 0, _wall?.Height ?? 0, _screen.Width, _screen.Height).H;
+    public (int W, int H) DestSize
+    {
+        get
+        {
+            var client = NativeWindow.ClientSize(WallHwnd);
+            return OutputViewMath.PresentDest(client.W, client.H, _screen.Width, _screen.Height);
+        }
+    }
+
+    public int PixelWidth => DestSize.W;
+    public int PixelHeight => DestSize.H;
     public IntPtr WallHwnd => _wall?.Hwnd ?? IntPtr.Zero;
 
     public OutputWindow(Display display, OutputScreen screen, bool playAudio)

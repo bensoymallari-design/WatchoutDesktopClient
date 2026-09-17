@@ -315,7 +315,7 @@ public sealed class StageSurface : Canvas
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
                 gpuDraws.Add(GpuLayerMath.FromCue(
-                    ev, asset, originX, originY, scaleX, Math.Max(1, ActualWidth), Math.Max(1, ActualHeight),
+                    ev, asset, originX, originY, scaleX, PixelWidth(), PixelHeight(),
                     tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true, scaleY));
                 z++;
                 continue;
