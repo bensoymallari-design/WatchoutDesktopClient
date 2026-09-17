@@ -47,10 +47,10 @@ public static class ScreenAssign
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
     /// <summary>
-    /// Size of the Output HWND: the live NVIDIA/Windows mode. Stage canvas
-    /// stays yours (1920×1080, …); Output contain-fits it onto this size.
-    /// Leftover NVIDIA customs from another controller are not guessed.
-    /// A laptop 150% DPI rectangle (2560) that matches EDID×scale stays on EDID (4K).
+    /// Size of the Output HWND: the live NVIDIA/Windows mode. Stage must use
+    /// the same pixels (Use size) so Output is 1:1. Leftover NVIDIA customs
+    /// from another controller are not guessed. A laptop 150% DPI rectangle
+    /// (2560) that matches EDID×scale stays on EDID (4K).
     /// </summary>
     public static int ScreenWidth(OutputScreen screen) => ScreenPixels(screen).W;
 
@@ -134,10 +134,9 @@ public static class ScreenAssign
     }
 
     /// <summary>
-    /// Live NVIDIA/Windows mode only. Colorlight X20 this show is 516×430;
-    /// 6720×1344 in the mode list is leftover from another controller and
-    /// must not be guessed. Stage stays 1920×1080 (or whatever you built);
-    /// Output contain-fits that canvas onto this live size.
+    /// Live NVIDIA/Windows mode only. This Colorlight X20 is 516×430;
+    /// 6720×1344 in the mode list is leftover from another controller.
+    /// Copy that live size onto Stage so Output is pixel-for-pixel.
     /// </summary>
     public static (int W, int H)? PickLedMap(
         int currentW, int currentH,
@@ -151,14 +150,6 @@ public static class ScreenAssign
         if (Custom(currentW, currentH)) return (currentW, currentH);
         return null;
     }
-
-    /// <summary>
-    /// Keep a real Stage canvas (1920×1080, …) when assigning a controller.
-    /// Output contain-fits that canvas onto the live wall/TV. Only placeholder
-    /// 100×100 displays take the controller pixels.
-    /// </summary>
-    public static bool KeepStageSize(double width, double height) =>
-        width >= 256 && height >= 256;
 
     /// <summary>
     /// True when Windows/EDID disagree. Colorlight maps still count even though
@@ -223,8 +214,8 @@ public static class ScreenAssign
         {
             var screen = pool[i];
             var prev = i < displays.Count ? displays[i] : ShowFactory.EmptyDisplay(new Display { Name = screen.Label, Channel = i + 1 });
-            var width = KeepStageSize(prev.Width, prev.Height) ? (int)Math.Round(prev.Width) : ScreenWidth(screen);
-            var height = KeepStageSize(prev.Width, prev.Height) ? (int)Math.Round(prev.Height) : ScreenHeight(screen);
+            var width = ScreenWidth(screen);
+            var height = ScreenHeight(screen);
             mapped.Add(new Display
             {
                 Id = prev.Id,

@@ -736,7 +736,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "Output contain-fits your Stage canvas (1920×1080 or whatever you built) onto the live wall/TV — Colorlight X20 516×430, a 1080 TV, 4K, any processor. Do not leave NVIDIA on a leftover custom from another controller (6720×1344). For this X20 set X20 HDMI to 516×430 (Customize… if it is missing), scale 100%. Assign screens pins the extra HDMI row; Stage size stays yours. Use size is only if you want 1:1 pixels.",
+                : "Pixel-for-pixel: Stage size = Output size = the live controller/TV. Colorlight X20 is 516×430 — set NVIDIA X20 HDMI to 516×430 (not leftover 6720×1344 from another controller), then Assign screens or Use size so Stage becomes 516×430. A 1920×1080 Stage stays 1920 on Output and will not fill 516 cabinets. A 1920 TV: Stage 1920×1080.",
         });
 
         _root.Children.Add(Header("AUDIO"));

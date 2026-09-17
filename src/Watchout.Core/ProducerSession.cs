@@ -1312,7 +1312,7 @@ public sealed class ProducerSession
                 Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label} (DPI scaled). The panel EDID is {screen.PhysicalWidth}×{screen.PhysicalHeight}. In Windows Display settings set that extra screen to {used.W}×{used.H}.", "warn");
                 continue;
             }
-            Log($"{screen.Label} live mode is {used.W}×{used.H} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}). Stage stays your canvas (1920×1080 or whatever you built) — Output contain-fits it onto that wall/TV. Leftover NVIDIA customs from another controller are ignored. For this Colorlight X20 set NVIDIA to 516×430.");
+            Log($"{screen.Label} live mode is {used.W}×{used.H} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}). Use size copies {used.W}×{used.H} onto Stage so Output is pixel-for-pixel — Stage 516×430 → wall 516×430. A 1920×1080 Stage stays 1920 on Output and will not fill a 516×430 X20. Leftover NVIDIA 6720×1344 from another controller is ignored; set this X20 HDMI to 516×430.");
         }
     }
 
