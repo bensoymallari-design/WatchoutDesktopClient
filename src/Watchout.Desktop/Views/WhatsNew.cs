@@ -28,6 +28,7 @@ public sealed class WhatsNewWindow : Window
                     "Already in the first 7.8 slice:\n" +
                     "Linear wipe — angle, feather, completion. Temperature and Exposure overlays. Chroma key on stills with Stage eyedropper. Playback speed. Placeholder cues. Replace media (keep old / new size / fit). Display image mask. Pixel-perfect placement. Auto-start.\n\n" +
                     "Added in this update:\n" +
+                    "Credit — window title is WatchMe by jhon juben mallari.\n" +
                     "Cue drag updates Properties — dragging or resizing a cue on Stage writes X/Y/Width/Height in the Properties panel (live, then again when you release). It used to keep the old numbers until you typed in the box.\n" +
                     "Stage size from Windows — picking a display copies the Windows resolution onto that Stage. NVIDIA custom (3160×2160) that you apply in Windows Display on the second monitor is caught as 3160×2160 Stage — not the controller EDID, and not a leftover NVIDIA mode. A 150% DPI 4K panel still uses the physical 3840 pixels. Output HWND matches those same pixels.\n" +
                     "Stage and cue restored — Colorlight/Resolume mapping (516×430 on a 1920 screen, leftover NVIDIA 6720) is reverted. Stage and cue work as they did when Output was already showing picture. Black Output fixes stay (top-level wall HWND, real screen pixels).\n" +
