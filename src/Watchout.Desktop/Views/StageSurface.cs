@@ -255,11 +255,11 @@ public sealed class StageSurface : Canvas
 
         if (session.Selection.Kind != SelectionKind.Cue) return;
         var live = PlaybackClock.VisibleMedia(show);
-        foreach (var ev in live.Where(e => session.Selection.Ids.Contains(e.Cue.Id)))
+        var selectedRects = StageGeometry.EditCueRects(
+            live, show.Assets, show.Timelines.SelectMany(t => t.Cues), session.Selection);
+        foreach (var item in selectedRects.Where(r => session.Selection.Ids.Contains(r.Cue.Id)))
         {
-            var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
-            var rect = StageGeometry.CueRect(ev, asset);
-            var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
+            var mapped = Map(item.Rect.X, item.Rect.Y, item.Rect.W, item.Rect.H, originX, originY, scale);
             var outline = new Rectangle
             {
                 Width = Math.Max(1, mapped.Width),
@@ -304,14 +304,11 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scaleX, scaleY);
-            // Output already owns the H.264 decoder. Leave Stage as the labeled
-            // display canvas so a second 4K DXVA / GPU readback cannot freeze the PC.
-            if (GpuLayerMath.StageYieldsFilePreview(Editing, session.StageYieldsFileDecoder, asset))
-            {
-                if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
-                continue;
-            }
-            if (gpuOn && asset is not null && GpuLayerMath.UsesGpu(asset))
+            // Output already owns the H.264 decoder. Leave Stage as a labeled
+            // canvas so a second 4K DXVA cannot freeze the PC — but keep a
+            // preview box so move/resize still has something to grab.
+            if (gpuOn && asset is not null && GpuLayerMath.UsesGpu(asset)
+                && !GpuLayerMath.StageYieldsFilePreview(Editing, session.StageYieldsFileDecoder, asset))
             {
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
@@ -512,7 +509,7 @@ public sealed class StageSurface : Canvas
             return Placeholder(native, asset.Name, asset.Color);
 
         if (Editing && App.Session.StageYieldsFileDecoder)
-            return null;
+            return new StagePreviewBox { Width = native.W, Height = native.H, CueName = asset.Name };
 
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
@@ -586,7 +583,7 @@ public sealed class StageSurface : Canvas
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
         if (Editing && App.Session.StageYieldsFileDecoder)
-            return el is Image or CueLookHost;
+            return el is StagePreviewBox;
         if (asset is { Kind: AssetKind.Video })
             return el is MediaElement;
         return el is not CaptureLayer;
@@ -956,9 +953,9 @@ public sealed class StageSurface : Canvas
                 if (App.Session.CueLayerLocked(hit.Id!)) return;
                 _resizeHandle = hit.Handle;
                 _resizeDisplay = false;
-                var ev = PlaybackClock.VisibleMedia(show).FirstOrDefault(c => c.Cue.Id == hit.Id);
-                var asset = show.Assets.FirstOrDefault(a => a.Id == ev?.Cue.AssetId);
-                _resizeStart = ev is null ? default : StageGeometry.CueRect(ev, asset);
+                var cueForResize = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == hit.Id);
+                var assetForResize = show.Assets.FirstOrDefault(a => a.Id == cueForResize?.AssetId);
+                _resizeStart = cueForResize is null ? default : StageGeometry.CueRect(cueForResize, assetForResize);
                 _dragStart = e.GetPosition(this);
                 App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
@@ -996,7 +993,7 @@ public sealed class StageSurface : Canvas
     StageHit HitAt(Show show, (double X, double Y) stage, bool preferDisplay)
     {
         var live = PlaybackClock.VisibleMedia(show);
-        var rects = StageGeometry.CueRects(live, show.Assets);
+        var rects = StageGeometry.EditCueRects(live, show.Assets, show.Timelines.SelectMany(t => t.Cues), App.Session.Selection);
         return StageGeometry.HitEditTarget(App.Session.StageEditMode, show.Displays, rects, App.Session.Selection, stage, Viewport(show).Scale, preferDisplay);
     }
 
@@ -1029,7 +1026,7 @@ public sealed class StageSurface : Canvas
                 var guides = _resizeDisplay
                     ? StageGeometry.DisplayMoveGuides(show.Displays, App.Session.Selection.Ids.FirstOrDefault())
                     : StageGeometry.DisplayGuides(show.Displays);
-                next = StageGeometry.SnapResizeRect(next, _resizeHandle, guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
+                next = StageGeometry.SnapResizeRect(next, _resizeHandle, guides.X, guides.Y, StageGeometry.EditSnapThreshold(scale));
             }
             if (_resizeDisplay && App.Session.Selection.Ids.FirstOrDefault() is { } displayId)
             {
@@ -1068,7 +1065,7 @@ public sealed class StageSurface : Canvas
             {
                 var display = show.Displays.FirstOrDefault(d => d.Id == _dragDisplayId);
                 var guides = StageGeometry.DisplayMoveGuides(show.Displays, _dragDisplayId);
-                var snapped = StageGeometry.SnapRect(new StageRect(x, y, display?.Width ?? 1920, display?.Height ?? 1080), guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
+                var snapped = StageGeometry.SnapRect(new StageRect(x, y, display?.Width ?? 1920, display?.Height ?? 1080), guides.X, guides.Y, StageGeometry.EditSnapThreshold(scale));
                 x = snapped.X;
                 y = snapped.Y;
             }
@@ -1111,7 +1108,7 @@ public sealed class StageSurface : Canvas
             if (cue is not null)
             {
                 var rect = StageGeometry.CueRect(cue, asset);
-                var snapped = StageGeometry.SnapRect(new StageRect(cx, cy, rect.W, rect.H), guides.X, guides.Y, StageGeometry.SnapThreshold(scale));
+                var snapped = StageGeometry.SnapRect(new StageRect(cx, cy, rect.W, rect.H), guides.X, guides.Y, StageGeometry.EditSnapThreshold(scale));
                 cx = snapped.X;
                 cy = snapped.Y;
             }
@@ -1243,6 +1240,33 @@ public sealed class StageSurface : Canvas
     {
         var (ox, oy, scale) = Viewport(show);
         return (ox + p.X / scale, oy + p.Y / scale);
+    }
+}
+
+sealed class StagePreviewBox : Border
+{
+    readonly TextBlock _label = new()
+    {
+        FontSize = 14,
+        FontWeight = FontWeights.SemiBold,
+        Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+        TextAlignment = TextAlignment.Center,
+        TextWrapping = TextWrapping.Wrap,
+        IsHitTestVisible = false,
+    };
+
+    public string CueName { get => _label.Text; set => _label.Text = value; }
+
+    public StagePreviewBox()
+    {
+        IsHitTestVisible = false;
+        SnapsToDevicePixels = true;
+        Background = new SolidColorBrush(Color.FromArgb(50, 245, 166, 35));
+        BorderBrush = new SolidColorBrush(Color.FromRgb(245, 166, 35));
+        BorderThickness = new Thickness(1);
+        Child = _label;
     }
 }
 

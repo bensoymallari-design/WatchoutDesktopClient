@@ -325,6 +325,14 @@ public static class StageGeometry
 
     public static double SnapThreshold(double zoom) => Math.Max(32, 48 / Math.Max(0.04, zoom));
 
+    /// <summary>
+    /// ~12 screen pixels in stage space. <see cref="SnapThreshold"/> is the drop
+    /// magnet (200+ px at overview zoom) and glued Fit-to-display cues to the
+    /// wall when used for drag/resize.
+    /// </summary>
+    public static double EditSnapThreshold(double zoom) =>
+        Math.Max(8, 12 / Math.Max(0.04, zoom));
+
     public static Display DisplayForCue(IReadOnlyList<Display> displays, Cue cue)
     {
         return displays.FirstOrDefault(d =>
@@ -364,6 +372,30 @@ public static class StageGeometry
             Asset? asset = ev.Cue.AssetId is { } id && byId.TryGetValue(id, out var a) ? a : null;
             return (ev.Cue, CueRect(ev, asset));
         }).ToList();
+    }
+
+    /// <summary>
+    /// Stage edit hits VisibleMedia plus the current selection, so a cue picked
+    /// on the timeline still has move/resize handles when the playhead is elsewhere.
+    /// </summary>
+    public static List<(Cue Cue, StageRect Rect)> EditCueRects(
+        IReadOnlyList<EvaluatedCue> visible,
+        IReadOnlyList<Asset> assets,
+        IEnumerable<Cue> timelineCues,
+        Selection selection)
+    {
+        var rects = CueRects(visible, assets);
+        if (selection.Kind != SelectionKind.Cue) return rects;
+        var have = rects.Select(r => r.Cue.Id).ToHashSet();
+        foreach (var id in selection.Ids)
+        {
+            if (!have.Add(id)) continue;
+            var cue = timelineCues.FirstOrDefault(c => c.Id == id);
+            if (cue is null || cue.Type != CueType.Media) continue;
+            var asset = assets.FirstOrDefault(a => a.Id == cue.AssetId);
+            rects.Add((cue, CueRect(cue, asset)));
+        }
+        return rects;
     }
 
     public static StageHit HitEditTarget(

@@ -144,6 +144,46 @@ public class StageGeometryTests
     }
 
     [Fact]
+    public void ResizeSnapDoesNotGlueAFitCueToTheDisplay()
+    {
+        var zoom = 0.18;
+        Assert.True(StageGeometry.SnapThreshold(zoom) >= 200);
+        Assert.True(StageGeometry.EditSnapThreshold(zoom) < 80);
+        Assert.True(StageGeometry.EditSnapThreshold(zoom) < StageGeometry.SnapThreshold(zoom));
+        var grown = StageGeometry.ResizeRect(new StageRect(0, 0, 1920, 1080), "e", 80, 0);
+        Assert.Equal(2000, grown.W);
+        var edit = StageGeometry.SnapResizeRect(grown, "e", [0, 1920], [0, 1080], StageGeometry.EditSnapThreshold(zoom));
+        Assert.Equal(2000, edit.W);
+        var glued = StageGeometry.SnapResizeRect(grown, "e", [0, 1920], [0, 1080], StageGeometry.SnapThreshold(zoom));
+        Assert.Equal(1920, glued.W);
+    }
+
+    [Fact]
+    public void EditCueRectsKeepATimelineSelectionWhenPlayheadIsOffTheClip()
+    {
+        var cue = new Cue
+        {
+            Id = "c",
+            Type = CueType.Media,
+            AssetId = "a",
+            Start = 10_000,
+            Duration = 5_000,
+            Position = new Vec3 { X = 40, Y = 80 },
+            Scale = new Vec2 { X = 50, Y = 50 },
+        };
+        var asset = new Asset { Id = "a", Width = 1920, Height = 1080 };
+        var selected = new Selection { Kind = SelectionKind.Cue, Ids = ["c"] };
+        var rects = StageGeometry.EditCueRects([], [asset], [cue], selected);
+        Assert.Single(rects);
+        Assert.Equal("c", rects[0].Cue.Id);
+        Assert.Equal(40, rects[0].Rect.X);
+        Assert.Equal(960, rects[0].Rect.W);
+        var handle = StageGeometry.HitEditTarget(StageEditMode.Cues, [Display()], rects, selected, (40, 80), 1);
+        Assert.Equal(StageHitKind.CueHandle, handle.Kind);
+        Assert.Equal("nw", handle.Handle);
+    }
+
+    [Fact]
     public void EdgeDragGrowsRightSide()
     {
         var grown = StageGeometry.ResizeRect(new StageRect(0, 0, 1920, 1080), "e", 80, 0);
