@@ -110,11 +110,11 @@ public static class StageGeometry
         return wall is { } w ? (w.X, w.Y, w.W, w.H) : null;
     }
 
-    public static (Vec3 Position, Vec2 Scale) FitTransform(Asset asset, Display display, string mode = "cover") =>
+    public static (Vec3 Position, Vec2 Scale) FitTransform(Asset asset, Display display, string mode = "contain") =>
         FitTransform(asset.Width, asset.Height, display.X, display.Y, display.Width, display.Height, mode);
 
     public static (Vec3 Position, Vec2 Scale) FitTransform(
-        double assetW, double assetH, double dx, double dy, double dw, double dh, string mode = "cover")
+        double assetW, double assetH, double dx, double dy, double dw, double dh, string mode = "contain")
     {
         var aw = Math.Max(1, assetW > 0 ? assetW : 1920);
         var ah = Math.Max(1, assetH > 0 ? assetH : 1080);

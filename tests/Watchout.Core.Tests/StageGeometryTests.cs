@@ -129,7 +129,7 @@ public class StageGeometryTests
     [Fact]
     public void FitCoverMapsClipAcrossFourWideWall()
     {
-        var fit = StageGeometry.FitTransform(1920, 1080, 0, 0, 7680, 1080);
+        var fit = StageGeometry.FitTransform(1920, 1080, 0, 0, 7680, 1080, "cover");
         Assert.Equal(0, fit.Position.X);
         Assert.Equal(400, fit.Scale.X);
         Assert.Equal(100, fit.Scale.Y);
@@ -138,7 +138,7 @@ public class StageGeometryTests
     [Fact]
     public void FitCoverMapsClipAcross2x2Wall()
     {
-        var fit = StageGeometry.FitTransform(1920, 1080, 0, 0, 3840, 2160);
+        var fit = StageGeometry.FitTransform(1920, 1080, 0, 0, 3840, 2160, "cover");
         Assert.Equal(200, fit.Scale.X);
         Assert.Equal(200, fit.Scale.Y);
     }

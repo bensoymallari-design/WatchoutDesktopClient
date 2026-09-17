@@ -619,7 +619,7 @@ public sealed class ProducerSession
         Changed?.Invoke();
     }
 
-    public void FitSelectedToDisplay(string mode = "cover")
+    public void FitSelectedToDisplay(string mode = "contain")
     {
         if (Show is null || !SelectedCues(Show).Any())
         {
@@ -662,7 +662,7 @@ public sealed class ProducerSession
         });
     }
 
-    public void FitSelectedToWall(string mode = "cover")
+    public void FitSelectedToWall(string mode = "contain")
     {
         Mutate(show =>
         {

@@ -17,8 +17,8 @@ public sealed class OutputWindow : Window
     readonly StageSurface _surface;
     GpuOutputWall? _wall;
 
-    public int PixelWidth => OutputViewMath.WallPixels(_screen.Width, _screen.Height).W;
-    public int PixelHeight => OutputViewMath.WallPixels(_screen.Width, _screen.Height).H;
+    public int PixelWidth => OutputViewMath.PresentDest(_wall?.Width ?? 0, _wall?.Height ?? 0, _screen.Width, _screen.Height).W;
+    public int PixelHeight => OutputViewMath.PresentDest(_wall?.Width ?? 0, _wall?.Height ?? 0, _screen.Width, _screen.Height).H;
     public IntPtr WallHwnd => _wall?.Hwnd ?? IntPtr.Zero;
 
     public OutputWindow(Display display, OutputScreen screen, bool playAudio)
