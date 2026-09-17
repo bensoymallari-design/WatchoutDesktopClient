@@ -912,6 +912,7 @@ public sealed class StageSurface : Canvas
         _panArmed = false;
         _panning = false;
         App.Session.SetStageLayoutBusy(false);
+        App.Session.CommitLiveLayout();
         ReleaseMouseCapture();
     }
 

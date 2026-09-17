@@ -1091,6 +1091,7 @@ public class DevicesPanel : UserControl
 public class PropertiesPanel : UserControl
 {
     readonly StackPanel _root = new() { Margin = new Thickness(10) };
+    readonly Dictionary<string, TextBox> _fields = new();
     string _fp = "";
     bool _building;
 
@@ -1098,6 +1099,7 @@ public class PropertiesPanel : UserControl
     {
         Content = new ScrollViewer { Content = _root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
+        App.Session.LayoutChanged += () => Dispatcher.BeginInvoke(SyncLiveGeometry);
     }
 
     public void Reload()
@@ -1134,6 +1136,7 @@ public class PropertiesPanel : UserControl
         if (fp == _fp) return;
         _fp = fp;
         _building = true;
+        _fields.Clear();
         _root.Children.Clear();
         try
         {
@@ -1428,12 +1431,50 @@ public class PropertiesPanel : UserControl
         }
     }
 
+    void SyncLiveGeometry()
+    {
+        if (_building || _fields.Count == 0) return;
+        var s = App.Session;
+        var show = s.Show;
+        if (show is null) return;
+        if (s.Selection.Kind == SelectionKind.Cue)
+        {
+            var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => s.Selection.Ids.Contains(c.Id));
+            if (cue is null) return;
+            var media = show.Assets.FirstOrDefault(a => a.Id == cue.AssetId);
+            var pixel = StageGeometry.CuePixelSize(media, cue.Scale);
+            SetField("X", cue.Position.X.ToString("0"));
+            SetField("Y", cue.Position.Y.ToString("0"));
+            SetField("Width", pixel.W.ToString("0"));
+            SetField("Height", pixel.H.ToString("0"));
+            SetField("Scale X %", cue.Scale.X.ToString("0.##"));
+            SetField("Scale Y %", cue.Scale.Y.ToString("0.##"));
+            return;
+        }
+        if (s.Selection.Kind != SelectionKind.Display) return;
+        var d = show.Displays.FirstOrDefault(x => s.Selection.Ids.Contains(x.Id));
+        if (d is null) return;
+        SetField("Width", d.Width.ToString("0"));
+        SetField("Height", d.Height.ToString("0"));
+        SetField("X", d.X.ToString("0"));
+        SetField("Y", d.Y.ToString("0"));
+    }
+
+    void SetField(string label, string value)
+    {
+        if (!_fields.TryGetValue(label, out var box)) return;
+        if (box.IsKeyboardFocusWithin) return;
+        if (box.Text == value) return;
+        box.Text = value;
+    }
+
     void Field(string label, string value, Action<string> set)
     {
         _root.Children.Add(new TextBlock { Text = label, Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 2) });
         var box = new TextBox { Text = value };
         box.LostFocus += (_, _) => set(box.Text);
         box.KeyDown += (_, e) => { if (e.Key == Key.Enter) set(box.Text); };
+        _fields[label] = box;
         _root.Children.Add(box);
     }
 

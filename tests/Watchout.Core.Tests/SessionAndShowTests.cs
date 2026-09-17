@@ -333,14 +333,21 @@ public class SessionAndShowTests
         Assert.Equal(2, layouts);
         Assert.Equal(200, cue.Scale.X);
 
+        session.CommitLiveLayout();
+        Assert.Equal(1, changes);
+        session.CommitLiveLayout();
+        Assert.Equal(1, changes);
+
         var display = session.Show.Displays[0];
         session.LiveUpdateDisplay(display.Id, d => d.X = 64);
-        Assert.Equal(0, changes);
+        Assert.Equal(1, changes);
         Assert.Equal(3, layouts);
         Assert.Equal(64, display.X);
+        session.CommitLiveLayout();
+        Assert.Equal(2, changes);
 
         session.SetCamera(10, 20, 0.4);
-        Assert.Equal(0, changes);
+        Assert.Equal(2, changes);
         Assert.Equal(4, layouts);
         Assert.Equal(10, session.Camera.X);
     }
