@@ -736,7 +736,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "LED processors (Colorlight X20, NovaStar, MCTRL, Linsn) show the size Windows is actually sending — including custom maps like 516×430. EDID often still says 1920×1080; Use size copies the LED map, not that EDID. Assign screens, pick the extra HDMI/DP row (not the laptop), then Output. A 1920×1080 cue on a 516×430 wall will not fill the cabinets — Use size then Fit cue.",
+                : "LED processors (Colorlight X20, NovaStar, MCTRL, Linsn) show the NVIDIA/Windows custom — X20 HDMI often 6720×1344 (or 5280×816, 516×430). EDID still says 1920×1080 or 4096×2160; Use size copies the custom, not that EDID. Assign screens, pick X20 HDMI (not the laptop), then Output. A 1920×1080 cue on a 6720×1344 wall cannot fill the cabinets — Use size then Fit cue.",
         });
 
         _root.Children.Add(Header("AUDIO"));

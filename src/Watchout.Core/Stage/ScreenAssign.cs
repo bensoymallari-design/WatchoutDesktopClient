@@ -47,9 +47,10 @@ public static class ScreenAssign
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
     /// <summary>
-    /// Size WatchMe copies onto Stage and the Output HWND. Colorlight X20-style
-    /// maps (516×430) are the Windows/custom mode — EDID often still says 1920×1080.
-    /// A laptop 150% DPI rectangle (2560) that matches EDID×scale stays on EDID (4K).
+    /// Size WatchMe copies onto Stage and the Output HWND. Colorlight X20 NVIDIA
+    /// customs (6720×1344, 516×430, …) are the Windows mode — EDID often still
+    /// says 1920×1080 or 4096×2160. A laptop 150% DPI rectangle (2560) that
+    /// matches EDID×scale stays on EDID (4K).
     /// </summary>
     public static int ScreenWidth(OutputScreen screen) => ScreenPixels(screen).W;
 
@@ -111,8 +112,27 @@ public static class ScreenAssign
         w >= 64 && h >= 64 && !IsStandardTiming(w, h) && !LooksLikeTvAspect(w, h);
 
     /// <summary>
-    /// Colorlight X20 / LEDVISION custom output (cabinet map) is often 516×430
-    /// or similar — not a TV 16:9 mode. Prefer that over a 1920 EDID.
+    /// NVIDIA / Windows current mode vs GetMonitorInfo rectangle. Colorlight X20
+    /// customs (6720×1344) are often larger than the EDID rect (1920 or 4096) —
+    /// never Min() those down. Standard 4K at 150% DPI still uses the smaller rect
+    /// so LooksLikeDpiScaledMode can restore EDID.
+    /// </summary>
+    public static (int W, int H) WindowsModePixels(int rectW, int rectH, int currentW, int currentH)
+    {
+        if (currentW >= 64 && currentH >= 64)
+        {
+            if (LooksLikeLedMap(currentW, currentH) || !IsStandardTiming(currentW, currentH))
+                return (currentW, currentH);
+            if (rectW >= 64 && rectH >= 64)
+                return (Math.Min(rectW, currentW), Math.Min(rectH, currentH));
+            return (currentW, currentH);
+        }
+        return (Math.Max(1, rectW), Math.Max(1, rectH));
+    }
+
+    /// <summary>
+    /// Colorlight X20 NVIDIA custom (6720×1344) or LEDVISION cabinet map (516×430)
+    /// — not a TV 16:9 mode. Prefer the live Windows mode over EDID 1920 / 4096.
     /// </summary>
     public static (int W, int H)? PickLedMap(
         int currentW, int currentH,
@@ -123,7 +143,9 @@ public static class ScreenAssign
         if (Custom(currentW, currentH)) return (currentW, currentH);
         var edidArea = Math.Max(1L, (long)(edidW > 0 ? edidW : currentW) * (edidH > 0 ? edidH : currentH));
         var maps = modes
-            .Where(m => LooksLikeLedMap(m.W, m.H) && m.W * (long)m.H < edidArea * 85 / 100)
+            .Where(m => LooksLikeLedMap(m.W, m.H)
+                && (m.W * (long)m.H < edidArea * 85 / 100
+                    || m.W * (long)m.H > edidArea * 115 / 100))
             .Distinct()
             .OrderByDescending(m => m.W * (long)m.H)
             .ToList();

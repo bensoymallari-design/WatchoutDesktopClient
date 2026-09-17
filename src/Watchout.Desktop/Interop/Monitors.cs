@@ -24,8 +24,9 @@ public static class Monitors
             var current = CurrentMode(device);
             var currentW = current.W > 0 ? current.W : width;
             var currentH = current.H > 0 ? current.H : height;
-            var windowsW = currentW > 0 ? Math.Min(width, currentW) : width;
-            var windowsH = currentH > 0 ? Math.Min(height, currentH) : height;
+            var windows = ScreenAssign.WindowsModePixels(width, height, currentW, currentH);
+            var windowsW = windows.W;
+            var windowsH = windows.H;
             var physicalW = match.PreferredWidth > 0 ? match.PreferredWidth : currentW;
             var physicalH = match.PreferredHeight > 0 ? match.PreferredHeight : currentH;
             var map = ScreenAssign.PickLedMap(windowsW, windowsH, physicalW, physicalH, AllModes(device));

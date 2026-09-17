@@ -153,6 +153,41 @@ public class ScreenAssignTests
     }
 
     [Fact]
+    public void ColorlightX20NvidiaCustom6720IsCopiedNotEdid()
+    {
+        // NVIDIA Control Panel: X20 HDMI Custom 6720×1344 at 100%, EDID still 1920 or 4096.
+        Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(1920, 1080, 6720, 1344));
+        Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(4096, 2160, 6720, 1344));
+        Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(6720, 1344, 6720, 1344));
+        Assert.Equal((2560, 720), ScreenAssign.WindowsModePixels(2560, 720, 3840, 1080));
+
+        var x20 = new OutputScreen
+        {
+            Id = "x20",
+            Label = "X20 HDMI",
+            Width = 6720,
+            Height = 1344,
+            PhysicalWidth = 1920,
+            PhysicalHeight = 1080,
+        };
+        Assert.True(ScreenAssign.LooksLikeLedMap(6720, 1344));
+        Assert.True(ScreenAssign.LooksLikeLedMap(5280, 816));
+        Assert.True(ScreenAssign.LooksLikeLedMap(1248, 603));
+        Assert.Equal(6720, ScreenAssign.ScreenWidth(x20));
+        Assert.Equal(1344, ScreenAssign.ScreenHeight(x20));
+        Assert.Equal("X20 HDMI · wall/TV 6720×1344 (EDID 1920×1080)", ScreenAssign.ScreenChoiceLabel(x20));
+        var display = new Display { Width = 1920, Height = 1080 };
+        ScreenAssign.CopyScreenSize(display, x20);
+        Assert.Equal(6720, display.Width);
+        Assert.Equal(1344, display.Height);
+
+        var live = ScreenAssign.PickLedMap(6720, 1344, 4096, 2160, [(4096, 2160), (6720, 1344), (5280, 816), (1248, 603)]);
+        Assert.Equal((6720, 1344), live);
+        var listed = ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (4096, 2160), (6720, 1344), (1400, 1050)]);
+        Assert.Equal((6720, 1344), listed);
+    }
+
+    [Fact]
     public void ResolveOutputSkipsTheProducerLaptopWhenAControllerExists()
     {
         var laptop = new OutputScreen { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080, Left = 0 };
