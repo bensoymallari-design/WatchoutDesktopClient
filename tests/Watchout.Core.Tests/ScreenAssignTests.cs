@@ -93,11 +93,63 @@ public class ScreenAssignTests
             PhysicalHeight = 1080,
         };
         Assert.True(ScreenAssign.WindowsModeDiffersFromController(scaled));
-        Assert.Equal("MCTRL4K · wall/TV 3840×1080 (Windows 1920×1080)", ScreenAssign.ScreenChoiceLabel(scaled));
+        Assert.Equal("MCTRL4K · wall/TV 1920×1080 (EDID 3840×1080)", ScreenAssign.ScreenChoiceLabel(scaled));
         var d = new Display { Width = 100, Height = 100 };
         ScreenAssign.CopyScreenSize(d, scaled);
-        Assert.Equal(3840, d.Width);
+        Assert.Equal(1920, d.Width);
         Assert.Equal(1080, d.Height);
+    }
+
+    [Fact]
+    public void CopyScreenSizeUsesWindowsModeNotControllerEdid()
+    {
+        var windows = new OutputScreen
+        {
+            Id = "hdmi",
+            Label = "HDMI",
+            Width = 1920,
+            Height = 1080,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 2160,
+        };
+        Assert.Equal(1920, ScreenAssign.ScreenWidth(windows));
+        Assert.Equal(1080, ScreenAssign.ScreenHeight(windows));
+        var d = new Display { Width = 100, Height = 100 };
+        ScreenAssign.CopyScreenSize(d, windows);
+        Assert.Equal(1920, d.Width);
+        Assert.Equal(1080, d.Height);
+        var mapped = ScreenAssign.LayoutDisplaysOnScreens(
+            [new Display { Id = "d1", Name = "Display 1", Width = 100, Height = 100, Enabled = true }],
+            [
+                new() { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080 },
+                windows,
+            ]);
+        Assert.Equal(1920, mapped[0].Width);
+        Assert.Equal(1080, mapped[0].Height);
+    }
+
+    [Fact]
+    public void DpiScaledFourKStillCopiesPhysicalPixels()
+    {
+        var dpi = new OutputScreen
+        {
+            Id = "tv",
+            Label = "SyncMaster",
+            Width = 2560,
+            Height = 1440,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 2160,
+            ScaleFactor = 1.5,
+        };
+        Assert.True(ScreenAssign.LooksLikeDpiScaledMode(dpi));
+        Assert.False(ScreenAssign.WindowsModeDiffersFromController(dpi));
+        Assert.Equal(3840, ScreenAssign.ScreenWidth(dpi));
+        Assert.Equal(2160, ScreenAssign.ScreenHeight(dpi));
+        var d = new Display { Width = 100, Height = 100 };
+        ScreenAssign.CopyScreenSize(d, dpi);
+        Assert.Equal(3840, d.Width);
+        Assert.Equal(2160, d.Height);
+        Assert.Equal("SyncMaster · wall/TV 3840×2160", ScreenAssign.ScreenChoiceLabel(dpi));
     }
 
     [Fact]

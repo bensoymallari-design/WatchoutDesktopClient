@@ -1306,7 +1306,7 @@ public sealed class ProducerSession
     {
         foreach (var screen in screens.Where(ScreenAssign.WindowsModeDiffersFromController))
         {
-            Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label}. The controller EDID is {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}. In Windows Display settings set that extra screen to {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}.", "warn");
+            Log($"Stage on {screen.Label} is {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)} (Windows mode). Controller EDID is {screen.PhysicalWidth}×{screen.PhysicalHeight}.", "info");
         }
     }
 

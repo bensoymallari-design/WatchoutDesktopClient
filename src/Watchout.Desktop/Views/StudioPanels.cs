@@ -713,8 +713,8 @@ public class DevicesPanel : UserControl
                 ? "Only the Producer laptop is visible. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, any brand), then Find screens."
                 : $"{n} OS screens — extra HDMI/DP outputs are LED walls, TVs, and processors. Pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
             foreach (var screen in found.Where(s => !s.IsPrimary))
-                App.Session.Log($"{screen.Label}: controller {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}"
-                    + (ScreenAssign.WindowsModeDiffersFromController(screen) ? $", Windows {screen.Width}×{screen.Height}" : ""));
+                App.Session.Log($"{screen.Label}: Windows {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}"
+                    + (ScreenAssign.WindowsModeDiffersFromController(screen) ? $", EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}" : ""));
             Reload();
         }, "go", compact: true);
         find.HorizontalAlignment = HorizontalAlignment.Right;
@@ -737,7 +737,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Assign screens copies the controller EDID size onto the Stage (not a DPI-scaled Windows rectangle). On each Display row pick that wall/TV screen — not the Producer laptop — then Output. If the label shows (Windows 1920×1080), set that extra screen in Windows Display settings to the controller size.",
+                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Assign screens copies the Windows resolution of that extra screen onto the Stage (1920×1080 Windows → 1920×1080 Stage). On each Display row pick that wall/TV screen — not the Producer laptop — then Output. Set the extra screen in Windows Display settings to the size you want on Stage, then Assign screens or Use size.",
         });
 
         _root.Children.Add(Header("AUDIO"));
