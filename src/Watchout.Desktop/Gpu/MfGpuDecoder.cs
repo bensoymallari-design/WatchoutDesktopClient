@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using NAudio.Wave;
+using Watchout.Core.Gpu;
 using Watchout.Core.Playback;
 
 namespace Watchout.Desktop.Gpu;
@@ -28,8 +29,10 @@ sealed class MfGpuDecoder : IDisposable
     IWavePlayer? _wave;
     DateTime _lastFrameUtc = DateTime.UtcNow;
     string? _error;
+    bool _software;
 
     public string? Error { get { lock (_gate) return _error; } }
+    public bool UsedSoftwareFallback { get { lock (_gate) return _software; } }
     public bool Ready { get { lock (_gate) return _ready; } }
     public double DurationMs { get { lock (_gate) return _durationMs; } }
     public bool Dead
@@ -140,44 +143,78 @@ sealed class MfGpuDecoder : IDisposable
 
     void Open()
     {
-        MfNative.Check(MfNative.MFCreateAttributes(out var attrs, 2), "MFCreateAttributes");
-        attrs.SetUINT32(MfNative.MfSourceReaderEnableVideoProcessing, 1);
-        attrs.SetUINT32(MfNative.MfReadwriteEnableHardwareTransforms, 1);
-        MfNative.Check(MfNative.MFCreateSourceReaderFromURL(_url, attrs, out var reader), "MFCreateSourceReaderFromURL");
-        Marshal.ReleaseComObject(attrs);
-        reader.SetStreamSelection(MfNative.AllStreams, false);
-        reader.SetStreamSelection(MfNative.VideoStream, true);
-        MfNative.Check(MfNative.MFCreateMediaType(out var video), "video type");
-        video.SetGUID(MfNative.MfMtMajorType, MfNative.MfMediaTypeVideo);
-        video.SetGUID(MfNative.MfMtSubtype, MfNative.MfVideoFormatRgb32);
-        reader.SetCurrentMediaType(MfNative.VideoStream, IntPtr.Zero, video);
-        Marshal.ReleaseComObject(video);
-        reader.GetCurrentMediaType(MfNative.VideoStream, out var current);
-        current.GetUINT64(MfNative.MfMtFrameSize, out var packed);
-        Marshal.ReleaseComObject(current);
-        var width = (int)(packed >> 32);
-        var height = (int)(packed & 0xFFFFFFFF);
-        var duration = 0.0;
+        Exception? last = null;
+        if (TryOpen(hardware: true, out last)) return;
+        if (OutputViewMath.RetryOpenWithoutHardwareTransforms(last is not null)
+            && TryOpen(hardware: false, out last))
+        {
+            lock (_gate) _software = true;
+            return;
+        }
+        throw last ?? new InvalidOperationException("Media Foundation could not open the file as RGB32");
+    }
+
+    bool TryOpen(bool hardware, out Exception? error)
+    {
+        error = null;
+        IMFAttributes? attrs = null;
+        IMFSourceReader? reader = null;
+        IMFMediaType? video = null;
+        IMFMediaType? current = null;
         try
         {
-            reader.GetPresentationAttribute(unchecked((int)0xFFFFFFFF), MfNative.MfPdDuration, out var dur);
-            if (dur.vt == MfNative.VtI8 && dur.hVal > 0)
-                duration = dur.hVal / 10_000.0;
-        }
-        catch { /* optional */ }
+            MfNative.Check(MfNative.MFCreateAttributes(out attrs, 2), "MFCreateAttributes");
+            attrs.SetUINT32(MfNative.MfSourceReaderEnableVideoProcessing, 1);
+            if (hardware)
+                attrs.SetUINT32(MfNative.MfReadwriteEnableHardwareTransforms, 1);
+            MfNative.Check(MfNative.MFCreateSourceReaderFromURL(_url, attrs, out reader), "MFCreateSourceReaderFromURL");
+            reader.SetStreamSelection(MfNative.AllStreams, false);
+            reader.SetStreamSelection(MfNative.VideoStream, true);
+            MfNative.Check(MfNative.MFCreateMediaType(out video), "video type");
+            video.SetGUID(MfNative.MfMtMajorType, MfNative.MfMediaTypeVideo);
+            video.SetGUID(MfNative.MfMtSubtype, MfNative.MfVideoFormatRgb32);
+            reader.SetCurrentMediaType(MfNative.VideoStream, IntPtr.Zero, video);
+            reader.GetCurrentMediaType(MfNative.VideoStream, out current);
+            current.GetUINT64(MfNative.MfMtFrameSize, out var packed);
+            var width = (int)(packed >> 32);
+            var height = (int)(packed & 0xFFFFFFFF);
+            var duration = 0.0;
+            try
+            {
+                reader.GetPresentationAttribute(unchecked((int)0xFFFFFFFF), MfNative.MfPdDuration, out var dur);
+                if (dur.vt == MfNative.VtI8 && dur.hVal > 0)
+                    duration = dur.hVal / 10_000.0;
+            }
+            catch { /* optional */ }
 
-        lock (_gate)
+            lock (_gate)
+            {
+                _reader = reader;
+                reader = null;
+                _width = Math.Max(2, width);
+                _height = Math.Max(2, height);
+                _stride = _width * 4;
+                _pixels = new byte[_stride * _height];
+                _durationMs = duration;
+                _software = !hardware;
+            }
+
+            TryOpenAudio(_reader);
+            ReadOne(_reader, preroll: true);
+            return true;
+        }
+        catch (Exception ex)
         {
-            _reader = reader;
-            _width = Math.Max(2, width);
-            _height = Math.Max(2, height);
-            _stride = _width * 4;
-            _pixels = new byte[_stride * _height];
-            _durationMs = duration;
+            error = ex;
+            return false;
         }
-
-        TryOpenAudio(reader);
-        ReadOne(reader, preroll: true);
+        finally
+        {
+            if (current is not null) Marshal.ReleaseComObject(current);
+            if (video is not null) Marshal.ReleaseComObject(video);
+            if (reader is not null) Marshal.ReleaseComObject(reader);
+            if (attrs is not null) Marshal.ReleaseComObject(attrs);
+        }
     }
 
     void TryOpenAudio(IMFSourceReader reader)

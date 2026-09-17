@@ -417,6 +417,7 @@ public sealed class StageSurface : Canvas
             _gpu.Height = Math.Max(2, ActualHeight > 8 ? ActualHeight : ViewDisplay?.Height ?? 2);
         SetLeft(_gpu, 0);
         SetTop(_gpu, 0);
+        if (!Editing) _gpu.UpdateLayout();
         _gpu.Present(draws, ViewDisplay, PlayAudio, keepLastFrame);
     }
 

@@ -14,6 +14,9 @@ public sealed class OutputWindow : Window
     readonly OutputScreen _screen;
     readonly StageSurface _surface;
 
+    public int PixelWidth => Math.Max(64, _screen.Width);
+    public int PixelHeight => Math.Max(64, _screen.Height);
+
     public OutputWindow(Display display, OutputScreen screen, bool playAudio)
     {
         DisplayId = display.Id;
@@ -61,10 +64,20 @@ public sealed class OutputWindow : Window
     {
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
-        NativeWindow.Place(hwnd, _screen.Left, _screen.Top, _screen.Width, _screen.Height);
+        NativeWindow.Place(hwnd, _screen.Left, _screen.Top, PixelWidth, PixelHeight);
+        SyncDipSize();
         if (!refresh) return;
         UpdateLayout();
         _surface.UpdateLayout();
         _surface.Refresh();
+    }
+
+    void SyncDipSize()
+    {
+        var src = PresentationSource.FromVisual(this);
+        var scale = src?.CompositionTarget?.TransformToDevice.M11 ?? 1;
+        if (scale < 0.1) scale = 1;
+        Width = PixelWidth / scale;
+        Height = PixelHeight / scale;
     }
 }
