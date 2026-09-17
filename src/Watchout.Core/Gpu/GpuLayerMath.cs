@@ -65,12 +65,19 @@ public static class GpuLayerMath
     }
 
     /// <summary>
-    /// Producer Stage does not run a second H.264 decode while Output is live.
-    /// That dual DXVA path is what froze 4K PCs. Stage shows a labeled canvas
-    /// instead; the wall keeps the only file decoder (GPU DXGI surface).
+    /// Producer Stage does not run a second H.264 MediaElement while Output is
+    /// live (that dual DXVA path froze 4K PCs). The GPU compositor still draws
+    /// the same textures Output uses — the layer stack image, Resolume-style.
     /// </summary>
     public static bool StageYieldsFilePreview(bool editing, bool outputLive, Asset? asset) =>
         editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
+
+    /// <summary>
+    /// Shared D3D11 textures. Stage and Output both draw this asset. Skip the
+    /// WPF MediaElement / labeled canvas so the Output stack is visible on Stage.
+    /// </summary>
+    public static bool StageDrawsSharedGpu(bool gpuOn, Asset? asset) =>
+        gpuOn && UsesGpu(asset);
 
     public static GpuSourceKind SourceKind(Asset asset)
     {

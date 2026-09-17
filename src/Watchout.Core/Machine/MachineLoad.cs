@@ -160,7 +160,7 @@ public static class MachineLoad
         if (cpu == LoadLevel.Tight)
             return "CPU is busy. Another 4K file may hitch Stage and the wall.";
         if (s.Show.FourK >= 1.8)
-            return "4K is already on the wall — Stage stays a labeled preview so this PC does not lag.";
+            return "4K is already on the wall — Stage shows the same GPU stack.";
         return "CPU, RAM, and GPU have headroom for more video.";
     }
 

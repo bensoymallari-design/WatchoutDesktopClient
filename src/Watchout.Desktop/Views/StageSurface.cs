@@ -186,13 +186,18 @@ public sealed class StageSurface : Canvas
             var selected = session.Selection.Kind == SelectionKind.Display && session.Selection.Ids.Contains(display.Id);
             var hover = display.Id == _hoverDisplayId;
             var outputLive = session.LiveOutputs.Contains(display.Id) || session.StageYieldsFileDecoder;
+            var stackLive = outputLive && GpuEngine.Available;
             var border = new Border
             {
                 Width = Math.Max(2, r.Width),
                 Height = Math.Max(2, r.Height),
                 BorderBrush = new SolidColorBrush(hover ? Color.FromRgb(74, 222, 128) : selected ? Color.FromRgb(245, 166, 35) : Color.FromRgb(80, 80, 80)),
                 BorderThickness = new Thickness(hover || selected ? 3 : 1),
-                Background = new SolidColorBrush(hover ? Color.FromArgb(50, 74, 222, 128) : Color.FromArgb(40, 20, 20, 20)),
+                Background = new SolidColorBrush(hover
+                    ? Color.FromArgb(50, 74, 222, 128)
+                    : stackLive
+                        ? Color.FromArgb(0, 0, 0, 0)
+                        : Color.FromArgb(40, 20, 20, 20)),
                 IsHitTestVisible = false,
             };
             SetLeft(border, r.X);
@@ -205,32 +210,38 @@ public sealed class StageSurface : Canvas
             var key = display.Role == DisplayRole.Key ? $"KEY {Math.Max(1, display.KeyChannel)}" : "";
             var hud = new StackPanel
             {
-                Width = Math.Max(2, r.Width),
+                Width = stackLive ? double.NaN : Math.Max(2, r.Width),
                 IsHitTestVisible = false,
+                Margin = stackLive ? new Thickness(10, 8, 10, 8) : new Thickness(0),
             };
-            hud.Children.Add(new TextBlock
+            if (!stackLive)
             {
-                Text = "STAGE",
-                FontSize = 11,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromArgb(180, 245, 166, 35)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 4),
-            });
+                hud.Children.Add(new TextBlock
+                {
+                    Text = "STAGE",
+                    FontSize = 11,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromArgb(180, 245, 166, 35)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
+                    Margin = new Thickness(0, 0, 0, 4),
+                });
+            }
             hud.Children.Add(new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(display.Name) ? "Display" : display.Name,
-                FontSize = Math.Clamp(r.Height * 0.09, 18, 42),
+                FontSize = stackLive ? 13 : Math.Clamp(r.Height * 0.09, 18, 42),
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromArgb(235, 245, 166, 35)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
+                Foreground = new SolidColorBrush(Color.FromArgb((byte)(stackLive ? 200 : 235), 245, 166, 35)),
+                HorizontalAlignment = stackLive ? HorizontalAlignment.Left : HorizontalAlignment.Center,
+                TextAlignment = stackLive ? TextAlignment.Left : TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
             });
             var sub = cap
                 ?? (outputLive
-                    ? $"{display.Width:0}×{display.Height:0}  ·  Output live — picture is on the wall"
+                    ? (stackLive
+                        ? $"{display.Width:0}×{display.Height:0}  ·  Output stack"
+                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — picture is on the wall")
                     : string.IsNullOrEmpty(key)
                         ? $"{display.Width:0}×{display.Height:0}"
                         : $"{display.Width:0}×{display.Height:0}  ·  {key}");
@@ -239,15 +250,24 @@ public sealed class StageSurface : Canvas
                 Text = sub,
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(180, 175, 168)),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(8, 8, 8, 0),
+                HorizontalAlignment = stackLive ? HorizontalAlignment.Left : HorizontalAlignment.Center,
+                TextAlignment = stackLive ? TextAlignment.Left : TextAlignment.Center,
+                Margin = stackLive ? new Thickness(0, 2, 0, 0) : new Thickness(8, 8, 8, 0),
                 TextWrapping = TextWrapping.Wrap,
             });
-            var hudH = Math.Min(120, Math.Max(64, r.Height * 0.28));
-            SetLeft(hud, r.X);
-            SetTop(hud, r.Y + Math.Max(0, (r.Height - hudH) / 2));
-            SetZIndex(hud, 200);
+            if (stackLive)
+            {
+                SetLeft(hud, r.X);
+                SetTop(hud, r.Y);
+                SetZIndex(hud, 12);
+            }
+            else
+            {
+                var hudH = Math.Min(120, Math.Max(64, r.Height * 0.28));
+                SetLeft(hud, r.X);
+                SetTop(hud, r.Y + Math.Max(0, (r.Height - hudH) / 2));
+                SetZIndex(hud, 200);
+            }
             Children.Add(hud);
             _chrome.Add(hud);
             if (selected)
@@ -307,11 +327,9 @@ public sealed class StageSurface : Canvas
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scaleX, scaleY);
-            // Output already owns the H.264 decoder. Leave Stage as a labeled
-            // canvas so a second 4K DXVA cannot freeze the PC — but keep a
-            // preview box so move/resize still has something to grab.
-            if (gpuOn && asset is not null && GpuLayerMath.UsesGpu(asset)
-                && !GpuLayerMath.StageYieldsFilePreview(Editing, session.StageYieldsFileDecoder, asset))
+            // Shared GPU textures — Stage draws the same Output stack. No
+            // second H.264 decode. MediaElement fallback still yields.
+            if (gpuOn && asset is not null && GpuLayerMath.StageDrawsSharedGpu(gpuOn, asset))
             {
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
@@ -410,8 +428,8 @@ public sealed class StageSurface : Canvas
         {
             _gpu = new GpuPresentLayer(output: !Editing);
             Children.Insert(0, _gpu);
-            SetZIndex(_gpu, 1);
         }
+        SetZIndex(_gpu, 5);
         if (LayoutDiffers(_gpu.Width, ActualWidth) || _gpu.Width < 8)
             _gpu.Width = Math.Max(2, ActualWidth > 8 ? ActualWidth : ViewDisplay?.Width ?? 2);
         if (LayoutDiffers(_gpu.Height, ActualHeight) || _gpu.Height < 8)

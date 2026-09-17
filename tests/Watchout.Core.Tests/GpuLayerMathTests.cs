@@ -114,6 +114,10 @@ public class GpuLayerMathTests
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, false, clip));
         var ndi = new Asset { Id = "n", Kind = AssetKind.Ndi, Url = "ndi://cam" };
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, ndi));
+        Assert.True(GpuLayerMath.StageDrawsSharedGpu(true, clip));
+        Assert.True(GpuLayerMath.StageDrawsSharedGpu(true, ndi));
+        Assert.False(GpuLayerMath.StageDrawsSharedGpu(false, clip));
+        Assert.False(GpuLayerMath.StageDrawsSharedGpu(true, null));
     }
 
     [Fact]
