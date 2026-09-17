@@ -33,17 +33,14 @@ public static class NativeWindow
     }
 
     /// <summary>
-    /// OS pixels of the monitor that contains this point. A 3840 wall HWND on a
-    /// 2560 mode must not stay 3840 — DXGI then crops (Fit cue looks zoomed).
+    /// OS pixels Windows is driving on the monitor that contains this point.
+    /// NVIDIA custom modes (3160×2160) use EnumDisplaySettings, not a leftover
+    /// GetMonitorInfo rectangle that can be smaller and clip the wall HWND.
     /// </summary>
     public static (int W, int H) MonitorPixels(int x, int y)
     {
         var mon = MonitorFromPoint(new POINT { X = x, Y = y }, MonitorDefaultToNearest);
-        if (mon == IntPtr.Zero) return (0, 0);
-        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-        if (!GetMonitorInfo(mon, ref info)) return (0, 0);
-        var r = info.rcMonitor;
-        return (Math.Max(0, r.Right - r.Left), Math.Max(0, r.Bottom - r.Top));
+        return Monitors.WindowsPixels(mon);
     }
 
     public static bool IsChild(IntPtr hwnd)
@@ -73,9 +70,6 @@ public static class NativeWindow
     [DllImport("user32.dll")]
     static extern IntPtr MonitorFromPoint(POINT pt, int flags);
 
-    [DllImport("user32.dll")]
-    static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
-
     [StructLayout(LayoutKind.Sequential)]
     struct POINT
     {
@@ -86,14 +80,5 @@ public static class NativeWindow
     struct RECT
     {
         public int Left, Top, Right, Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct MONITORINFO
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public int dwFlags;
     }
 }

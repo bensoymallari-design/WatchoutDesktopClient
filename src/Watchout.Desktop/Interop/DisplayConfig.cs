@@ -8,7 +8,13 @@ namespace Watchout.Desktop.Interop;
 /// </summary>
 static class DisplayConfig
 {
-    internal readonly record struct EdidInfo(string DeviceKey, string FriendlyName, int PreferredWidth, int PreferredHeight);
+    internal readonly record struct EdidInfo(
+        string DeviceKey,
+        string FriendlyName,
+        int PreferredWidth,
+        int PreferredHeight,
+        int CurrentWidth,
+        int CurrentHeight);
 
     internal static List<EdidInfo> List()
     {
@@ -50,7 +56,14 @@ static class DisplayConfig
                 var friendly = string.IsNullOrWhiteSpace(target.MonitorFriendlyDeviceName)
                     ? ""
                     : target.MonitorFriendlyDeviceName.Trim();
-                list.Add(new EdidInfo(key, friendly, (int)preferred.Width, (int)preferred.Height));
+                var current = CurrentDesktop(path, modes, modeCount);
+                list.Add(new EdidInfo(
+                    key,
+                    friendly,
+                    (int)preferred.Width,
+                    (int)preferred.Height,
+                    current.W,
+                    current.H));
             }
         }
         catch
@@ -62,6 +75,44 @@ static class DisplayConfig
 
     internal static string DeviceKey(string? device) =>
         (device ?? "").Replace(@"\\.\", "", StringComparison.Ordinal).Trim();
+
+    const uint InvalidModeIdx = 0xffffffff;
+    const uint SourceType = 1;
+    const uint TargetType = 2;
+
+    static (int W, int H) CurrentDesktop(PathInfo path, ModeInfo[] modes, uint modeCount)
+    {
+        var source = ReadSource(path.Source.ModeInfoIdx, modes, modeCount);
+        if (source.W >= 64 && source.H >= 64) return source;
+        return ReadTargetActive(path.Target.ModeInfoIdx, modes, modeCount);
+    }
+
+    static int ModeIndex(uint packed, uint modeCount)
+    {
+        if (packed == InvalidModeIdx) return -1;
+        if (packed < modeCount) return (int)packed;
+        var low = packed & 0xffff;
+        if (low < modeCount) return (int)low;
+        return -1;
+    }
+
+    static (int W, int H) ReadSource(uint idx, ModeInfo[] modes, uint modeCount)
+    {
+        var i = ModeIndex(idx, modeCount);
+        if (i < 0) return (0, 0);
+        var mode = modes[i];
+        if (mode.InfoType != SourceType) return (0, 0);
+        return ((int)mode.Width, (int)mode.Height);
+    }
+
+    static (int W, int H) ReadTargetActive(uint idx, ModeInfo[] modes, uint modeCount)
+    {
+        var i = ModeIndex(idx, modeCount);
+        if (i < 0) return (0, 0);
+        var mode = modes[i];
+        if (mode.InfoType != TargetType) return (0, 0);
+        return ((int)mode.ActiveWidth, (int)mode.ActiveHeight);
+    }
 
     static int GetInfo<T>(ref T packet) where T : struct
     {
@@ -167,8 +218,8 @@ static class DisplayConfig
         public int PositionX;
         public int PositionY;
         public uint Pad0;
-        public uint Pad1;
-        public uint Pad2;
+        public uint ActiveWidth;
+        public uint ActiveHeight;
         public uint Pad3;
         public uint Pad4;
         public uint Pad5;

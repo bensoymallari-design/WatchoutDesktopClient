@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Interop;
 
@@ -21,12 +22,10 @@ public static class Monitors
             var key = DisplayConfig.DeviceKey(device);
             var match = edid.FirstOrDefault(e => string.Equals(e.DeviceKey, key, StringComparison.OrdinalIgnoreCase));
             var current = CurrentMode(device);
-            var currentW = current.W > 0 ? current.W : width;
-            var currentH = current.H > 0 ? current.H : height;
-            var windowsW = currentW > 0 ? Math.Min(width, currentW) : width;
-            var windowsH = currentH > 0 ? Math.Min(height, currentH) : height;
-            var physicalW = match.PreferredWidth > 0 ? match.PreferredWidth : currentW;
-            var physicalH = match.PreferredHeight > 0 ? match.PreferredHeight : currentH;
+            var windows = ScreenAssign.PickWindowsMode(
+                current.W, current.H, width, height, match.CurrentWidth, match.CurrentHeight);
+            var physicalW = match.PreferredWidth > 0 ? match.PreferredWidth : windows.W;
+            var physicalH = match.PreferredHeight > 0 ? match.PreferredHeight : windows.H;
             var label = !string.IsNullOrWhiteSpace(match.FriendlyName)
                 ? match.FriendlyName
                 : string.IsNullOrWhiteSpace(key)
@@ -34,12 +33,12 @@ public static class Monitors
                     : key;
             screens.Add(new OutputScreen
             {
-                Id = string.IsNullOrWhiteSpace(key) ? $"{r.Left},{r.Top},{width}x{height}" : key,
+                Id = string.IsNullOrWhiteSpace(key) ? $"{r.Left},{r.Top},{windows.W}x{windows.H}" : key,
                 Label = label,
                 Left = r.Left,
                 Top = r.Top,
-                Width = windowsW,
-                Height = windowsH,
+                Width = windows.W,
+                Height = windows.H,
                 PhysicalWidth = physicalW,
                 PhysicalHeight = physicalH,
                 IsPrimary = primary,
@@ -64,12 +63,32 @@ public static class Monitors
         return screens;
     }
 
+    public static (int W, int H) WindowsPixels(IntPtr hMonitor)
+    {
+        if (hMonitor == IntPtr.Zero) return (0, 0);
+        var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+        if (!GetMonitorInfo(hMonitor, ref info)) return (0, 0);
+        var r = info.rcMonitor;
+        var width = Math.Max(0, r.Right - r.Left);
+        var height = Math.Max(0, r.Bottom - r.Top);
+        var device = info.szDevice ?? "";
+        var current = CurrentMode(device);
+        var key = DisplayConfig.DeviceKey(device);
+        var match = DisplayConfig.List().FirstOrDefault(e => string.Equals(e.DeviceKey, key, StringComparison.OrdinalIgnoreCase));
+        return ScreenAssign.PickWindowsMode(current.W, current.H, width, height, match.CurrentWidth, match.CurrentHeight);
+    }
+
     static (int W, int H) CurrentMode(string device)
     {
         if (string.IsNullOrWhiteSpace(device)) return (0, 0);
         var mode = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
-        if (!EnumDisplaySettings(device, EnumCurrentSettings, ref mode)) return (0, 0);
-        return (mode.dmPelsWidth, mode.dmPelsHeight);
+        if (EnumDisplaySettings(device, EnumCurrentSettings, ref mode)
+            && mode.dmPelsWidth > 0 && mode.dmPelsHeight > 0)
+            return (mode.dmPelsWidth, mode.dmPelsHeight);
+        if (EnumDisplaySettingsEx(device, EnumCurrentSettings, ref mode, EdsRawMode)
+            && mode.dmPelsWidth > 0 && mode.dmPelsHeight > 0)
+            return (mode.dmPelsWidth, mode.dmPelsHeight);
+        return (0, 0);
     }
 
     static double DpiScale(IntPtr hMonitor)
@@ -89,6 +108,7 @@ public static class Monitors
     const int MONITORINFOF_PRIMARY = 1;
     const int CCHDEVICENAME = 32;
     const int EnumCurrentSettings = -1;
+    const int EdsRawMode = 2;
 
     delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, IntPtr lprcMonitor, IntPtr dwData);
 
@@ -100,6 +120,9 @@ public static class Monitors
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     static extern bool EnumDisplaySettings(string lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    static extern bool EnumDisplaySettingsEx(string lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode, int dwFlags);
 
     [DllImport("shcore.dll")]
     static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
