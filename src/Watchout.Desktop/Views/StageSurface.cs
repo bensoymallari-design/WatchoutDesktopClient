@@ -290,7 +290,7 @@ public sealed class StageSurface : Canvas
             _decoderEpoch = session.DecoderEpoch;
         }
 
-        var (originX, originY, scale) = OutputViewport(show);
+        var (originX, originY, scaleX, scaleY) = OutputViewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();
         var gpuDraws = new List<Watchout.Core.Gpu.GpuDraw>();
@@ -303,7 +303,7 @@ public sealed class StageSurface : Canvas
         {
             var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
             var rect = StageGeometry.CueRect(ev, asset);
-            var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
+            var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scaleX, scaleY);
             // Output already owns the H.264 decoder. Leave Stage as a labeled
             // canvas so a second 4K DXVA cannot freeze the PC — but keep a
             // preview box so move/resize still has something to grab.
@@ -313,8 +313,8 @@ public sealed class StageSurface : Canvas
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
                 gpuDraws.Add(GpuLayerMath.FromCue(
-                    ev, asset, originX, originY, scale, Math.Max(1, ActualWidth), Math.Max(1, ActualHeight),
-                    tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true));
+                    ev, asset, originX, originY, scaleX, Math.Max(1, ActualWidth), Math.Max(1, ActualHeight),
+                    tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true, scaleY));
                 z++;
                 continue;
             }
@@ -678,7 +678,7 @@ public sealed class StageSurface : Canvas
         return grid;
     }
 
-    (double OriginX, double OriginY, double Scale) OutputViewport(Show show)
+    (double OriginX, double OriginY, double ScaleX, double ScaleY) OutputViewport(Show show)
     {
         if (!Editing && ViewDisplay is { } display)
         {
@@ -687,7 +687,8 @@ public sealed class StageSurface : Canvas
             return Watchout.Core.Gpu.OutputViewMath.OutputViewport(
                 display.X, display.Y, display.Width, display.Height, destW, destH);
         }
-        return Viewport(show);
+        var v = Viewport(show);
+        return (v.OriginX, v.OriginY, v.Scale, v.Scale);
     }
 
     int PixelWidth()
@@ -719,8 +720,11 @@ public sealed class StageSurface : Canvas
         return (cam.X - ActualWidth / 2 / zoom, cam.Y - ActualHeight / 2 / zoom, zoom);
     }
 
-    static Rect Map(double x, double y, double w, double h, double ox, double oy, double scale) =>
-        new((x - ox) * scale, (y - oy) * scale, w * scale, h * scale);
+    static Rect Map(double x, double y, double w, double h, double ox, double oy, double scaleX, double scaleY = 0)
+    {
+        var sy = scaleY == 0 ? scaleX : scaleY;
+        return new((x - ox) * scaleX, (y - oy) * sy, w * scaleX, h * sy);
+    }
 
     static Brush BrushFrom(string hex)
     {
