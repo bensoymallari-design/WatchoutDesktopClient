@@ -4,6 +4,7 @@ using Watchout.Core.Models;
 using Watchout.Core.Playback;
 using Watchout.Core.Persistence;
 using Watchout.Core.Scheduling;
+using Watchout.Core.Stage;
 using Xunit;
 
 namespace Watchout.Core.Tests;
@@ -42,6 +43,35 @@ public class SessionAndShowTests
         var cue = session.AddCueFromAsset(media.Id);
         Assert.NotNull(cue);
         Assert.Equal(media.Id, cue!.AssetId);
+    }
+
+    [Fact]
+    public void CuePixelSizeAndFitFillTheDisplay()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        var display = session.Show!.Displays[0];
+        session.UpdateDisplay(display.Id, d => { d.Width = 3840; d.Height = 2160; });
+        var probe = new MediaProbe { Width = 1920, Height = 1080, DurationMs = 10_000, Fps = 60, Codec = "h264" };
+        var media = MediaImport.FromProbe("/clips/uhd.mp4", "/library/uhd.mp4", probe, 1_000_000, true);
+        session.ApplyImported(media);
+        var cue = session.AddCueFromAsset(media.Id)!;
+        var fitted = StageGeometry.CuePixelSize(session.Show.Assets[0], cue.Scale);
+        Assert.Equal(3840, fitted.W);
+        Assert.Equal(2160, fitted.H);
+
+        session.SetCuePixelSize(cue.Id, width: 960, height: 540);
+        var small = StageGeometry.CuePixelSize(session.Show.Assets[0], cue.Scale);
+        Assert.Equal(960, small.W);
+        Assert.Equal(540, small.H);
+
+        session.Select(SelectionKind.Cue, cue.Id);
+        session.FitSelectedToDisplay();
+        var again = StageGeometry.CuePixelSize(session.Show.Assets[0], cue.Scale);
+        Assert.Equal(3840, again.W);
+        Assert.Equal(2160, again.H);
+        Assert.Equal(display.X, cue.Position.X);
+        Assert.Equal(display.Y, cue.Position.Y);
     }
 
     [Fact]

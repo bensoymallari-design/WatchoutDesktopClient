@@ -24,6 +24,7 @@
             <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="ZoomOut_Click" Content="−"/>
             <Button x:Name="FitWallBtn" Style="{StaticResource Wo.Button}" Padding="8,2" Click="FrameWall_Click" Content="Fit wall"/>
             <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FrameDisplay_Click" Content="Fit display"/>
+            <Button Style="{StaticResource Wo.Button}" Padding="8,2" Click="FitCue_Click" Content="Fit cue"/>
           </StackPanel>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
             <Button x:Name="EditCuesBtn" Style="{StaticResource Wo.Button}" Padding="8,2" Click="EditCues_Click" Content="Edit cues"/>

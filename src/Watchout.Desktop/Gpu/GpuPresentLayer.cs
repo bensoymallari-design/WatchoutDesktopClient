@@ -63,9 +63,10 @@ public sealed class GpuPresentLayer : Grid
         var client = NativeWindow.ClientSize(hwnd);
         var displayW = display is null ? 0 : (int)Math.Round(display.Width);
         var displayH = display is null ? 0 : (int)Math.Round(display.Height);
-        var (w, h) = OutputViewMath.PresentSize(
-            client.W, client.H, displayW, displayH,
-            win?.PixelWidth ?? 0, win?.PixelHeight ?? 0);
+        var (w, h) = OutputViewMath.PresentDest(
+            client.W, client.H, win?.PixelWidth ?? 0, win?.PixelHeight ?? 0);
+        if (w < 64 || h < 64)
+            (w, h) = OutputViewMath.PresentSize(client.W, client.H, displayW, displayH, win?.PixelWidth ?? 0, win?.PixelHeight ?? 0);
         if (!_loggedWall)
         {
             _loggedWall = true;

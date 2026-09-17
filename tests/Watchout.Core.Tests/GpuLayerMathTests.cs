@@ -145,6 +145,11 @@ public class GpuLayerMathTests
         var keepScreen = OutputViewMath.PresentSize(2560, 1440, 3840, 2160, 3840, 2160);
         Assert.Equal(3840, keepScreen.W);
         Assert.Equal(2160, keepScreen.H);
+        var stub = OutputViewMath.PresentDest(64, 64, 3840, 2160);
+        Assert.Equal(3840, stub.W);
+        var hwnd = OutputViewMath.PresentDest(1920, 1080, 3840, 2160);
+        Assert.Equal(1920, hwnd.W);
+        Assert.Equal(1080, hwnd.H);
         var hdmiDip = OutputViewMath.ScreenToDip(3840, 2160, 1);
         Assert.Equal(3840, hdmiDip.DipW);
         Assert.Equal(2160, hdmiDip.DipH);
@@ -171,6 +176,10 @@ public class GpuLayerMathTests
         var oneToOne = OutputViewMath.OutputViewport(0, 0, 1920, 1080, 1920, 1080);
         Assert.Equal(1, oneToOne.ScaleX, 3);
         Assert.Equal(1, oneToOne.ScaleY, 3);
+        var fittedOnSmallerWall = OutputViewMath.OutputViewport(0, 0, 3840, 2160, 1920, 1080);
+        var whole = GpuLayerMath.MapRect(new StageRect(0, 0, 3840, 2160), fittedOnSmallerWall.OriginX, fittedOnSmallerWall.OriginY, fittedOnSmallerWall.ScaleX, fittedOnSmallerWall.ScaleY);
+        Assert.Equal(1920, whole.W);
+        Assert.Equal(1080, whole.H);
         Assert.True(OutputViewMath.PulseClock(true, false));
         Assert.True(OutputViewMath.PulseClock(false, true));
         Assert.False(OutputViewMath.PulseClock(false, false));

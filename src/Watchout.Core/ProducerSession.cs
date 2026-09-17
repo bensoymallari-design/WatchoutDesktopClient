@@ -619,8 +619,15 @@ public sealed class ProducerSession
         Changed?.Invoke();
     }
 
-    public void FitSelectedToDisplay(string mode = "cover")
+    public void FitSelectedToDisplay(string mode = "contain")
     {
+        if (Show is null || !SelectedCues(Show).Any())
+        {
+            Log("Select a cue, then Fit cue to fill that display", "warn");
+            return;
+        }
+        string? name = null;
+        string? size = null;
         Mutate(show =>
         {
             foreach (var cue in SelectedCues(show))
@@ -631,11 +638,31 @@ public sealed class ProducerSession
                 var fit = StageGeometry.FitTransform(asset, display, mode);
                 cue.Position = fit.Position;
                 cue.Scale = fit.Scale;
+                name = cue.Name;
+                size = $"{display.Name} {display.Width:0}×{display.Height:0}";
             }
+        });
+        if (name is not null) Log($"Fitted {name} to {size}");
+    }
+
+    public void SetCuePixelSize(string id, double? width = null, double? height = null)
+    {
+        if (CueLayerLocked(id))
+        {
+            Log("Layer is locked", "warn");
+            return;
+        }
+        Mutate(show =>
+        {
+            var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == id);
+            if (cue is null) return;
+            var asset = show.Assets.FirstOrDefault(a => a.Id == cue.AssetId);
+            var size = StageGeometry.CuePixelSize(asset, cue.Scale);
+            cue.Scale = StageGeometry.ScaleFromPixelSize(asset, width ?? size.W, height ?? size.H);
         });
     }
 
-    public void FitSelectedToWall(string mode = "cover")
+    public void FitSelectedToWall(string mode = "contain")
     {
         Mutate(show =>
         {

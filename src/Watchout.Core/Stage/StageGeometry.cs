@@ -110,11 +110,11 @@ public static class StageGeometry
         return wall is { } w ? (w.X, w.Y, w.W, w.H) : null;
     }
 
-    public static (Vec3 Position, Vec2 Scale) FitTransform(Asset asset, Display display, string mode = "cover") =>
+    public static (Vec3 Position, Vec2 Scale) FitTransform(Asset asset, Display display, string mode = "contain") =>
         FitTransform(asset.Width, asset.Height, display.X, display.Y, display.Width, display.Height, mode);
 
     public static (Vec3 Position, Vec2 Scale) FitTransform(
-        double assetW, double assetH, double dx, double dy, double dw, double dh, string mode = "cover")
+        double assetW, double assetH, double dx, double dy, double dw, double dh, string mode = "contain")
     {
         var aw = Math.Max(1, assetW > 0 ? assetW : 1920);
         var ah = Math.Max(1, assetH > 0 ? assetH : 1080);
@@ -256,6 +256,18 @@ public static class StageGeometry
             new Vec3 { X = Math.Round(rect.X), Y = Math.Round(rect.Y), Z = 0 },
             new Vec2 { X = RoundHundredths(rect.W / aw * 100), Y = RoundHundredths(rect.H / ah * 100) });
     }
+
+    /// <summary>
+    /// On-Stage pixel size of a cue (asset native × scale %). Watchout-style Width/Height.
+    /// </summary>
+    public static (double W, double H) CuePixelSize(Asset? asset, Vec2 scale)
+    {
+        var r = CueRect(new Cue { Scale = scale }, asset);
+        return (Math.Round(r.W), Math.Round(r.H));
+    }
+
+    public static Vec2 ScaleFromPixelSize(Asset? asset, double pixelW, double pixelH) =>
+        RectToCueTransform(new StageRect(0, 0, Math.Max(1, pixelW), Math.Max(1, pixelH)), asset ?? new Asset()).Scale;
 
     public static (double Value, double Dist)? NearestGuide(double value, IEnumerable<double> guides, double threshold)
     {

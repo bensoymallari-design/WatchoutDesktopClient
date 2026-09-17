@@ -290,6 +290,8 @@ public sealed class StageSurface : Canvas
             _decoderEpoch = session.DecoderEpoch;
         }
 
+        if (!Editing && Window.GetWindow(this) is OutputWindow wall)
+            wall.EnsureWall();
         var (originX, originY, scaleX, scaleY) = OutputViewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();

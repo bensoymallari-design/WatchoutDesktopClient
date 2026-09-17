@@ -145,6 +145,7 @@ public partial class ProducerView : UserControl
     void EditDisplays_Click(object sender, RoutedEventArgs e) => App.Session.SetStageEditMode(StageEditMode.Displays);
     void FrameWall_Click(object sender, RoutedEventArgs e) => Stage.FrameWall();
     void FrameDisplay_Click(object sender, RoutedEventArgs e) => Stage.FrameSelectedDisplay();
+    void FitCue_Click(object sender, RoutedEventArgs e) => App.Session.FitSelectedToDisplay();
     void ZoomIn_Click(object sender, RoutedEventArgs e) => Stage.ZoomBy(1.15);
     void ZoomOut_Click(object sender, RoutedEventArgs e) => Stage.ZoomBy(0.87);
     void Output_Click(object sender, RoutedEventArgs e)

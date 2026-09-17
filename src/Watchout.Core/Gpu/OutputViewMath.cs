@@ -53,6 +53,18 @@ public static class OutputViewMath
     public static (int W, int H) WallPixels(int screenW, int screenH) =>
         (Math.Max(MinHostPx, screenW), Math.Max(MinHostPx, screenH));
 
+    /// <summary>
+    /// Swap-chain / mapping dest. A 64×64 stub must not drive 4K, but drawing
+    /// 3840 pixels into a smaller HWND crops the picture (looks zoomed).
+    /// Use the real client when it is a real window.
+    /// </summary>
+    public static (int W, int H) PresentDest(int clientW, int clientH, int screenW, int screenH)
+    {
+        if (clientW >= 256 && clientH >= 256)
+            return (clientW, clientH);
+        return WallPixels(screenW, screenH);
+    }
+
     public static bool HostNeedsResize(int hostW, int hostH, int presentW, int presentH) =>
         Math.Abs(hostW - presentW) > 1 || Math.Abs(hostH - presentH) > 1;
 
@@ -86,8 +98,9 @@ public static class OutputViewMath
 
     /// <summary>
     /// Map a show Display onto the Output wall in destination pixels.
-    /// Stretch-fills so Stage display 1920×1080 on a 1920×1080 wall is 1:1,
-    /// and WPF DIP (2560 at 150%) must not letterbox a 4K wall.
+    /// Uniform contain so a cue that fills the Stage display shows the whole
+    /// picture on the wall. Stretching 3840 stage pixels into a 1920 HWND
+    /// was cropping (zoomed). Snap to 1:1 when sizes already match.
     /// </summary>
     public static (double OriginX, double OriginY, double ScaleX, double ScaleY) OutputViewport(
         double displayX, double displayY, double displayW, double displayH,
@@ -97,11 +110,12 @@ public static class OutputViewMath
         var dh = Math.Max(1, displayH);
         var sx = destW / dw;
         var sy = destH / dh;
-        if (sx <= 0) sx = 1;
-        if (sy <= 0) sy = 1;
-        if (Math.Abs(sx - 1) < 0.03) sx = 1;
-        if (Math.Abs(sy - 1) < 0.03) sy = 1;
-        return (displayX, displayY, sx, sy);
+        var s = Math.Min(sx, sy);
+        if (s <= 0) s = 1;
+        if (Math.Abs(s - 1) < 0.03) s = 1;
+        var originX = displayX - (destW / s - dw) / 2;
+        var originY = displayY - (destH / s - dh) / 2;
+        return (originX, originY, s, s);
     }
 
     /// <summary>
