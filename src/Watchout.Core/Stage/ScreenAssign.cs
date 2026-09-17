@@ -46,27 +46,133 @@ public static class ScreenAssign
             ? $"{screen.Label} · Producer {ScreenSizeText(screen)}"
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
-    public static int ScreenWidth(OutputScreen screen) =>
-        screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;
+    /// <summary>
+    /// Size WatchMe copies onto Stage and the Output HWND. Colorlight X20 NVIDIA
+    /// customs (6720×1344, 516×430, …) are the Windows mode — EDID often still
+    /// says 1920×1080 or 4096×2160. A laptop 150% DPI rectangle (2560) that
+    /// matches EDID×scale stays on EDID (4K).
+    /// </summary>
+    public static int ScreenWidth(OutputScreen screen) => ScreenPixels(screen).W;
 
-    public static int ScreenHeight(OutputScreen screen) =>
-        screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
+    public static int ScreenHeight(OutputScreen screen) => ScreenPixels(screen).H;
+
+    public static (int W, int H) ScreenPixels(OutputScreen screen)
+    {
+        if (LooksLikeDpiScaledMode(screen))
+        {
+            var w = screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;
+            var h = screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
+            return (Math.Max(1, w), Math.Max(1, h));
+        }
+        if (screen.MappedWidth >= 64 && screen.MappedHeight >= 64)
+            return (screen.MappedWidth, screen.MappedHeight);
+        if (screen.Width > 0 && screen.Height > 0)
+            return (screen.Width, screen.Height);
+        if (screen.PhysicalWidth > 0 && screen.PhysicalHeight > 0)
+            return (screen.PhysicalWidth, screen.PhysicalHeight);
+        return (1920, 1080);
+    }
+
+    public static bool LooksLikeDpiScaledMode(OutputScreen screen)
+    {
+        var scale = screen.ScaleFactor > 0.1 ? screen.ScaleFactor : 1;
+        if (scale < 1.05) return false;
+        if (screen.Width <= 0 || screen.Height <= 0) return false;
+        if (screen.PhysicalWidth <= 0 || screen.PhysicalHeight <= 0) return false;
+        var restoredW = screen.Width * scale;
+        var restoredH = screen.Height * scale;
+        return Math.Abs(restoredW - screen.PhysicalWidth) <= Math.Max(8, screen.PhysicalWidth * 0.05)
+            && Math.Abs(restoredH - screen.PhysicalHeight) <= Math.Max(8, screen.PhysicalHeight * 0.05);
+    }
+
+    public static bool IsStandardTiming(int w, int h) =>
+        (w, h) is
+            (3840, 2160) or (3840, 1080) or (4096, 2160) or
+            (2560, 1440) or (2560, 1080) or (1920, 1200) or (1920, 1080) or
+            (1680, 1050) or (1600, 900) or (1366, 768) or (1360, 768) or
+            (1280, 1024) or (1280, 800) or (1280, 720) or
+            (1024, 768) or (800, 600) or (640, 480);
 
     /// <summary>
-    /// True when Windows is driving the HDMI port at a different mode than the controller EDID.
-    /// Stage/Use size still copy the controller size; Output placement uses Width×Height.
+    /// GPU/TV extra modes (1400×1050, 720×480) must not beat a Colorlight
+    /// cabinet map. 516×430 is ~6:5 — not 16:9 / 4:3 / 16:10.
+    /// </summary>
+    public static bool LooksLikeTvAspect(int w, int h)
+    {
+        if (w < 64 || h < 64) return false;
+        var r = w / (double)h;
+        return NearRatio(r, 16.0 / 9) || NearRatio(r, 16.0 / 10) || NearRatio(r, 4.0 / 3)
+            || NearRatio(r, 5.0 / 4) || NearRatio(r, 3.0 / 2) || NearRatio(r, 21.0 / 9)
+            || NearRatio(r, 32.0 / 9) || NearRatio(r, 5.0 / 3) || NearRatio(r, 8.0 / 5);
+    }
+
+    static bool NearRatio(double ratio, double target) => Math.Abs(ratio - target) < 0.04;
+
+    public static bool LooksLikeLedMap(int w, int h) =>
+        w >= 64 && h >= 64 && !IsStandardTiming(w, h) && !LooksLikeTvAspect(w, h);
+
+    /// <summary>
+    /// NVIDIA / Windows current mode vs GetMonitorInfo rectangle. Colorlight X20
+    /// customs (6720×1344) are often larger than the EDID rect (1920 or 4096) —
+    /// never Min() those down. Standard 4K at 150% DPI still uses the smaller rect
+    /// so LooksLikeDpiScaledMode can restore EDID.
+    /// </summary>
+    public static (int W, int H) WindowsModePixels(int rectW, int rectH, int currentW, int currentH)
+    {
+        if (currentW >= 64 && currentH >= 64)
+        {
+            if (LooksLikeLedMap(currentW, currentH) || !IsStandardTiming(currentW, currentH))
+                return (currentW, currentH);
+            if (rectW >= 64 && rectH >= 64)
+                return (Math.Min(rectW, currentW), Math.Min(rectH, currentH));
+            return (currentW, currentH);
+        }
+        return (Math.Max(1, rectW), Math.Max(1, rectH));
+    }
+
+    /// <summary>
+    /// Colorlight X20 NVIDIA custom (6720×1344) or LEDVISION cabinet map (516×430)
+    /// — not a TV 16:9 mode. Prefer the live Windows mode over EDID 1920 / 4096.
+    /// </summary>
+    public static (int W, int H)? PickLedMap(
+        int currentW, int currentH,
+        int edidW, int edidH,
+        IReadOnlyList<(int W, int H)> modes)
+    {
+        static bool Custom(int w, int h) => w >= 64 && h >= 64 && !IsStandardTiming(w, h);
+        if (Custom(currentW, currentH)) return (currentW, currentH);
+        var edidArea = Math.Max(1L, (long)(edidW > 0 ? edidW : currentW) * (edidH > 0 ? edidH : currentH));
+        var maps = modes
+            .Where(m => LooksLikeLedMap(m.W, m.H)
+                && (m.W * (long)m.H < edidArea * 85 / 100
+                    || m.W * (long)m.H > edidArea * 115 / 100))
+            .Distinct()
+            .OrderByDescending(m => m.W * (long)m.H)
+            .ToList();
+        return maps.Count > 0 ? maps[0] : null;
+    }
+
+    /// <summary>
+    /// True when Windows/EDID disagree. Colorlight maps still count even though
+    /// Use size copies the Windows/custom pixels, not the EDID.
     /// </summary>
     public static bool WindowsModeDiffersFromController(OutputScreen screen) =>
-        screen.Width > 0 && screen.Height > 0
-        && (screen.Width != ScreenWidth(screen) || screen.Height != ScreenHeight(screen));
+        screen.Width > 0 && screen.PhysicalWidth > 0
+        && (screen.Width != screen.PhysicalWidth || screen.Height != screen.PhysicalHeight);
 
     public static string ScreenSizeText(OutputScreen screen)
     {
-        var w = ScreenWidth(screen);
-        var h = ScreenHeight(screen);
-        return WindowsModeDiffersFromController(screen)
-            ? $"{w}×{h} (Windows {screen.Width}×{screen.Height})"
-            : $"{w}×{h}";
+        var used = ScreenPixels(screen);
+        var edidW = screen.PhysicalWidth > 0 ? screen.PhysicalWidth : used.W;
+        var edidH = screen.PhysicalHeight > 0 ? screen.PhysicalHeight : used.H;
+        if (used.W == screen.Width && used.H == screen.Height
+            && used.W == edidW && used.H == edidH)
+            return $"{used.W}×{used.H}";
+        if (used.W == screen.Width && used.H == screen.Height)
+            return $"{used.W}×{used.H} (EDID {edidW}×{edidH})";
+        if (used.W == edidW && used.H == edidH)
+            return $"{used.W}×{used.H} (Windows {screen.Width}×{screen.Height})";
+        return $"{used.W}×{used.H} (Windows {screen.Width}×{screen.Height}, EDID {edidW}×{edidH})";
     }
 
     public static void ApplyAssignment(Display display, string? key)

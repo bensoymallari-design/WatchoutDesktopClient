@@ -452,6 +452,9 @@ public sealed class OutputScreen
     public int Height { get; set; }
     public int PhysicalWidth { get; set; }
     public int PhysicalHeight { get; set; }
+    /// <summary>Colorlight X20 / LED map when Windows lists a custom timing (e.g. 516×430).</summary>
+    public int MappedWidth { get; set; }
+    public int MappedHeight { get; set; }
     public bool IsPrimary { get; set; }
     public double ScaleFactor { get; set; } = 1;
 }

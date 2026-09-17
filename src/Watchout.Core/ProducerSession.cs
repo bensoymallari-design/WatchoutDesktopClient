@@ -1306,7 +1306,13 @@ public sealed class ProducerSession
     {
         foreach (var screen in screens.Where(ScreenAssign.WindowsModeDiffersFromController))
         {
-            Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label}. The controller EDID is {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}. In Windows Display settings set that extra screen to {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}.", "warn");
+            var used = ScreenAssign.ScreenPixels(screen);
+            if (ScreenAssign.LooksLikeDpiScaledMode(screen))
+            {
+                Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label} (DPI scaled). The panel EDID is {screen.PhysicalWidth}×{screen.PhysicalHeight}. In Windows Display settings set that extra screen to {used.W}×{used.H}.", "warn");
+                continue;
+            }
+            Log($"{screen.Label} NVIDIA/Windows mode is {used.W}×{used.H} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}). Use size copies {used.W}×{used.H} onto Stage so Fit cue matches the Colorlight X20 custom (6720×1344 and similar) — not 1920×1080.");
         }
     }
 
