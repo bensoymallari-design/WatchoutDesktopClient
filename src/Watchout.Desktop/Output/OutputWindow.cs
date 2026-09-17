@@ -4,6 +4,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using Watchout.Core.Gpu;
 using Watchout.Core.Models;
+using Watchout.Core.Stage;
 using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Interop;
 using Watchout.Desktop.Views;
@@ -22,9 +23,12 @@ public sealed class OutputWindow : Window
         get
         {
             var client = NativeWindow.ClientSize(WallHwnd);
-            return OutputViewMath.PresentDest(client.W, client.H, _screen.Width, _screen.Height);
+            return OutputViewMath.PresentDest(client.W, client.H, ScreenW, ScreenH);
         }
     }
+
+    int ScreenW => ScreenAssign.ScreenWidth(_screen);
+    int ScreenH => ScreenAssign.ScreenHeight(_screen);
 
     public int PixelWidth => DestSize.W;
     public int PixelHeight => DestSize.H;
@@ -45,7 +49,7 @@ public sealed class OutputWindow : Window
         SnapsToDevicePixels = true;
         Left = screen.Left;
         Top = screen.Top;
-        var dip = OutputViewMath.ScreenToDip(screen.Width, screen.Height, screen.ScaleFactor);
+        var dip = OutputViewMath.ScreenToDip(ScreenAssign.ScreenWidth(screen), ScreenAssign.ScreenHeight(screen), screen.ScaleFactor);
         Width = Math.Max(64, dip.DipW);
         Height = Math.Max(64, dip.DipH);
         _surface = new StageSurface
@@ -81,7 +85,7 @@ public sealed class OutputWindow : Window
         if (owner == IntPtr.Zero) return;
         try
         {
-            var (w, h) = OutputViewMath.WallPixels(_screen.Width, _screen.Height);
+            var (w, h) = OutputViewMath.WallPixels(ScreenW, ScreenH);
             if (_wall is null)
                 _wall = GpuOutputWall.Create(owner, _screen.Left, _screen.Top, w, h);
             else
@@ -97,7 +101,7 @@ public sealed class OutputWindow : Window
     {
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
-        var (w, h) = OutputViewMath.WallPixels(_screen.Width, _screen.Height);
+        var (w, h) = OutputViewMath.WallPixels(ScreenW, ScreenH);
         NativeWindow.Place(hwnd, _screen.Left, _screen.Top, w, h, topmost: false);
         EnsureWall();
         if (WallHwnd != IntPtr.Zero) NativeWindow.KeepTopmost(WallHwnd);

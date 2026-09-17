@@ -46,26 +46,57 @@ public static class ScreenAssign
             ? $"{screen.Label} · Producer {ScreenSizeText(screen)}"
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
-    public static int ScreenWidth(OutputScreen screen) =>
-        screen.PhysicalWidth > 0 ? screen.PhysicalWidth : screen.Width;
+    /// <summary>
+    /// Stage copies the Windows HDMI mode (Width×Height). A 1920×1080 extra
+    /// screen becomes a 1920×1080 Display even when EDID prefers 3840.
+    /// 150% DPI on a 4K panel reports a smaller Width that still maps to the
+    /// physical pixels — keep those so a 3840 wall does not become 2560.
+    /// </summary>
+    public static int ScreenWidth(OutputScreen screen)
+    {
+        if (LooksLikeDpiScaledMode(screen) && screen.PhysicalWidth > 0)
+            return screen.PhysicalWidth;
+        if (screen.Width > 0) return screen.Width;
+        return screen.PhysicalWidth > 0 ? screen.PhysicalWidth : 1920;
+    }
 
-    public static int ScreenHeight(OutputScreen screen) =>
-        screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
+    public static int ScreenHeight(OutputScreen screen)
+    {
+        if (LooksLikeDpiScaledMode(screen) && screen.PhysicalHeight > 0)
+            return screen.PhysicalHeight;
+        if (screen.Height > 0) return screen.Height;
+        return screen.PhysicalHeight > 0 ? screen.PhysicalHeight : 1080;
+    }
+
+    public static bool LooksLikeDpiScaledMode(OutputScreen screen)
+    {
+        var scale = screen.ScaleFactor;
+        if (scale < 1.05) return false;
+        if (screen.Width <= 0 || screen.Height <= 0) return false;
+        if (screen.PhysicalWidth <= 0 || screen.PhysicalHeight <= 0) return false;
+        return Approx(screen.Width * scale, screen.PhysicalWidth)
+            && Approx(screen.Height * scale, screen.PhysicalHeight);
+    }
+
+    static bool Approx(double value, int target) =>
+        Math.Abs(value - target) <= Math.Max(2, target * 0.02);
 
     /// <summary>
-    /// True when Windows is driving the HDMI port at a different mode than the controller EDID.
-    /// Stage/Use size still copy the controller size; Output placement uses Width×Height.
+    /// True when Windows is driving HDMI at a different mode than the controller
+    /// EDID (not 150% DPI). Stage still copies the Windows mode.
     /// </summary>
     public static bool WindowsModeDiffersFromController(OutputScreen screen) =>
         screen.Width > 0 && screen.Height > 0
-        && (screen.Width != ScreenWidth(screen) || screen.Height != ScreenHeight(screen));
+        && screen.PhysicalWidth > 0 && screen.PhysicalHeight > 0
+        && !LooksLikeDpiScaledMode(screen)
+        && (screen.Width != screen.PhysicalWidth || screen.Height != screen.PhysicalHeight);
 
     public static string ScreenSizeText(OutputScreen screen)
     {
         var w = ScreenWidth(screen);
         var h = ScreenHeight(screen);
         return WindowsModeDiffersFromController(screen)
-            ? $"{w}×{h} (Windows {screen.Width}×{screen.Height})"
+            ? $"{w}×{h} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight})"
             : $"{w}×{h}";
     }
 
