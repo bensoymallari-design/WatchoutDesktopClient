@@ -9,6 +9,7 @@
     <StackPanel VerticalAlignment="Center" Margin="64,0">
       <TextBlock Text="NATIVE SHOW CONTROL" FontSize="11" Foreground="#F5A623"/>
       <TextBlock Text="WatchMe" FontSize="64" FontWeight="Black" Foreground="#F5A623" Margin="0,4,0,0"/>
+      <TextBlock Text="by jhon juben mallari" FontSize="16" Foreground="#A8A29E" Margin="0,2,0,0"/>
       <TextBlock Text="PRODUCER  1.0.0" FontSize="22" FontWeight="SemiBold" Foreground="#F5A623" Margin="0,4,0,0"/>
       <TextBlock TextWrapping="Wrap" MaxWidth="560" Margin="0,20,0,0" Foreground="#A8A29E" FontSize="13" LineHeight="20"
                  Text="Native Windows Producer for big LED walls and live events. Stage, Timeline, Assets, and show outputs on any extra screen — Colorlight, NovaStar, LED processors, TVs, projectors. Live HDMI/SDI capture for Resolume program out. H.264 plays through Media Foundation / DXVA. HAP and DXV can be transcoded to H.264 MP4. Nothing is converted to WebM."/>

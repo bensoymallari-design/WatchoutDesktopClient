@@ -1,7 +1,7 @@
 <Window x:Class="Watchout.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WatchMe"
+        Title="WatchMe by jhon juben mallari"
         Width="1600" Height="980" MinWidth="1100" MinHeight="720"
         Background="#111111" Foreground="#E8E6E3"
         WindowStartupLocation="CenterScreen">
@@ -99,7 +99,7 @@
         <MenuItem Header="What's New" Click="WhatsNew_Click"/>
         <MenuItem Header="User Guide (7.8 map)" Click="Guide_Click"/>
         <MenuItem Header="Reset HDMI / wall displays" Click="ResetDisplays_Click"/>
-        <MenuItem Header="About WatchMe" Click="About_Click"/>
+        <MenuItem Header="About WatchMe by jhon juben mallari" Click="About_Click"/>
       </MenuItem>
     </Menu>
     <StatusBar DockPanel.Dock="Bottom" Background="#1A1A1A" Foreground="#9A958D">

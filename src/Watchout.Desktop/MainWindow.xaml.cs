@@ -41,8 +41,8 @@ public partial class MainWindow : Window
         var s = App.Session;
         Root.Content = s.View == "producer" ? _producer : _welcome;
         Title = s.Show is { } show
-            ? $"{show.Name}{(s.BlindEdit ? " · BLIND" : "")} — {Brand.Name}"
-            : Brand.Name;
+            ? $"{show.Name}{(s.BlindEdit ? " · BLIND" : "")} — {Brand.Title}"
+            : Brand.Title;
         if (s.ActiveTimeline is { } tl)
             StatusClock.Text = TimeFormat.FormatPlayTime(tl.Playhead);
         StatusLog.Text = s.Logs.FirstOrDefault()?.Message ?? "Ready";
@@ -435,7 +435,7 @@ public partial class MainWindow : Window
     void About_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show(this,
-            $"{Brand.Name} {Brand.Version} — native .NET / WPF desktop.\n\n" +
+            $"{Brand.Title} {Brand.Version} — native .NET / WPF desktop.\n\n" +
             "Video: D3D11 compositor + Media Foundation DXVA (one decode, Stage + Output).\n" +
             "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n" +
             "Looks: blend Normal/Add/Multiply/Screen, crop, wipe, chroma, brightness/contrast/sat/hue on the GPU.\n" +
@@ -448,7 +448,7 @@ public partial class MainWindow : Window
             "Picture comes from the installed NDI Runtime DLL.\n\n" +
             "HAP, Resolume DXV, ProRes, DNx: optional ffmpeg transcode to H.264 MP4\n" +
             "(NVENC / AMF / QSV when present) so the GPU still decodes DXVA H.264.",
-            $"About {Brand.Name}");
+            $"About {Brand.Title}");
     }
 
     public static async Task ImportMediaAsync()

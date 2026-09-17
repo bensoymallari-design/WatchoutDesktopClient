@@ -16,7 +16,7 @@ public sealed class SplashWindow : Window
 
     public SplashWindow()
     {
-        Title = Brand.Name;
+        Title = Brand.Title;
         Width = 640;
         Height = 420;
         WindowStyle = WindowStyle.None;
@@ -48,6 +48,13 @@ public sealed class SplashWindow : Window
             FontSize = 28,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+        });
+        brand.Children.Add(new TextBlock
+        {
+            Text = $"by {Brand.Credit}",
+            FontSize = 13,
+            Foreground = new SolidColorBrush(Color.FromRgb(154, 149, 141)),
+            Margin = new Thickness(0, 2, 0, 0),
         });
         brand.Children.Add(new TextBlock
         {
