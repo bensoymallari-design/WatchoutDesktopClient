@@ -131,6 +131,16 @@ public class GpuLayerMathTests
         Assert.False(GpuResidentPath.ReuseBuffer(64, 0));
         Assert.Equal(128, GpuResidentPath.GrowBuffer(64, 100));
         Assert.Equal(64, GpuResidentPath.GrowBuffer(64, 32));
+        Assert.False(GpuResidentPath.OpenProducedAFrame(false));
+        Assert.True(GpuResidentPath.OpenProducedAFrame(true));
+        Assert.True(GpuResidentPath.StillOpening(false));
+        Assert.False(GpuResidentPath.StillOpening(true));
+        Assert.True(GpuResidentPath.StallWithoutPicture(true, false, 4000, 4000));
+        Assert.False(GpuResidentPath.StallWithoutPicture(true, false, 100, 4000));
+        Assert.False(GpuResidentPath.StallWithoutPicture(true, true, 5000, 4000));
+        Assert.False(GpuResidentPath.StallWithoutPicture(false, false, 5000, 4000));
+        Assert.Equal(80, GpuResidentPath.PrerollAttempts);
+        Assert.Equal(2500, GpuResidentPath.PrerollBudgetMs);
     }
 
     [Fact]

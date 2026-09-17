@@ -175,9 +175,9 @@ public static class GpuEngine
             {
                 var decoder = Files[key];
                 if (!decoder.Dead && !decoder.Stalled) continue;
-                decoder.Dispose();
-                Files.Remove(key);
-                _comp?.Drop(key);
+                if (decoder.Dead && decoder.Error is { Length: > 0 } err)
+                    NoteDecode(key, err);
+                DropKey(key);
                 Rebuilt.Remove(key);
             }
         }
@@ -205,6 +205,8 @@ public static class GpuEngine
                     if (decoder is null) break;
                     if (decoder.UsedSoftwareFallback)
                         NoteSoftware(draw.SourceKey);
+                    if (decoder.FellBackFromNv12)
+                        NoteNv12Fallback(draw.SourceKey);
                     decoder.Sync(draw.MediaTimeMs, draw.Playing, draw.Loop, draw.Volume, playAudio);
                     var gpuReady = decoder.TryBindGpu(out var gpuTex, out var gpuDirty);
                     var cpuReady = decoder.TryCopyFrame(out var pixels, out var w, out var h, out var stride, out var cpuDirty);
@@ -249,9 +251,7 @@ public static class GpuEngine
             if (Rebuilt.TryGetValue(draw.SourceKey, out var at)
                 && (DateTime.UtcNow - at).TotalSeconds < 2)
                 return decoder.Dead ? null : decoder;
-            decoder.Dispose();
-            Files.Remove(draw.SourceKey);
-            _comp?.Drop(draw.SourceKey);
+            DropKey(draw.SourceKey);
             Rebuilt[draw.SourceKey] = DateTime.UtcNow;
             decoder = null;
         }
@@ -291,15 +291,23 @@ public static class GpuEngine
     static void NoteDecode(string key, string error)
     {
         if (!DecodeLogged.Add(key + error)) return;
-        App.Session.Log($"DXVA could not play {key}: {error} — try another H.264 MP4, or Stop then Play", "error");
+        App.Session.Log($"DXVA could not play this MP4 ({key}): {error} — use 8-bit H.264, or Stop then Play", "error");
     }
 
     static readonly HashSet<string> GpuSurfaceLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    static readonly HashSet<string> Nv12FallbackLogged = new(StringComparer.OrdinalIgnoreCase);
 
     static void NoteSoftware(string key)
     {
         if (!SoftwareLogged.Add(key)) return;
         App.Session.Log($"Playing {key} without DXVA hardware transforms — RGB32 still runs on this GPU");
+    }
+
+    static void NoteNv12Fallback(string key)
+    {
+        if (!Nv12FallbackLogged.Add(key)) return;
+        App.Session.Log($"DXVA NV12 GPU path failed for this MP4 — using RGB32 so Output is not stuck black after delete-and-reload.");
     }
 
     static void NoteGpuSurface(string key)
@@ -327,7 +335,7 @@ public static class GpuEngine
     static void NoteWaiting(string key)
     {
         if (!WaitingLogged.Add(key)) return;
-        App.Session.Log($"Output waiting for the first DXVA frame — {key}");
+        App.Session.Log($"Output waiting for the first DXVA frame of this MP4 — {key}");
     }
 
     static void NotePicture()
@@ -353,6 +361,10 @@ public static class GpuEngine
 
     static void DropKey(string key)
     {
+        WaitingLogged.Remove(key);
+        GpuSurfaceLogged.Remove(key);
+        Nv12FallbackLogged.Remove(key);
+        SoftwareLogged.Remove(key);
         if (Files.Remove(key, out var decoder)) decoder.Dispose();
         Stills.Remove(key);
         if (LiveHolds.Remove(key, out var fn))
@@ -445,6 +457,7 @@ public static class GpuEngine
         Idle.Clear();
         Rebuilt.Clear();
         SoftwareLogged.Clear();
+        Nv12FallbackLogged.Clear();
         GpuSurfaceLogged.Clear();
         SwapLogged.Clear();
         WaitingLogged.Clear();

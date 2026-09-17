@@ -39,12 +39,16 @@ sealed class MfGpuDecoder : IDisposable
     BufferedWaveProvider? _pcm;
     IWavePlayer? _wave;
     DateTime _lastFrameUtc = DateTime.UtcNow;
+    DateTime _openedUtc = DateTime.UtcNow;
+    bool _openFinished;
     string? _error;
     bool _software;
+    bool _fellBackFromNv12;
 
     public string? Error { get { lock (_gate) return _error; } }
     public bool UsedSoftwareFallback { get { lock (_gate) return _software; } }
     public bool UsedGpuSurfaces { get { lock (_gate) return _gpuSurfaces; } }
+    public bool FellBackFromNv12 { get { lock (_gate) return _fellBackFromNv12; } }
     public bool Ready { get { lock (_gate) return _ready; } }
     public double DurationMs { get { lock (_gate) return _durationMs; } }
     public bool Dead
@@ -64,7 +68,12 @@ sealed class MfGpuDecoder : IDisposable
         {
             lock (_gate)
             {
-                if (!_playing || !_ready) return false;
+                if (!_playing) return false;
+                if (GpuResidentPath.StillOpening(_openFinished)) return false;
+                var sinceOpen = (DateTime.UtcNow - _openedUtc).TotalMilliseconds;
+                if (GpuResidentPath.StallWithoutPicture(true, _ready, sinceOpen, VideoSync.StallMs))
+                    return true;
+                if (!_ready) return false;
                 return (DateTime.UtcNow - _lastFrameUtc).TotalMilliseconds >= VideoSync.StallMs;
             }
         }
@@ -138,6 +147,12 @@ sealed class MfGpuDecoder : IDisposable
         try
         {
             Open();
+            lock (_gate)
+            {
+                _openFinished = true;
+                _openedUtc = DateTime.UtcNow;
+                _lastFrameUtc = _openedUtc;
+            }
             var token = _cts!.Token;
             while (!token.IsCancellationRequested)
             {
@@ -174,6 +189,7 @@ sealed class MfGpuDecoder : IDisposable
         if (_gpu?.DxgiManager is not null)
         {
             if (TryOpen(hardware: true, dxgi: true, nv12: true, out last)) return;
+            lock (_gate) _fellBackFromNv12 = true;
             if (TryOpen(hardware: true, dxgi: true, nv12: false, out last)) return;
         }
         if (TryOpen(hardware: true, dxgi: false, nv12: false, out last)) return;
@@ -183,7 +199,8 @@ sealed class MfGpuDecoder : IDisposable
             lock (_gate) _software = true;
             return;
         }
-        throw last ?? new InvalidOperationException("Media Foundation could not open the file as RGB32");
+        throw last ?? new InvalidOperationException(
+            "Media Foundation could not decode this MP4 as NV12 or RGB32 — use an 8-bit H.264 MP4 (not Dolby Vision / HEVC HDR)");
     }
 
     bool TryOpen(bool hardware, bool dxgi, bool nv12, out Exception? error)
@@ -250,7 +267,14 @@ sealed class MfGpuDecoder : IDisposable
             }
 
             TryOpenAudio(_reader);
-            ReadOne(_reader, preroll: true);
+            var deadline = DateTime.UtcNow.AddMilliseconds(GpuResidentPath.PrerollBudgetMs);
+            for (var i = 0; i < GpuResidentPath.PrerollAttempts && !_ready && DateTime.UtcNow < deadline; i++)
+                ReadOne(_reader, preroll: true);
+            if (!GpuResidentPath.OpenProducedAFrame(_ready))
+            {
+                var kind = nv12 ? "NV12 GPU" : dxgi ? "RGB32 GPU" : "RGB32";
+                throw new InvalidOperationException($"DXVA {kind} opened {width}×{height} but produced no picture");
+            }
             return true;
         }
         catch (Exception ex)
@@ -263,6 +287,14 @@ sealed class MfGpuDecoder : IDisposable
             }
             _convert?.Dispose();
             _convert = null;
+            DropGpuTargets();
+            lock (_gate)
+            {
+                _dxgi = false;
+                _ready = false;
+                _gpuSurfaces = false;
+                _pixels = null;
+            }
             error = ex;
             return false;
         }
@@ -492,7 +524,24 @@ sealed class MfGpuDecoder : IDisposable
     {
         tex = null;
         slice = 0;
-        if (buffer is not IMFDXGIBuffer dxgi) return false;
+        IMFDXGIBuffer? dxgi = null;
+        var unk = Marshal.GetIUnknownForObject(buffer);
+        try
+        {
+            var iid = typeof(IMFDXGIBuffer).GUID;
+            var hr = Marshal.QueryInterface(unk, ref iid, out var pDxgi);
+            if (hr >= 0 && pDxgi != IntPtr.Zero)
+            {
+                try { dxgi = (IMFDXGIBuffer)Marshal.GetObjectForIUnknown(pDxgi); }
+                finally { Marshal.Release(pDxgi); }
+            }
+        }
+        finally
+        {
+            Marshal.Release(unk);
+        }
+        dxgi ??= buffer as IMFDXGIBuffer;
+        if (dxgi is null) return false;
         dxgi.GetResource(MfNative.Id3d11Texture2D, out var ptr);
         if (ptr == IntPtr.Zero) return false;
         tex = new ID3D11Texture2D(ptr);

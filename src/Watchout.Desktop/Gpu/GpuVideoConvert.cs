@@ -41,12 +41,13 @@ sealed class GpuVideoConvert : IDisposable
     {
         var srcDesc = source.Description;
         var dstDesc = dest.Description;
-        if (srcDesc.Width != dstDesc.Width || srcDesc.Height != dstDesc.Height)
+        if (srcDesc.Width < 2 || srcDesc.Height < 2 || dstDesc.Width < 2 || dstDesc.Height < 2)
             return false;
         _gpu.Enter();
         try
         {
-            if (IsBgra(srcDesc.Format) && IsBgra(dstDesc.Format) && srcDesc.Format == dstDesc.Format)
+            if (IsBgra(srcDesc.Format) && IsBgra(dstDesc.Format) && srcDesc.Format == dstDesc.Format
+                && srcDesc.Width == dstDesc.Width && srcDesc.Height == dstDesc.Height)
             {
                 _gpu.Context.CopyResource(dest, source);
                 return true;

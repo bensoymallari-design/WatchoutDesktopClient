@@ -47,4 +47,20 @@ public static class GpuResidentPath
         var grow = existingLength <= 0 ? needed : existingLength * 2;
         return Math.Max(needed, grow);
     }
+
+    /// <summary>
+    /// NV12 + D3D manager can "open" without ever handing a DXGI frame
+    /// (Dolby Vision / HEVC, or IMFDXGIBuffer QI failing). That left Output
+    /// black after delete-and-reload of the same MP4. Reject the open and
+    /// try RGB32. NDI and capture are not this path.
+    /// </summary>
+    public const int PrerollAttempts = 80;
+    public const int PrerollBudgetMs = 2500;
+
+    public static bool OpenProducedAFrame(bool ready) => ready;
+
+    public static bool StillOpening(bool openFinished) => !openFinished;
+
+    public static bool StallWithoutPicture(bool playing, bool ready, double sinceOpenMs, double stallMs) =>
+        playing && !ready && sinceOpenMs >= stallMs;
 }
