@@ -65,4 +65,26 @@ public static class OutputViewMath
     /// </summary>
     public static bool TearGpuOnPresentError(int hresult) =>
         hresult == unchecked((int)0x887A0005) || hresult == unchecked((int)0x887A0007);
+
+    /// <summary>
+    /// Map a show Display into destination pixels so a Fit-to-display cue fills
+    /// the wall. WPF ActualWidth (DIP / 64×64 host) must not scale the quad.
+    /// </summary>
+    public static (double OriginX, double OriginY, double Scale) OutputViewport(
+        double displayX, double displayY, double displayW, double displayH,
+        int destW, int destH)
+    {
+        var dw = Math.Max(1, displayW);
+        var dh = Math.Max(1, displayH);
+        var scale = Math.Min(destW / dw, destH / dh);
+        if (scale <= 0) scale = 1;
+        return (displayX, displayY, scale);
+    }
+
+    /// <summary>
+    /// Keep Output presenting while the wall is open even if the timeline is
+    /// stopped, so the first decoded frame can land before Play.
+    /// </summary>
+    public static bool PulseClock(bool timelinePlaying, bool outputLive) =>
+        timelinePlaying || outputLive;
 }

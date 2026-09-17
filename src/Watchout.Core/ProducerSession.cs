@@ -6,6 +6,7 @@ using Watchout.Core.Playback;
 using Watchout.Core.Persistence;
 using Watchout.Core.Stage;
 using Watchout.Core.Scheduling;
+using Watchout.Core.Gpu;
 
 namespace Watchout.Core;
 
@@ -294,7 +295,7 @@ public sealed class ProducerSession
         if (Show is null) return;
         var livePlaying = Show.Timelines.Any(t => t.Playback == PlaybackState.Play);
         var wallPlaying = BlindEdit && _playback is not null && _playback.Timelines.Any(t => t.Playback == PlaybackState.Play);
-        if (!livePlaying && !wallPlaying) return;
+        if (!OutputViewMath.PulseClock(livePlaying || wallPlaying, LiveOutputs.Count > 0)) return;
         if (livePlaying) PlaybackClock.Tick(Show, dtMs);
         if (wallPlaying) PlaybackClock.Tick(_playback!, dtMs);
         Clock?.Invoke();
