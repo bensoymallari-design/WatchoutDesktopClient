@@ -139,8 +139,7 @@ public static class GpuEngine
                 if (draws.Count > 0 || !GpuSourceLifetime.FreezeIdleWhilePlaying(playing, draws.Count))
                     SyncSources(draws, playAudio, playing);
                 var ready = draws.Count(d => _comp.Has(d.SourceKey));
-                if (playing && draws.Count > 0 && ready == 0)
-                    NoteWaiting(draws[0].SourceKey);
+                NoteWall(draws, ready, playing, keepLastFrame);
                 if (GpuSourceLifetime.ClearToBlack(ready))
                 {
                     _comp.Render(swap.Rtv, width, height, draws, display);
@@ -270,6 +269,60 @@ public static class GpuEngine
         return decoder;
     }
 
+    static OutputPictureKind _wallKind;
+    static DateTime _wallKindUtc = DateTime.UtcNow;
+    static bool _wallKindLogged;
+
+    static void NoteWall(IReadOnlyList<GpuDraw> draws, int ready, bool playing, bool keepLastFrame)
+    {
+        var draw = draws.Count > 0 ? draws[0] : default;
+        var key = draws.Count > 0 ? draw.SourceKey : "";
+        var kind = draws.Count > 0 ? draw.Kind : GpuSourceKind.File;
+        Files.TryGetValue(key, out var decoder);
+        var missing = kind == GpuSourceKind.File
+            && key.Length > 0
+            && decoder is null
+            && !File.Exists(FilePath(key));
+        var liveHas = kind is GpuSourceKind.Ndi or GpuSourceKind.Capture && ready > 0;
+        var hint = new OutputPictureHint(
+            playing,
+            draws.Count,
+            ready,
+            keepLastFrame,
+            kind,
+            decoder?.Opening == true,
+            decoder?.Ready == true,
+            decoder?.Dead == true,
+            decoder?.Stalled == true,
+            missing,
+            liveHas,
+            decoder?.Error);
+        var cause = OutputPictureCause.Classify(hint);
+        if (cause != _wallKind)
+        {
+            _wallKind = cause;
+            _wallKindUtc = DateTime.UtcNow;
+            _wallKindLogged = false;
+            if (cause != OutputPictureKind.Picture)
+                _pictureLogged = false;
+        }
+        if (cause == OutputPictureKind.Picture)
+        {
+            NotePicture();
+            _wallKindLogged = true;
+            return;
+        }
+        var ms = (DateTime.UtcNow - _wallKindUtc).TotalMilliseconds;
+        if (!OutputPictureCause.ShouldLog(cause, _wallKindLogged, ms)) return;
+        var text = OutputPictureCause.Message(cause, key, decoder?.Error);
+        if (text.Length == 0) return;
+        _wallKindLogged = true;
+        App.Session.Log(text, OutputPictureCause.Level(cause));
+    }
+
+    static string FilePath(string key) =>
+        key.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ? key["file:".Length..] : key;
+
     static readonly HashSet<string> MissingLogged = new(StringComparer.OrdinalIgnoreCase);
 
     static readonly HashSet<string> DecodeLogged = new(StringComparer.OrdinalIgnoreCase);
@@ -277,8 +330,6 @@ public static class GpuEngine
     static readonly HashSet<string> SoftwareLogged = new(StringComparer.OrdinalIgnoreCase);
 
     static readonly HashSet<string> SwapLogged = new(StringComparer.OrdinalIgnoreCase);
-
-    static readonly HashSet<string> WaitingLogged = new(StringComparer.OrdinalIgnoreCase);
 
     static bool _pictureLogged;
 
@@ -332,12 +383,6 @@ public static class GpuEngine
         App.Session.Log($"Output swap retry after {message}", "warn");
     }
 
-    static void NoteWaiting(string key)
-    {
-        if (!WaitingLogged.Add(key)) return;
-        App.Session.Log($"Output waiting for the first DXVA frame of this MP4 — {key}");
-    }
-
     static void NotePicture()
     {
         if (_pictureLogged) return;
@@ -361,7 +406,6 @@ public static class GpuEngine
 
     static void DropKey(string key)
     {
-        WaitingLogged.Remove(key);
         GpuSurfaceLogged.Remove(key);
         Nv12FallbackLogged.Remove(key);
         SoftwareLogged.Remove(key);
@@ -460,8 +504,9 @@ public static class GpuEngine
         Nv12FallbackLogged.Clear();
         GpuSurfaceLogged.Clear();
         SwapLogged.Clear();
-        WaitingLogged.Clear();
         _pictureLogged = false;
+        _wallKind = OutputPictureKind.Idle;
+        _wallKindLogged = false;
         foreach (var hold in LiveHolds)
         {
             if (hold.Key.StartsWith("ndi:", StringComparison.OrdinalIgnoreCase))
