@@ -113,19 +113,28 @@ public static class GpuEngine
         if (!TryStart() || _comp is null || _gpu is null || hwnd == 0) return false;
         width = Math.Max(2, width);
         height = Math.Max(2, height);
+        var client = NativeWindow.ClientSize(hwnd);
+        if (client.W >= OutputViewMath.MinHostPx && client.H >= OutputViewMath.MinHostPx)
+        {
+            width = Math.Min(width, client.W);
+            height = Math.Min(height, client.H);
+        }
         try
         {
             lock (Gate)
             {
                 var playing = keepLastFrame || draws.Any(d => d.Playing);
                 var child = NativeWindow.IsChild(hwnd);
-                if (!Swaps.TryGetValue(hwnd, out var swap) || swap.Width != width || swap.Height != height)
+                if (!Swaps.TryGetValue(hwnd, out var swap)
+                    || swap.RequestedWidth != width || swap.RequestedHeight != height)
                 {
                     swap?.Dispose();
                     swap = OutputSwap.Create(_gpu, hwnd, width, height, child);
                     Swaps[hwnd] = swap;
-                    NoteSwap(hwnd, width, height, swap.Flip, child);
+                    NoteSwap(hwnd, swap.Width, swap.Height, swap.Flip, child);
                 }
+                width = swap.Width;
+                height = swap.Height;
                 if (draws.Count > 0 || !GpuSourceLifetime.FreezeIdleWhilePlaying(playing, draws.Count))
                     SyncSources(draws, playAudio, playing);
                 var ready = draws.Count(d => _comp.Has(d.SourceKey));
@@ -447,14 +456,18 @@ sealed class OutputSwap : IDisposable
     public ID3D11RenderTargetView Rtv { get; }
     public int Width { get; }
     public int Height { get; }
+    public int RequestedWidth { get; }
+    public int RequestedHeight { get; }
     public bool Flip { get; }
 
-    OutputSwap(IDXGISwapChain1 chain, ID3D11RenderTargetView rtv, int w, int h, bool flip)
+    OutputSwap(IDXGISwapChain1 chain, ID3D11RenderTargetView rtv, int w, int h, int requestedW, int requestedH, bool flip)
     {
         Chain = chain;
         Rtv = rtv;
         Width = w;
         Height = h;
+        RequestedWidth = requestedW;
+        RequestedHeight = requestedH;
         Flip = flip;
     }
 
@@ -473,6 +486,8 @@ sealed class OutputSwap : IDisposable
 
     static OutputSwap CreateCore(GpuDevice gpu, nint hwnd, int width, int height, bool flip)
     {
+        width = Math.Max(2, width);
+        height = Math.Max(2, height);
         var desc = new SwapChainDescription1
         {
             Width = (uint)width,
@@ -480,9 +495,9 @@ sealed class OutputSwap : IDisposable
             Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0),
             BufferUsage = Usage.RenderTargetOutput,
-            BufferCount = 1u,
+            BufferCount = flip ? 2u : 1u,
             Scaling = Scaling.Stretch,
-            SwapEffect = SwapEffect.Discard,
+            SwapEffect = flip ? SwapEffect.FlipDiscard : SwapEffect.Discard,
             AlphaMode = AlphaMode.Ignore,
         };
         var chain = gpu.Factory.CreateSwapChainForHwnd(gpu.Device, hwnd, desc);
@@ -492,9 +507,10 @@ sealed class OutputSwap : IDisposable
         }
         catch { /* factory optional */ }
         using var back = chain.GetBuffer<ID3D11Texture2D>(0);
+        var actual = OutputViewMath.SwapPixels(width, height, (int)back.Description.Width, (int)back.Description.Height);
         var rtv = gpu.Device.CreateRenderTargetView(back);
         gpu.Context.ClearRenderTargetView(rtv, new Vortice.Mathematics.Color4(0, 0, 0, 1));
-        return new OutputSwap(chain, rtv, width, height, flip);
+        return new OutputSwap(chain, rtv, actual.W, actual.H, width, height, flip);
     }
 
     public void Dispose()

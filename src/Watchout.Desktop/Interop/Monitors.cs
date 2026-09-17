@@ -23,6 +23,8 @@ public static class Monitors
             var current = CurrentMode(device);
             var currentW = current.W > 0 ? current.W : width;
             var currentH = current.H > 0 ? current.H : height;
+            var windowsW = currentW > 0 ? Math.Min(width, currentW) : width;
+            var windowsH = currentH > 0 ? Math.Min(height, currentH) : height;
             var physicalW = match.PreferredWidth > 0 ? match.PreferredWidth : currentW;
             var physicalH = match.PreferredHeight > 0 ? match.PreferredHeight : currentH;
             var label = !string.IsNullOrWhiteSpace(match.FriendlyName)
@@ -36,8 +38,8 @@ public static class Monitors
                 Label = label,
                 Left = r.Left,
                 Top = r.Top,
-                Width = width,
-                Height = height,
+                Width = windowsW,
+                Height = windowsH,
                 PhysicalWidth = physicalW,
                 PhysicalHeight = physicalH,
                 IsPrimary = primary,

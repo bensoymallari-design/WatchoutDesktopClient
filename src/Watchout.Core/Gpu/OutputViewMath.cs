@@ -56,13 +56,30 @@ public static class OutputViewMath
     /// <summary>
     /// Swap-chain / mapping dest. A 64×64 stub must not drive 4K, but drawing
     /// 3840 pixels into a smaller HWND crops the picture (looks zoomed).
-    /// Use the real client when it is a real window.
+    /// Use the real client when it is a real window, and never present larger
+    /// than the Windows mode (a 3840 buffer on a 2560 client is a zoomed crop).
     /// </summary>
     public static (int W, int H) PresentDest(int clientW, int clientH, int screenW, int screenH)
     {
         if (clientW >= 256 && clientH >= 256)
+        {
+            if (screenW >= 256 && screenH >= 256)
+                return (Math.Min(clientW, screenW), Math.Min(clientH, screenH));
             return (clientW, clientH);
+        }
         return WallPixels(screenW, screenH);
+    }
+
+    /// <summary>
+    /// DXGI FlipDiscard ignores Stretch (behaves like NONE). A swap larger than
+    /// the HWND crops top-left — the 3840 Fit-cue zoom. Present at the real
+    /// back-buffer size, not the size we asked for.
+    /// </summary>
+    public static (int W, int H) SwapPixels(int requestedW, int requestedH, int actualW, int actualH)
+    {
+        var w = actualW >= MinHostPx ? actualW : requestedW;
+        var h = actualH >= MinHostPx ? actualH : requestedH;
+        return (Math.Max(2, w), Math.Max(2, h));
     }
 
     public static bool HostNeedsResize(int hostW, int hostH, int presentW, int presentH) =>
@@ -112,7 +129,9 @@ public static class OutputViewMath
         var sy = destH / dh;
         var s = Math.Min(sx, sy);
         if (s <= 0) s = 1;
-        if (Math.Abs(s - 1) < 0.03) s = 1;
+        // Snap to 1:1 only when the wall is at least as big as the display.
+        // dest 3730 / display 3840 used to snap up to 1 and crop (looked zoomed).
+        if (Math.Abs(s - 1) < 0.03 && destW >= dw - 1 && destH >= dh - 1) s = 1;
         var originX = displayX - (destW / s - dw) / 2;
         var originY = displayY - (destH / s - dh) / 2;
         return (originX, originY, s, s);

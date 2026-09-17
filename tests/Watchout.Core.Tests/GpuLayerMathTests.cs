@@ -150,6 +150,12 @@ public class GpuLayerMathTests
         var hwnd = OutputViewMath.PresentDest(1920, 1080, 3840, 2160);
         Assert.Equal(1920, hwnd.W);
         Assert.Equal(1080, hwnd.H);
+        var dpiClient = OutputViewMath.PresentDest(2560, 1440, 3840, 2160);
+        Assert.Equal(2560, dpiClient.W);
+        Assert.Equal(1440, dpiClient.H);
+        var actualSwap = OutputViewMath.SwapPixels(3840, 2160, 2560, 1440);
+        Assert.Equal(2560, actualSwap.W);
+        Assert.Equal(1440, actualSwap.H);
         var hdmiDip = OutputViewMath.ScreenToDip(3840, 2160, 1);
         Assert.Equal(3840, hdmiDip.DipW);
         Assert.Equal(2160, hdmiDip.DipH);
@@ -180,6 +186,10 @@ public class GpuLayerMathTests
         var whole = GpuLayerMath.MapRect(new StageRect(0, 0, 3840, 2160), fittedOnSmallerWall.OriginX, fittedOnSmallerWall.OriginY, fittedOnSmallerWall.ScaleX, fittedOnSmallerWall.ScaleY);
         Assert.Equal(1920, whole.W);
         Assert.Equal(1080, whole.H);
+        var almost = OutputViewMath.OutputViewport(0, 0, 3840, 2160, 3730, 2098);
+        Assert.True(almost.ScaleX < 0.99);
+        var almostMapped = GpuLayerMath.MapRect(new StageRect(0, 0, 3840, 2160), almost.OriginX, almost.OriginY, almost.ScaleX, almost.ScaleY);
+        Assert.True(almostMapped.W <= 3730 + 1);
         // 1700×720 cue stays put; 3840 Stage cue must not overflow a smaller HWND (that zooms).
         var small = GpuLayerMath.FitDrawToDest(0, 0, 1700, 720, 3840, 2160);
         Assert.Equal(1700, small.W);

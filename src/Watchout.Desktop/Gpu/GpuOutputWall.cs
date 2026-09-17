@@ -33,6 +33,12 @@ sealed class GpuOutputWall : IDisposable
     {
         width = Math.Max(64, width);
         height = Math.Max(64, height);
+        var mon = NativeWindow.MonitorPixels(left, top);
+        if (mon.W >= 64 && mon.H >= 64)
+        {
+            width = Math.Min(width, mon.W);
+            height = Math.Min(height, mon.H);
+        }
         var ex = WsExTopmost | WsExToolWindow | WsExNoActivate | WsExNoRedirectionBitmap;
         var style = WsPopup | WsVisible | WsClipSiblings;
         var hwnd = CreateWindowEx(ex, "Static", "WatchMe Wall", style, left, top, width, height, owner, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
@@ -53,6 +59,12 @@ sealed class GpuOutputWall : IDisposable
     {
         width = Math.Max(64, width);
         height = Math.Max(64, height);
+        var mon = NativeWindow.MonitorPixels(left, top);
+        if (mon.W >= 64 && mon.H >= 64)
+        {
+            width = Math.Min(width, mon.W);
+            height = Math.Min(height, mon.H);
+        }
         NativeWindow.Place(Hwnd, left, top, width, height);
         var client = NativeWindow.ClientSize(Hwnd);
         Width = client.W >= 64 ? client.W : width;
