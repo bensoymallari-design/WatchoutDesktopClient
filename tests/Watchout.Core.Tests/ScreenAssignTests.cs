@@ -123,9 +123,9 @@ public class ScreenAssignTests
         Assert.Equal(516, display.Width);
         Assert.Equal(430, display.Height);
 
-        var listed = ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (516, 430), (1280, 720), (1400, 1050)]);
-        Assert.Equal((516, 430), listed);
-        var live = ScreenAssign.PickLedMap(516, 430, 1920, 1080, [(1920, 1080), (516, 430)]);
+        var listed = ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (516, 430), (1280, 720), (1400, 1050), (6720, 1344)]);
+        Assert.Null(listed);
+        var live = ScreenAssign.PickLedMap(516, 430, 1920, 1080, [(1920, 1080), (516, 430), (6720, 1344)]);
         Assert.Equal((516, 430), live);
         Assert.False(ScreenAssign.IsStandardTiming(516, 430));
         Assert.True(ScreenAssign.LooksLikeLedMap(516, 430));
@@ -133,7 +133,7 @@ public class ScreenAssignTests
         Assert.True(ScreenAssign.IsStandardTiming(1920, 1080));
         Assert.Null(ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (1400, 1050), (1280, 720)]));
 
-        var still1920 = new OutputScreen
+        var leftoverMap = new OutputScreen
         {
             Id = "x20",
             Label = "Colorlight",
@@ -141,50 +141,38 @@ public class ScreenAssignTests
             Height = 1080,
             PhysicalWidth = 1920,
             PhysicalHeight = 1080,
-            MappedWidth = 516,
-            MappedHeight = 430,
+            MappedWidth = 6720,
+            MappedHeight = 1344,
         };
-        Assert.Equal(516, ScreenAssign.ScreenWidth(still1920));
-        Assert.Equal(430, ScreenAssign.ScreenHeight(still1920));
+        Assert.Equal(1920, ScreenAssign.ScreenWidth(leftoverMap));
+        Assert.Equal(1080, ScreenAssign.ScreenHeight(leftoverMap));
         var mappedDisplay = new Display { Width = 1920, Height = 1080 };
-        ScreenAssign.CopyScreenSize(mappedDisplay, still1920);
-        Assert.Equal(516, mappedDisplay.Width);
-        Assert.Equal(430, mappedDisplay.Height);
+        ScreenAssign.CopyScreenSize(mappedDisplay, leftoverMap);
+        Assert.Equal(1920, mappedDisplay.Width);
+        Assert.Equal(1080, mappedDisplay.Height);
     }
 
     [Fact]
-    public void ColorlightX20NvidiaCustom6720IsCopiedNotEdid()
+    public void LeftoverNvidiaCustomFromAnotherControllerIsIgnored()
     {
-        // NVIDIA Control Panel: X20 HDMI Custom 6720×1344 at 100%, EDID still 1920 or 4096.
+        // 6720×1344 is another controller still sitting in NVIDIA's list — not this X20.
+        Assert.Null(ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (4096, 2160), (6720, 1344), (1400, 1050)]));
+        var liveX20 = ScreenAssign.PickLedMap(516, 430, 1920, 1080, [(1920, 1080), (6720, 1344), (516, 430)]);
+        Assert.Equal((516, 430), liveX20);
+        // If that other controller is still the live NVIDIA mode, follow it — but Stage 1920 is kept.
         Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(1920, 1080, 6720, 1344));
-        Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(4096, 2160, 6720, 1344));
-        Assert.Equal((6720, 1344), ScreenAssign.WindowsModePixels(6720, 1344, 6720, 1344));
-        Assert.Equal((2560, 720), ScreenAssign.WindowsModePixels(2560, 720, 3840, 1080));
-
-        var x20 = new OutputScreen
+        var displays = new List<Display> { new() { Id = "d1", Name = "Display 1", Width = 1920, Height = 1080, Enabled = true } };
+        var screens = new List<OutputScreen>
         {
-            Id = "x20",
-            Label = "X20 HDMI",
-            Width = 6720,
-            Height = 1344,
-            PhysicalWidth = 1920,
-            PhysicalHeight = 1080,
+            new() { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080 },
+            new() { Id = "x20", Label = "X20 HDMI", Width = 516, Height = 430, PhysicalWidth = 1920, PhysicalHeight = 1080 },
         };
-        Assert.True(ScreenAssign.LooksLikeLedMap(6720, 1344));
-        Assert.True(ScreenAssign.LooksLikeLedMap(5280, 816));
-        Assert.True(ScreenAssign.LooksLikeLedMap(1248, 603));
-        Assert.Equal(6720, ScreenAssign.ScreenWidth(x20));
-        Assert.Equal(1344, ScreenAssign.ScreenHeight(x20));
-        Assert.Equal("X20 HDMI · wall/TV 6720×1344 (EDID 1920×1080)", ScreenAssign.ScreenChoiceLabel(x20));
-        var display = new Display { Width = 1920, Height = 1080 };
-        ScreenAssign.CopyScreenSize(display, x20);
-        Assert.Equal(6720, display.Width);
-        Assert.Equal(1344, display.Height);
-
-        var live = ScreenAssign.PickLedMap(6720, 1344, 4096, 2160, [(4096, 2160), (6720, 1344), (5280, 816), (1248, 603)]);
-        Assert.Equal((6720, 1344), live);
-        var listed = ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (4096, 2160), (6720, 1344), (1400, 1050)]);
-        Assert.Equal((6720, 1344), listed);
+        var mapped = ScreenAssign.LayoutDisplaysOnScreens(displays, screens);
+        Assert.Equal(1920, mapped[0].Width);
+        Assert.Equal(1080, mapped[0].Height);
+        Assert.Equal("x20", mapped[0].ScreenId);
+        Assert.True(ScreenAssign.KeepStageSize(1920, 1080));
+        Assert.False(ScreenAssign.KeepStageSize(100, 100));
     }
 
     [Fact]

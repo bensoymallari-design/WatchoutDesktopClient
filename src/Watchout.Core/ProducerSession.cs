@@ -1312,7 +1312,7 @@ public sealed class ProducerSession
                 Log($"Windows is sending {screen.Width}×{screen.Height} to {screen.Label} (DPI scaled). The panel EDID is {screen.PhysicalWidth}×{screen.PhysicalHeight}. In Windows Display settings set that extra screen to {used.W}×{used.H}.", "warn");
                 continue;
             }
-            Log($"{screen.Label} NVIDIA/Windows mode is {used.W}×{used.H} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}). Use size copies {used.W}×{used.H} onto Stage so Fit cue matches the Colorlight X20 custom (6720×1344 and similar) — not 1920×1080.");
+            Log($"{screen.Label} live mode is {used.W}×{used.H} (EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}). Stage stays your canvas (1920×1080 or whatever you built) — Output contain-fits it onto that wall/TV. Leftover NVIDIA customs from another controller are ignored. For this Colorlight X20 set NVIDIA to 516×430.");
         }
     }
 

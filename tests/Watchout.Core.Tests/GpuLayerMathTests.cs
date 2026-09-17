@@ -192,6 +192,12 @@ public class GpuLayerMathTests
         var whole = GpuLayerMath.MapRect(new StageRect(0, 0, 3840, 2160), fittedOnSmallerWall.OriginX, fittedOnSmallerWall.OriginY, fittedOnSmallerWall.ScaleX, fittedOnSmallerWall.ScaleY);
         Assert.Equal(1920, whole.W);
         Assert.Equal(1080, whole.H);
+        var stageOnX20 = OutputViewMath.OutputViewport(0, 0, 1920, 1080, 516, 430);
+        var x20Mapped = GpuLayerMath.MapRect(new StageRect(0, 0, 1920, 1080), stageOnX20.OriginX, stageOnX20.OriginY, stageOnX20.ScaleX, stageOnX20.ScaleY);
+        Assert.Equal(516, (int)Math.Round(x20Mapped.W));
+        Assert.True(x20Mapped.H <= 430 + 1);
+        var tv = OutputViewMath.OutputViewport(0, 0, 1920, 1080, 1920, 1080);
+        Assert.Equal(1, tv.ScaleX, 3);
         var almost = OutputViewMath.OutputViewport(0, 0, 3840, 2160, 3730, 2098);
         Assert.True(almost.ScaleX < 0.99);
         var almostMapped = GpuLayerMath.MapRect(new StageRect(0, 0, 3840, 2160), almost.OriginX, almost.OriginY, almost.ScaleX, almost.ScaleY);
