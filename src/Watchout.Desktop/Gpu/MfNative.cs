@@ -16,7 +16,9 @@ static class MfNative
     public static readonly Guid MfMediaTypeVideo = new("73646976-0000-0010-8000-00AA00389B71");
     public static readonly Guid MfMediaTypeAudio = new("73647561-0000-0010-8000-00AA00389B71");
     public static readonly Guid MfVideoFormatRgb32 = new("00000016-0000-0010-8000-00AA00389B71");
+    public static readonly Guid MfVideoFormatNv12 = new("3231564E-0000-0010-8000-00AA00389B71");
     public static readonly Guid MfAudioFormatPcm = new("00000001-0000-0010-8000-00AA00389B71");
+    public static readonly Guid Id3d11Texture2D = new("6f15aaf2-d208-4e89-9ab4-489535d34f9c");
     public static readonly Guid MfMtMajorType = new("48eba18e-f8c9-4687-bf11-0a74c9f96a8f");
     public static readonly Guid MfMtSubtype = new("f7e34c9a-42e8-4714-b74b-cb29d72c35e5");
     public static readonly Guid MfMtFrameSize = new("1652c33d-d6b2-4012-b834-72030849a37d");
@@ -28,6 +30,7 @@ static class MfNative
     public static readonly Guid MfPdDuration = new("6d7226c9-0a18-4bd4-b4c7-0add5609750a");
     public static readonly Guid MfSourceReaderEnableVideoProcessing = new("fb394f3d-ccf1-42ee-bbb3-f9b845d8d854");
     public static readonly Guid MfReadwriteEnableHardwareTransforms = new("a634a91c-822b-41b2-bb68-12f5625a73ae");
+    public static readonly Guid MfSourceReaderD3DManager = new("ec822da2-e1e9-4b29-ae0b-84663d18ae42");
 
     [DllImport("mfplat.dll", ExactSpelling = true)]
     public static extern int MFStartup(int version, int flags);
@@ -43,6 +46,9 @@ static class MfNative
 
     [DllImport("mfreadwrite.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
     public static extern int MFCreateSourceReaderFromURL(string url, IMFAttributes? attrs, out IMFSourceReader reader);
+
+    [DllImport("mfplat.dll", ExactSpelling = true)]
+    public static extern int MFCreateDXGIDeviceManager(out uint resetToken, out IMFDXGIDeviceManager manager);
 
     public static void Check(int hr, string what)
     {
@@ -145,4 +151,25 @@ interface IMFSourceReader
     void Flush(int dwStreamIndex);
     void GetServiceForStream(int dwStreamIndex, in Guid guidService, in Guid riid, out IntPtr ppvObject);
     void GetPresentationAttribute(int dwStreamIndex, in Guid guidAttribute, out MfNative.PropVariant pvarAttribute);
+}
+
+[ComImport, Guid("eb533e1c-f10b-4332-b56a-c163649af9ac"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMFDXGIDeviceManager
+{
+    void ResetDevice(IntPtr pUnkDevice, uint resetToken);
+    void OpenDeviceHandle(out IntPtr phDevice);
+    void CloseDeviceHandle(IntPtr hDevice);
+    void TestDevice(IntPtr hDevice);
+    void LockDevice(IntPtr hDevice, in Guid riid, out IntPtr ppUnk, [MarshalAs(UnmanagedType.Bool)] bool fBlock);
+    void UnlockDevice(IntPtr hDevice, [MarshalAs(UnmanagedType.Bool)] bool fSaveState);
+    void GetVideoService(IntPtr hDevice, in Guid riid, out IntPtr ppService);
+}
+
+[ComImport, Guid("e7174cfa-1c9e-48b1-8866-626226bfc258"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMFDXGIBuffer
+{
+    void GetResource(in Guid riid, out IntPtr ppvObject);
+    void GetSubresourceIndex(out uint puSubresourceIndex);
+    void SetUnknown(in Guid guid, [MarshalAs(UnmanagedType.IUnknown)] object? pUnkData);
+    void GetUnknown(in Guid guid, in Guid riid, out IntPtr ppvObject);
 }

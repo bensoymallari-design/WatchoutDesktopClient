@@ -103,7 +103,7 @@ public partial class App : Application
     {
         LoadRecents();
         LoadSettings();
-        Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through a D3D11 compositor (Media Foundation / DXVA). HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
+        Session.Log($"{Brand.Name} {Brand.Version} — native Windows desktop. H.264 plays through a D3D11 compositor (Media Foundation / DXVA GPU surfaces). HDMI/SDI capture cards can take Resolume (or any program) live. No Electron, no WebM proxy.");
         Session.Log($"Media folder {Path.Combine(DataDir(), "media")} — 4K files stay on the original disk. Delete leftover copies here if the drive filled up.");
         if (Settings.GpuPreference != GpuPreference.Auto)
             Session.Log($"GPU preference {Settings.GpuPreference} — pin WatchMe.exe in Windows Graphics settings. WPF cannot switch adapters itself.");

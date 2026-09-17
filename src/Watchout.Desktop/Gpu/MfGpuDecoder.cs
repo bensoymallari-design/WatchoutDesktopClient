@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using NAudio.Wave;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
 using Watchout.Core.Gpu;
 using Watchout.Core.Playback;
 
@@ -9,10 +11,17 @@ sealed class MfGpuDecoder : IDisposable
 {
     readonly object _gate = new();
     readonly string _url;
+    readonly GpuDevice? _gpu;
     IMFSourceReader? _reader;
     Thread? _thread;
     CancellationTokenSource? _cts;
+    GpuVideoConvert? _convert;
+    ID3D11Texture2D? _gpuA;
+    ID3D11Texture2D? _gpuB;
+    ID3D11Texture2D? _gpuFront;
+    bool _gpuUseA = true;
     byte[]? _pixels;
+    byte[]? _audioScratch;
     int _width;
     int _height;
     int _stride;
@@ -25,6 +34,8 @@ sealed class MfGpuDecoder : IDisposable
     double _targetMs;
     double _volume = 1;
     bool _wantAudio;
+    bool _dxgi;
+    bool _gpuSurfaces;
     BufferedWaveProvider? _pcm;
     IWavePlayer? _wave;
     DateTime _lastFrameUtc = DateTime.UtcNow;
@@ -33,6 +44,7 @@ sealed class MfGpuDecoder : IDisposable
 
     public string? Error { get { lock (_gate) return _error; } }
     public bool UsedSoftwareFallback { get { lock (_gate) return _software; } }
+    public bool UsedGpuSurfaces { get { lock (_gate) return _gpuSurfaces; } }
     public bool Ready { get { lock (_gate) return _ready; } }
     public double DurationMs { get { lock (_gate) return _durationMs; } }
     public bool Dead
@@ -58,10 +70,11 @@ sealed class MfGpuDecoder : IDisposable
         }
     }
 
-    public MfGpuDecoder(string fileUrl, bool audio)
+    public MfGpuDecoder(string fileUrl, bool audio, GpuDevice? gpu = null)
     {
         _url = fileUrl;
         _wantAudio = audio;
+        _gpu = gpu;
         _cts = new CancellationTokenSource();
         _thread = new Thread(Loop)
         {
@@ -93,6 +106,18 @@ sealed class MfGpuDecoder : IDisposable
         }
     }
 
+    public bool TryBindGpu(out ID3D11Texture2D? texture, out bool dirty)
+    {
+        lock (_gate)
+        {
+            texture = _gpuFront;
+            dirty = _dirty;
+            var ok = _ready && _gpuFront is not null;
+            if (ok) _dirty = false;
+            return ok;
+        }
+    }
+
     public bool TryCopyFrame(out byte[] pixels, out int width, out int height, out int stride, out bool dirty)
     {
         lock (_gate)
@@ -102,8 +127,9 @@ sealed class MfGpuDecoder : IDisposable
             height = _height;
             stride = _stride;
             dirty = _dirty;
-            _dirty = false;
-            return _ready && _pixels is not null && _width > 0;
+            var ok = _ready && _pixels is not null && _width > 0 && _gpuFront is null;
+            if (ok) _dirty = false;
+            return ok;
         }
     }
 
@@ -138,15 +164,21 @@ sealed class MfGpuDecoder : IDisposable
             CloseAudio();
             if (_reader is not null) Marshal.ReleaseComObject(_reader);
             _reader = null;
+            DropGpu();
         }
     }
 
     void Open()
     {
         Exception? last = null;
-        if (TryOpen(hardware: true, out last)) return;
+        if (_gpu?.DxgiManager is not null)
+        {
+            if (TryOpen(hardware: true, dxgi: true, nv12: true, out last)) return;
+            if (TryOpen(hardware: true, dxgi: true, nv12: false, out last)) return;
+        }
+        if (TryOpen(hardware: true, dxgi: false, nv12: false, out last)) return;
         if (OutputViewMath.RetryOpenWithoutHardwareTransforms(last is not null)
-            && TryOpen(hardware: false, out last))
+            && TryOpen(hardware: false, dxgi: false, nv12: false, out last))
         {
             lock (_gate) _software = true;
             return;
@@ -154,17 +186,25 @@ sealed class MfGpuDecoder : IDisposable
         throw last ?? new InvalidOperationException("Media Foundation could not open the file as RGB32");
     }
 
-    bool TryOpen(bool hardware, out Exception? error)
+    bool TryOpen(bool hardware, bool dxgi, bool nv12, out Exception? error)
     {
         error = null;
         IMFAttributes? attrs = null;
         IMFSourceReader? reader = null;
         IMFMediaType? video = null;
         IMFMediaType? current = null;
+        GpuVideoConvert? convert = null;
         try
         {
-            MfNative.Check(MfNative.MFCreateAttributes(out attrs, 2), "MFCreateAttributes");
-            attrs.SetUINT32(MfNative.MfSourceReaderEnableVideoProcessing, 1);
+            MfNative.Check(MfNative.MFCreateAttributes(out attrs, 3), "MFCreateAttributes");
+            if (dxgi && _gpu?.DxgiManager is { } manager)
+            {
+                attrs.SetUnknown(MfNative.MfSourceReaderD3DManager, manager);
+            }
+            else
+            {
+                attrs.SetUINT32(MfNative.MfSourceReaderEnableVideoProcessing, 1);
+            }
             if (hardware)
                 attrs.SetUINT32(MfNative.MfReadwriteEnableHardwareTransforms, 1);
             MfNative.Check(MfNative.MFCreateSourceReaderFromURL(_url, attrs, out reader), "MFCreateSourceReaderFromURL");
@@ -172,7 +212,7 @@ sealed class MfGpuDecoder : IDisposable
             reader.SetStreamSelection(MfNative.VideoStream, true);
             MfNative.Check(MfNative.MFCreateMediaType(out video), "video type");
             video.SetGUID(MfNative.MfMtMajorType, MfNative.MfMediaTypeVideo);
-            video.SetGUID(MfNative.MfMtSubtype, MfNative.MfVideoFormatRgb32);
+            video.SetGUID(MfNative.MfMtSubtype, nv12 ? MfNative.MfVideoFormatNv12 : MfNative.MfVideoFormatRgb32);
             reader.SetCurrentMediaType(MfNative.VideoStream, IntPtr.Zero, video);
             reader.GetCurrentMediaType(MfNative.VideoStream, out current);
             current.GetUINT64(MfNative.MfMtFrameSize, out var packed);
@@ -187,6 +227,12 @@ sealed class MfGpuDecoder : IDisposable
             }
             catch { /* optional */ }
 
+            if (dxgi && nv12)
+            {
+                convert = GpuVideoConvert.TryCreate(_gpu!);
+                if (convert is null) return false;
+            }
+
             lock (_gate)
             {
                 _reader = reader;
@@ -194,9 +240,13 @@ sealed class MfGpuDecoder : IDisposable
                 _width = Math.Max(2, width);
                 _height = Math.Max(2, height);
                 _stride = _width * 4;
-                _pixels = new byte[_stride * _height];
-                _durationMs = duration;
+                _dxgi = dxgi;
+                _convert = convert;
+                convert = null;
                 _software = !hardware;
+                if (!dxgi)
+                    _pixels = new byte[_stride * _height];
+                _durationMs = duration;
             }
 
             TryOpenAudio(_reader);
@@ -205,6 +255,14 @@ sealed class MfGpuDecoder : IDisposable
         }
         catch (Exception ex)
         {
+            convert?.Dispose();
+            if (_reader is not null)
+            {
+                try { Marshal.ReleaseComObject(_reader); } catch { /* ignore */ }
+                _reader = null;
+            }
+            _convert?.Dispose();
+            _convert = null;
             error = ex;
             return false;
         }
@@ -298,31 +356,174 @@ sealed class MfGpuDecoder : IDisposable
                 PushAudio(sample);
                 return;
             }
-            sample.ConvertToContiguousBuffer(out var buffer);
-            buffer.Lock(out var data, out _, out var length);
-            try
-            {
-                lock (_gate)
-                {
-                    if (_pixels is null) return;
-                    var copy = Math.Min(length, _pixels.Length);
-                    Marshal.Copy(data, _pixels, 0, copy);
-                    _stride = _width * 4;
-                    _frameTime100ns = time;
-                    _ready = true;
-                    _dirty = true;
-                    _lastFrameUtc = DateTime.UtcNow;
-                }
-            }
-            finally
-            {
-                buffer.Unlock();
-                Marshal.ReleaseComObject(buffer);
-            }
+            if (_dxgi && TryPublishGpu(sample, time))
+                return;
+            if (_convert is not null)
+                return;
+            CopyCpu(sample, time);
         }
         finally
         {
             Marshal.ReleaseComObject(sample);
+        }
+    }
+
+    bool TryPublishGpu(IMFSample sample, long time)
+    {
+        if (_gpu is null) return false;
+        if (!TryWrapDxgi(sample, out var src, out var slice) || src is null)
+            return false;
+        try
+        {
+            var desc = src.Description;
+            var w = Math.Max(2, (int)desc.Width);
+            var h = Math.Max(2, (int)desc.Height);
+            EnsureGpuTargets(w, h);
+            var dest = _gpuUseA ? _gpuA! : _gpuB!;
+            var ok = GpuVideoConvert.IsBgra(desc.Format) && desc.Format == Format.B8G8R8A8_UNorm
+                ? CopyGpu(src, dest)
+                : _convert is not null && _convert.Blit(src, slice, dest);
+            if (!ok && _convert is not null)
+                ok = _convert.Blit(src, slice, dest);
+            if (!ok) return false;
+            lock (_gate)
+            {
+                _gpuFront = dest;
+                _gpuUseA = !_gpuUseA;
+                _width = w;
+                _height = h;
+                _stride = w * 4;
+                _frameTime100ns = time;
+                _ready = true;
+                _dirty = true;
+                _gpuSurfaces = true;
+                _lastFrameUtc = DateTime.UtcNow;
+            }
+            return true;
+        }
+        finally
+        {
+            src.Dispose();
+        }
+    }
+
+    bool CopyGpu(ID3D11Texture2D src, ID3D11Texture2D dest)
+    {
+        _gpu!.Enter();
+        try
+        {
+            _gpu.Context.CopyResource(dest, src);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            _gpu.Leave();
+        }
+    }
+
+    void EnsureGpuTargets(int w, int h)
+    {
+        if (_gpuA is not null
+            && _gpuA.Description.Width == (uint)w
+            && _gpuA.Description.Height == (uint)h)
+            return;
+        _gpu!.Enter();
+        try
+        {
+            DropGpuTargets();
+            _gpuA = CreateBgra(w, h);
+            _gpuB = CreateBgra(w, h);
+        }
+        finally
+        {
+            _gpu.Leave();
+        }
+        if (_convert is null && _gpu is not null)
+            _convert = GpuVideoConvert.TryCreate(_gpu);
+    }
+
+    ID3D11Texture2D CreateBgra(int w, int h) =>
+        _gpu!.Device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)w,
+            Height = (uint)h,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+        });
+
+    static bool TryWrapDxgi(IMFSample sample, out ID3D11Texture2D? tex, out uint slice)
+    {
+        tex = null;
+        slice = 0;
+        sample.GetBufferCount(out var count);
+        for (uint i = 0; i < count; i++)
+        {
+            sample.GetBufferByIndex(i, out var buffer);
+            try
+            {
+                if (TryWrapBuffer(buffer, out tex, out slice)) return true;
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(buffer);
+            }
+        }
+        try
+        {
+            sample.ConvertToContiguousBuffer(out var contig);
+            try { return TryWrapBuffer(contig, out tex, out slice); }
+            finally { Marshal.ReleaseComObject(contig); }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    static bool TryWrapBuffer(IMFMediaBuffer buffer, out ID3D11Texture2D? tex, out uint slice)
+    {
+        tex = null;
+        slice = 0;
+        if (buffer is not IMFDXGIBuffer dxgi) return false;
+        dxgi.GetResource(MfNative.Id3d11Texture2D, out var ptr);
+        if (ptr == IntPtr.Zero) return false;
+        tex = new ID3D11Texture2D(ptr);
+        Marshal.Release(ptr);
+        try { dxgi.GetSubresourceIndex(out slice); } catch { slice = 0; }
+        return true;
+    }
+
+    void CopyCpu(IMFSample sample, long time)
+    {
+        sample.ConvertToContiguousBuffer(out var buffer);
+        buffer.Lock(out var data, out _, out var length);
+        try
+        {
+            lock (_gate)
+            {
+                if (_pixels is null || _pixels.Length < length)
+                    _pixels = new byte[Math.Max(length, _stride * _height)];
+                var copy = Math.Min(length, _pixels.Length);
+                Marshal.Copy(data, _pixels, 0, copy);
+                _stride = _width * 4;
+                _frameTime100ns = time;
+                _ready = true;
+                _dirty = true;
+                _lastFrameUtc = DateTime.UtcNow;
+            }
+        }
+        finally
+        {
+            buffer.Unlock();
+            Marshal.ReleaseComObject(buffer);
         }
     }
 
@@ -333,9 +534,10 @@ sealed class MfGpuDecoder : IDisposable
         buffer.Lock(out var data, out _, out var length);
         try
         {
-            var bytes = new byte[length];
-            Marshal.Copy(data, bytes, 0, length);
-            _pcm.AddSamples(bytes, 0, bytes.Length);
+            if (!GpuResidentPath.ReuseBuffer(_audioScratch?.Length ?? 0, length))
+                _audioScratch = new byte[GpuResidentPath.GrowBuffer(_audioScratch?.Length ?? 0, length)];
+            Marshal.Copy(data, _audioScratch!, 0, length);
+            _pcm.AddSamples(_audioScratch, 0, length);
         }
         finally
         {
@@ -352,12 +554,41 @@ sealed class MfGpuDecoder : IDisposable
         _pcm = null;
     }
 
+    void DropGpuTargets()
+    {
+        ID3D11Texture2D? a;
+        ID3D11Texture2D? b;
+        lock (_gate)
+        {
+            _gpuFront = null;
+            a = _gpuA;
+            b = _gpuB;
+            _gpuA = null;
+            _gpuB = null;
+        }
+        a?.Dispose();
+        b?.Dispose();
+    }
+
+    void DropGpu()
+    {
+        DropGpuTargets();
+        GpuVideoConvert? convert;
+        lock (_gate)
+        {
+            convert = _convert;
+            _convert = null;
+        }
+        convert?.Dispose();
+    }
+
     public void Dispose()
     {
         try { _cts?.Cancel(); } catch { /* ignore */ }
         if (_thread is { IsAlive: true } && !_thread.Join(400))
             try { _cts?.Cancel(); } catch { /* ignore */ }
         CloseAudio();
+        DropGpu();
         _cts?.Dispose();
     }
 }

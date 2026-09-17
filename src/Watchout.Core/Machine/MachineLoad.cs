@@ -156,7 +156,7 @@ public static class MachineLoad
         if (gpu == LoadLevel.Tight)
             return "GPU is busy. One more 1080p is safer than another 4K.";
         if (ram == LoadLevel.Tight)
-            return "RAM is high (Windows + other apps). Close browsers. This laptop can still run 4K — Resolume does; WatchMe copies frames in RAM so the bar fills faster.";
+            return "RAM is high (Windows + other apps). Close browsers. This laptop can still run 4K — Resolume does. H.264 stays on the GPU; NDI/capture still touch RAM.";
         if (cpu == LoadLevel.Tight)
             return "CPU is busy. Another 4K file may hitch Stage and the wall.";
         if (s.Show.FourK >= 1.8)
