@@ -153,6 +153,12 @@ public class GpuLayerMathTests
         var dpiClient = OutputViewMath.PresentDest(2560, 1440, 3840, 2160);
         Assert.Equal(2560, dpiClient.W);
         Assert.Equal(1440, dpiClient.H);
+        var x20 = OutputViewMath.PresentDest(516, 430, 516, 430);
+        Assert.Equal(516, x20.W);
+        Assert.Equal(430, x20.H);
+        var x20OnEdid = OutputViewMath.PresentDest(1920, 1080, 516, 430);
+        Assert.Equal(516, x20OnEdid.W);
+        Assert.Equal(430, x20OnEdid.H);
         var actualSwap = OutputViewMath.SwapPixels(3840, 2160, 2560, 1440);
         Assert.Equal(2560, actualSwap.W);
         Assert.Equal(1440, actualSwap.H);

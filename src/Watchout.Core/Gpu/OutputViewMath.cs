@@ -61,9 +61,11 @@ public static class OutputViewMath
     /// </summary>
     public static (int W, int H) PresentDest(int clientW, int clientH, int screenW, int screenH)
     {
+        // 64×64 stub HWND must not drive 4K. A Colorlight 516×430 (or smaller
+        // cabinet map) is a real window — never fall back to a 1920 client.
         if (clientW >= 256 && clientH >= 256)
         {
-            if (screenW >= 256 && screenH >= 256)
+            if (screenW >= MinHostPx && screenH >= MinHostPx)
                 return (Math.Min(clientW, screenW), Math.Min(clientH, screenH));
             return (clientW, clientH);
         }

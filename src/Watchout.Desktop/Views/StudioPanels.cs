@@ -669,7 +669,7 @@ public class DevicesPanel : UserControl
         var ndiCams = CaptureHub.Devices.Where(d => NdiNames.LooksLikeNdi(d.Name)).ToList();
         var cards = CaptureHub.Devices.Where(d => !NdiNames.LooksLikeNdi(d.Name)).ToList();
         var audioOutputs = Interop.AudioOutputs.List();
-        var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id + s.Label + s.Width + s.Height + s.PhysicalWidth + s.PhysicalHeight))
+        var fp = string.Join("|", Interop.Monitors.List().Select(s => s.Id + s.Label + s.Width + s.Height + s.PhysicalWidth + s.PhysicalHeight + s.MappedWidth + s.MappedHeight))
                  + App.Session.LiveOutputs.Count
                  + (show?.Displays.Count ?? 0)
                  + string.Join("|", show?.Displays.Select(d => d.Id + d.Name + d.ScreenId + d.Channel + d.Width + d.Height + d.Enabled + d.Role + d.KeyChannel) ?? [])
@@ -713,8 +713,7 @@ public class DevicesPanel : UserControl
                 ? "Only the Producer laptop is visible. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, any brand), then Find screens."
                 : $"{n} OS screens — extra HDMI/DP outputs are LED walls, TVs, and processors. Pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
             foreach (var screen in found.Where(s => !s.IsPrimary))
-                App.Session.Log($"{screen.Label}: controller {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}"
-                    + (ScreenAssign.WindowsModeDiffersFromController(screen) ? $", Windows {screen.Width}×{screen.Height}" : ""));
+                App.Session.Log($"{screen.Label}: {ScreenAssign.ScreenSizeText(screen)}");
             Reload();
         }, "go", compact: true);
         find.HorizontalAlignment = HorizontalAlignment.Right;
@@ -737,7 +736,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Assign screens copies the controller EDID size onto the Stage (not a DPI-scaled Windows rectangle). On each Display row pick that wall/TV screen — not the Producer laptop — then Output. If the label shows (Windows 1920×1080), set that extra screen in Windows Display settings to the controller size.",
+                : "LED processors (Colorlight X20, NovaStar, MCTRL, Linsn) show the size Windows is actually sending — including custom maps like 516×430. EDID often still says 1920×1080; Use size copies the LED map, not that EDID. Assign screens, pick the extra HDMI/DP row (not the laptop), then Output. A 1920×1080 cue on a 516×430 wall will not fill the cabinets — Use size then Fit cue.",
         });
 
         _root.Children.Add(Header("AUDIO"));
