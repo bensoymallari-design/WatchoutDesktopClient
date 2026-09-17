@@ -292,10 +292,11 @@ sealed class GpuCompositor : IDisposable
 
     void WriteQuad(GpuDraw draw, int destW, int destH, Display? outputDisplay)
     {
-        var x0 = draw.X / destW * 2 - 1;
-        var x1 = (draw.X + draw.W) / destW * 2 - 1;
-        var y0 = 1 - draw.Y / destH * 2;
-        var y1 = 1 - (draw.Y + draw.H) / destH * 2;
+        var (x, y, w, h) = GpuLayerMath.FitDrawToDest(draw.X, draw.Y, draw.W, draw.H, destW, destH);
+        var x0 = x / destW * 2 - 1;
+        var x1 = (x + w) / destW * 2 - 1;
+        var y0 = 1 - y / destH * 2;
+        var y1 = 1 - (y + h) / destH * 2;
         if (outputDisplay is { Blend: true })
         {
             // Edge blend is applied in the pixel shader via Edge.

@@ -80,11 +80,11 @@ public sealed class StageSurface : Canvas
             Refresh();
         };
         MouseWheel += OnWheel;
-        MouseLeftButtonDown += OnLeftDown;
-        MouseLeftButtonUp += OnLeftUp;
+        PreviewMouseLeftButtonDown += OnLeftDown;
+        PreviewMouseLeftButtonUp += OnLeftUp;
         MouseDown += OnAnyDown;
         MouseUp += OnAnyUp;
-        MouseMove += OnMove;
+        PreviewMouseMove += OnMove;
         MouseRightButtonDown += (_, e) =>
         {
             _panning = true;
@@ -139,6 +139,7 @@ public sealed class StageSurface : Canvas
         if (syncMedia) _clockQueued = true;
         if (_visualQueued) return;
         _visualQueued = true;
+        var priority = App.Session.StageLayoutBusy ? DispatcherPriority.Input : DispatcherPriority.Render;
         Dispatcher.BeginInvoke(() =>
         {
             _visualQueued = false;
@@ -150,7 +151,7 @@ public sealed class StageSurface : Canvas
                 DrawChrome();
             }
             TickPlayback(sync);
-        }, DispatcherPriority.Render);
+        }, priority);
     }
 
     public void Refresh()
@@ -315,7 +316,7 @@ public sealed class StageSurface : Canvas
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
                 var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
                 gpuDraws.Add(GpuLayerMath.FromCue(
-                    ev, asset, originX, originY, scaleX, Math.Max(1, ActualWidth), Math.Max(1, ActualHeight),
+                    ev, asset, originX, originY, scaleX, PixelWidth(), PixelHeight(),
                     tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true, scaleY));
                 z++;
                 continue;
@@ -926,6 +927,8 @@ public sealed class StageSurface : Canvas
         Focus();
         var show = App.Session.Show;
         if (show is null) return;
+        _panning = false;
+        _panArmed = false;
         var stage = ScreenToStage(e.GetPosition(this), show);
         if (e.ClickCount >= 2)
         {
@@ -949,6 +952,7 @@ public sealed class StageSurface : Canvas
                 _dragStart = e.GetPosition(this);
                 App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
+                e.Handled = true;
                 return;
             case StageHitKind.CueHandle:
                 App.Session.Select(SelectionKind.Cue, hit.Id!);
@@ -961,6 +965,7 @@ public sealed class StageSurface : Canvas
                 _dragStart = e.GetPosition(this);
                 App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
+                e.Handled = true;
                 return;
             case StageHitKind.Cue:
                 App.Session.Select(SelectionKind.Cue, hit.Id!);
@@ -971,6 +976,7 @@ public sealed class StageSurface : Canvas
                 _dragCueOrigin = new Point(cue?.Position.X ?? 0, cue?.Position.Y ?? 0);
                 App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
+                e.Handled = true;
                 return;
             case StageHitKind.Display:
                 App.Session.Select(SelectionKind.Display, hit.Id!);
@@ -981,6 +987,7 @@ public sealed class StageSurface : Canvas
                 _dragArmed = true;
                 App.Session.SetStageLayoutBusy(true);
                 CaptureMouse();
+                e.Handled = true;
                 return;
             default:
                 _panArmed = true;
@@ -1052,6 +1059,7 @@ public sealed class StageSurface : Canvas
                         c.Position = fit.Position;
                         c.Scale = fit.Scale;
                     });
+                    PlaceDraggedCue(show, cue.Id);
                 }
             }
             return;
@@ -1116,6 +1124,18 @@ public sealed class StageSurface : Canvas
             }
         }
         App.Session.LiveUpdateCue(_dragCueId, c => c.Position = new Vec3 { X = Math.Round(cx), Y = Math.Round(cy), Z = c.Position.Z });
+        PlaceDraggedCue(show, _dragCueId);
+    }
+
+    void PlaceDraggedCue(Show show, string cueId)
+    {
+        if (!_layers.TryGetValue(cueId, out var el)) return;
+        var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.Id == cueId);
+        if (cue is null) return;
+        var asset = cue.AssetId is { } aid ? show.Assets.FirstOrDefault(a => a.Id == aid) : null;
+        var rect = StageGeometry.CueRect(cue, asset);
+        var (ox, oy, scale) = Viewport(show);
+        PlaceLayer(el, Map(rect.X, rect.Y, rect.W, rect.H, ox, oy, scale));
     }
 
     static Cursor HandleCursor(string? handle) => handle switch

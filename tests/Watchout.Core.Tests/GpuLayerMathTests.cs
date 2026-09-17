@@ -180,6 +180,20 @@ public class GpuLayerMathTests
         var whole = GpuLayerMath.MapRect(new StageRect(0, 0, 3840, 2160), fittedOnSmallerWall.OriginX, fittedOnSmallerWall.OriginY, fittedOnSmallerWall.ScaleX, fittedOnSmallerWall.ScaleY);
         Assert.Equal(1920, whole.W);
         Assert.Equal(1080, whole.H);
+        // 1700×720 cue stays put; 3840 Stage cue must not overflow a smaller HWND (that zooms).
+        var small = GpuLayerMath.FitDrawToDest(0, 0, 1700, 720, 3840, 2160);
+        Assert.Equal(1700, small.W);
+        Assert.Equal(720, small.H);
+        var stageFit = GpuLayerMath.FitDrawToDest(0, 0, 3840, 2160, 2560, 1440);
+        Assert.Equal(2560, (int)Math.Round(stageFit.W));
+        Assert.Equal(1440, (int)Math.Round(stageFit.H));
+        Assert.Equal(0, (int)Math.Round(stageFit.X));
+        Assert.Equal(0, (int)Math.Round(stageFit.Y));
+        var dragged = GpuLayerMath.FitDrawToDest(480, 120, 3840, 2160, 2560, 1440);
+        Assert.Equal(2560, (int)Math.Round(dragged.W));
+        Assert.Equal(1440, (int)Math.Round(dragged.H));
+        Assert.True(dragged.X > stageFit.X + 1);
+        Assert.True(dragged.Y > stageFit.Y + 1);
         Assert.True(OutputViewMath.PulseClock(true, false));
         Assert.True(OutputViewMath.PulseClock(false, true));
         Assert.False(OutputViewMath.PulseClock(false, false));

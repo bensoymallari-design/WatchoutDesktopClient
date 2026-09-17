@@ -480,9 +480,9 @@ sealed class OutputSwap : IDisposable
             Format = Format.B8G8R8A8_UNorm,
             SampleDescription = new SampleDescription(1, 0),
             BufferUsage = Usage.RenderTargetOutput,
-            BufferCount = flip ? 2u : 1u,
+            BufferCount = 1u,
             Scaling = Scaling.Stretch,
-            SwapEffect = flip ? SwapEffect.FlipDiscard : SwapEffect.Discard,
+            SwapEffect = SwapEffect.Discard,
             AlphaMode = AlphaMode.Ignore,
         };
         var chain = gpu.Factory.CreateSwapChainForHwnd(gpu.Device, hwnd, desc);

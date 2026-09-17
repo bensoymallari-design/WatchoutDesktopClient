@@ -109,6 +109,8 @@ public static class GpuLayerMath
         var y = (float)((rect.Y - originY) * sy);
         var w = (float)(rect.W * scale);
         var h = (float)(rect.H * sy);
+        if (destW > 1 && destH > 1)
+            (x, y, w, h) = FitDrawToDest(x, y, w, h, destW, destH);
         var crop = ev.Crop;
         var u0 = (float)Math.Clamp(crop.Left / 100.0, 0, 0.99);
         var v0 = (float)Math.Clamp(crop.Top / 100.0, 0, 0.99);
@@ -158,6 +160,28 @@ public static class GpuLayerMath
          (float)((rect.Y - originY) * sy),
          (float)(rect.W * scaleX),
          (float)(rect.H * sy));
+    }
+
+    /// <summary>
+    /// A cue sized to the Stage display (3840) drawn into a smaller Output
+    /// HWND crops the texture (looks zoomed). A 1700×720 cue fits because it
+    /// stays inside that HWND. Scale the quad down so the whole picture stays
+    /// visible; keep UVs 0–1. Scale X/Y with the same factor so dragging the
+    /// cue still moves the picture (centering discarded the offset).
+    /// </summary>
+    public static (float X, float Y, float W, float H) FitDrawToDest(
+        float x, float y, float w, float h, double destW, double destH)
+    {
+        var dw = (float)Math.Max(1, destW);
+        var dh = (float)Math.Max(1, destH);
+        w = Math.Max(1, w);
+        h = Math.Max(1, h);
+        if (w <= dw + 1 && h <= dh + 1)
+            return (x, y, w, h);
+        var s = Math.Min(dw / w, dh / h);
+        var nw = Math.Max(1, w * s);
+        var nh = Math.Max(1, h * s);
+        return (x * s + (dw - nw) / 2, y * s + (dh - nh) / 2, nw, nh);
     }
 
     /// <summary>
