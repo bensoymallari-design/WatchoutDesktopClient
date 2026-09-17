@@ -46,9 +46,32 @@ public static class ScreenAssign
             ? $"{screen.Label} · Producer {ScreenSizeText(screen)}"
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
+    public const int MinModePx = 64;
+
+    /// <summary>
+    /// The mode Windows is actually driving on that extra screen — NVIDIA custom
+    /// (3160×2160), Display settings, or the current GDI/CCD size. Never shrink
+    /// with Min(rcMonitor, current): that dropped custom modes larger than the
+    /// leftover monitor rectangle. Do not scan every NVIDIA leftover mode.
+    /// </summary>
+    public static (int W, int H) PickWindowsMode(int currentW, int currentH, int monitorW, int monitorH, int ccdW = 0, int ccdH = 0)
+    {
+        if (currentW >= MinModePx && currentH >= MinModePx)
+            return (currentW, currentH);
+        if (ccdW >= MinModePx && ccdH >= MinModePx)
+            return (ccdW, ccdH);
+        if (monitorW >= MinModePx && monitorH >= MinModePx)
+            return (monitorW, monitorH);
+        if (currentW > 0 && currentH > 0) return (currentW, currentH);
+        if (ccdW > 0 && ccdH > 0) return (ccdW, ccdH);
+        if (monitorW > 0 && monitorH > 0) return (monitorW, monitorH);
+        return (1920, 1080);
+    }
+
     /// <summary>
     /// Stage copies the Windows HDMI mode (Width×Height). A 1920×1080 extra
     /// screen becomes a 1920×1080 Display even when EDID prefers 3840.
+    /// NVIDIA custom 3160×2160 in Windows Display is copied as 3160×2160.
     /// 150% DPI on a 4K panel reports a smaller Width that still maps to the
     /// physical pixels — keep those so a 3840 wall does not become 2560.
     /// </summary>
