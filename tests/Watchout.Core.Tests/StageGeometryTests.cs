@@ -241,7 +241,19 @@ public class StageGeometryTests
         var alt = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, none, (200, 200), 1, preferDisplay: true);
         Assert.Equal(StageHitKind.Display, alt.Kind);
 
-        var chrome = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, none, (40, 8), 1);
+        var chromeOverCue = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], rects, none, (40, 8), 1);
+        Assert.Equal(StageHitKind.Cue, chromeOverCue.Kind);
+        Assert.Equal("c", chromeOverCue.Id);
+
+        var pip = new Cue
+        {
+            Id = "pip",
+            Type = CueType.Media,
+            AssetId = "a",
+            Position = new Vec3 { X = 400, Y = 400 },
+            Scale = new Vec2 { X = 20, Y = 20 },
+        };
+        var chrome = StageGeometry.HitEditTarget(StageEditMode.Cues, [display], StageGeometry.CueRects([pip], [asset]), none, (40, 8), 1);
         Assert.Equal(StageHitKind.Display, chrome.Kind);
 
         var selected = new Selection { Kind = SelectionKind.Display, Ids = ["d1"] };

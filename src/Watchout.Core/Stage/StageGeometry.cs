@@ -446,18 +446,21 @@ public static class StageGeometry
             return display is null ? default : new StageHit(StageHitKind.Display, display.Id);
         }
 
-        for (var i = displays.Count - 1; i >= 0; i--)
-        {
-            if (PointInDisplayChrome(displays[i], pt, zoom))
-                return new StageHit(StageHitKind.Display, displays[i].Id);
-        }
-
+        // Cues win over the display title strip. At overview zoom that strip is
+        // ~24 screen pixels and sat on top of a Fit-to-display clip, so a drag
+        // moved the wall instead of the cue (the picture did not follow).
         for (var i = cueRects.Count - 1; i >= 0; i--)
         {
             var (cue, rect) = cueRects[i];
             if (cue.Type != CueType.Media) continue;
             if (PointInRect(pt, rect))
                 return new StageHit(StageHitKind.Cue, cue.Id);
+        }
+
+        for (var i = displays.Count - 1; i >= 0; i--)
+        {
+            if (PointInDisplayChrome(displays[i], pt, zoom))
+                return new StageHit(StageHitKind.Display, displays[i].Id);
         }
 
         var hitDisplay = HitDisplay(displays, pt);

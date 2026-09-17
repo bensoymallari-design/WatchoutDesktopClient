@@ -187,6 +187,13 @@ public class GpuLayerMathTests
         var stageFit = GpuLayerMath.FitDrawToDest(0, 0, 3840, 2160, 2560, 1440);
         Assert.Equal(2560, (int)Math.Round(stageFit.W));
         Assert.Equal(1440, (int)Math.Round(stageFit.H));
+        Assert.Equal(0, (int)Math.Round(stageFit.X));
+        Assert.Equal(0, (int)Math.Round(stageFit.Y));
+        var dragged = GpuLayerMath.FitDrawToDest(480, 120, 3840, 2160, 2560, 1440);
+        Assert.Equal(2560, (int)Math.Round(dragged.W));
+        Assert.Equal(1440, (int)Math.Round(dragged.H));
+        Assert.True(dragged.X > stageFit.X + 1);
+        Assert.True(dragged.Y > stageFit.Y + 1);
         Assert.True(OutputViewMath.PulseClock(true, false));
         Assert.True(OutputViewMath.PulseClock(false, true));
         Assert.False(OutputViewMath.PulseClock(false, false));

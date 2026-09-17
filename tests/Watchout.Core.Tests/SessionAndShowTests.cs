@@ -346,6 +346,21 @@ public class SessionAndShowTests
     }
 
     [Fact]
+    public void SelectingTheSameCueAgainDoesNotRebuildProducer()
+    {
+        var session = new ProducerSession();
+        session.OpenDemo();
+        var cue = session.Show!.Timelines[0].Cues.First(c => c.Type == CueType.Media);
+        session.Select(SelectionKind.Cue, cue.Id);
+        var changes = 0;
+        session.Changed += () => changes++;
+        session.Select(SelectionKind.Cue, cue.Id);
+        Assert.Equal(0, changes);
+        Assert.Equal(SelectionKind.Cue, session.Selection.Kind);
+        Assert.Contains(cue.Id, session.Selection.Ids);
+    }
+
+    [Fact]
     public void StageLayoutBusyHoldsUntilReleased()
     {
         var session = new ProducerSession();

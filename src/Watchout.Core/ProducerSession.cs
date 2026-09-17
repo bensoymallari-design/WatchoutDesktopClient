@@ -134,7 +134,17 @@ public sealed class ProducerSession
 
     public void Select(SelectionKind kind, params string[] ids)
     {
-        Selection = new Selection { Kind = kind, Ids = ids.ToList() };
+        var list = ids.ToList();
+        if (Selection.Kind == kind && Selection.Ids.Count == list.Count && Selection.Ids.SequenceEqual(list))
+        {
+            if (kind == SelectionKind.Cue && StageEditMode != StageEditMode.Cues)
+            {
+                StageEditMode = StageEditMode.Cues;
+                Changed?.Invoke();
+            }
+            return;
+        }
+        Selection = new Selection { Kind = kind, Ids = list };
         if (kind == SelectionKind.Cue)
             StageEditMode = StageEditMode.Cues;
         Changed?.Invoke();
