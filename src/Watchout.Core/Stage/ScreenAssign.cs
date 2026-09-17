@@ -47,10 +47,10 @@ public static class ScreenAssign
             : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
 
     /// <summary>
-    /// Size WatchMe copies onto Stage and the Output HWND. Colorlight X20 NVIDIA
-    /// customs (6720×1344, 516×430, …) are the Windows mode — EDID often still
-    /// says 1920×1080 or 4096×2160. A laptop 150% DPI rectangle (2560) that
-    /// matches EDID×scale stays on EDID (4K).
+    /// Size of the Output HWND: the live NVIDIA/Windows mode. Stage canvas
+    /// stays yours (1920×1080, …); Output contain-fits it onto this size.
+    /// Leftover NVIDIA customs from another controller are not guessed.
+    /// A laptop 150% DPI rectangle (2560) that matches EDID×scale stays on EDID (4K).
     /// </summary>
     public static int ScreenWidth(OutputScreen screen) => ScreenPixels(screen).W;
 
@@ -64,10 +64,12 @@ public static class ScreenAssign
             var h = screen.PhysicalHeight > 0 ? screen.PhysicalHeight : screen.Height;
             return (Math.Max(1, w), Math.Max(1, h));
         }
-        if (screen.MappedWidth >= 64 && screen.MappedHeight >= 64)
-            return (screen.MappedWidth, screen.MappedHeight);
+        // Live NVIDIA/Windows mode only. Leftover customs in the mode list
+        // (6720×1344 from another controller) must not override this X20's 516×430.
         if (screen.Width > 0 && screen.Height > 0)
             return (screen.Width, screen.Height);
+        if (screen.MappedWidth >= 64 && screen.MappedHeight >= 64)
+            return (screen.MappedWidth, screen.MappedHeight);
         if (screen.PhysicalWidth > 0 && screen.PhysicalHeight > 0)
             return (screen.PhysicalWidth, screen.PhysicalHeight);
         return (1920, 1080);
@@ -112,10 +114,11 @@ public static class ScreenAssign
         w >= 64 && h >= 64 && !IsStandardTiming(w, h) && !LooksLikeTvAspect(w, h);
 
     /// <summary>
-    /// NVIDIA / Windows current mode vs GetMonitorInfo rectangle. Colorlight X20
-    /// customs (6720×1344) are often larger than the EDID rect (1920 or 4096) —
-    /// never Min() those down. Standard 4K at 150% DPI still uses the smaller rect
-    /// so LooksLikeDpiScaledMode can restore EDID.
+    /// NVIDIA / Windows current mode vs GetMonitorInfo rectangle. A live
+    /// custom (this X20 516×430) is used even when the EDID rect is 1920.
+    /// Leftover list entries are not used here — only the selected mode.
+    /// Standard 4K at 150% DPI still uses the smaller rect so
+    /// LooksLikeDpiScaledMode can restore EDID.
     /// </summary>
     public static (int W, int H) WindowsModePixels(int rectW, int rectH, int currentW, int currentH)
     {
@@ -131,26 +134,31 @@ public static class ScreenAssign
     }
 
     /// <summary>
-    /// Colorlight X20 NVIDIA custom (6720×1344) or LEDVISION cabinet map (516×430)
-    /// — not a TV 16:9 mode. Prefer the live Windows mode over EDID 1920 / 4096.
+    /// Live NVIDIA/Windows mode only. Colorlight X20 this show is 516×430;
+    /// 6720×1344 in the mode list is leftover from another controller and
+    /// must not be guessed. Stage stays 1920×1080 (or whatever you built);
+    /// Output contain-fits that canvas onto this live size.
     /// </summary>
     public static (int W, int H)? PickLedMap(
         int currentW, int currentH,
         int edidW, int edidH,
         IReadOnlyList<(int W, int H)> modes)
     {
+        _ = edidW;
+        _ = edidH;
+        _ = modes;
         static bool Custom(int w, int h) => w >= 64 && h >= 64 && !IsStandardTiming(w, h);
         if (Custom(currentW, currentH)) return (currentW, currentH);
-        var edidArea = Math.Max(1L, (long)(edidW > 0 ? edidW : currentW) * (edidH > 0 ? edidH : currentH));
-        var maps = modes
-            .Where(m => LooksLikeLedMap(m.W, m.H)
-                && (m.W * (long)m.H < edidArea * 85 / 100
-                    || m.W * (long)m.H > edidArea * 115 / 100))
-            .Distinct()
-            .OrderByDescending(m => m.W * (long)m.H)
-            .ToList();
-        return maps.Count > 0 ? maps[0] : null;
+        return null;
     }
+
+    /// <summary>
+    /// Keep a real Stage canvas (1920×1080, …) when assigning a controller.
+    /// Output contain-fits that canvas onto the live wall/TV. Only placeholder
+    /// 100×100 displays take the controller pixels.
+    /// </summary>
+    public static bool KeepStageSize(double width, double height) =>
+        width >= 256 && height >= 256;
 
     /// <summary>
     /// True when Windows/EDID disagree. Colorlight maps still count even though
@@ -215,8 +223,8 @@ public static class ScreenAssign
         {
             var screen = pool[i];
             var prev = i < displays.Count ? displays[i] : ShowFactory.EmptyDisplay(new Display { Name = screen.Label, Channel = i + 1 });
-            var width = ScreenWidth(screen);
-            var height = ScreenHeight(screen);
+            var width = KeepStageSize(prev.Width, prev.Height) ? (int)Math.Round(prev.Width) : ScreenWidth(screen);
+            var height = KeepStageSize(prev.Width, prev.Height) ? (int)Math.Round(prev.Height) : ScreenHeight(screen);
             mapped.Add(new Display
             {
                 Id = prev.Id,

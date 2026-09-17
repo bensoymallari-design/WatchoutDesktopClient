@@ -736,7 +736,7 @@ public class DevicesPanel : UserControl
             Foreground = (Brush)FindResource("Wo.Muted"),
             Text = extras.Count == 0
                 ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "LED processors (Colorlight X20, NovaStar, MCTRL, Linsn) show the NVIDIA/Windows custom — X20 HDMI often 6720×1344 (or 5280×816, 516×430). EDID still says 1920×1080 or 4096×2160; Use size copies the custom, not that EDID. Assign screens, pick X20 HDMI (not the laptop), then Output. A 1920×1080 cue on a 6720×1344 wall cannot fill the cabinets — Use size then Fit cue.",
+                : "Output contain-fits your Stage canvas (1920×1080 or whatever you built) onto the live wall/TV — Colorlight X20 516×430, a 1080 TV, 4K, any processor. Do not leave NVIDIA on a leftover custom from another controller (6720×1344). For this X20 set X20 HDMI to 516×430 (Customize… if it is missing), scale 100%. Assign screens pins the extra HDMI row; Stage size stays yours. Use size is only if you want 1:1 pixels.",
         });
 
         _root.Children.Add(Header("AUDIO"));
