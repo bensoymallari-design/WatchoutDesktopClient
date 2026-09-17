@@ -32,6 +32,20 @@ public static class NativeWindow
         return (Math.Max(0, r.Right - r.Left), Math.Max(0, r.Bottom - r.Top));
     }
 
+    /// <summary>
+    /// OS pixels of the monitor that contains this point. A 3840 wall HWND on a
+    /// 2560 mode must not stay 3840 — DXGI then crops (Fit cue looks zoomed).
+    /// </summary>
+    public static (int W, int H) MonitorPixels(int x, int y)
+    {
+        var mon = MonitorFromPoint(new POINT { X = x, Y = y }, MonitorDefaultToNearest);
+        if (mon == IntPtr.Zero) return (0, 0);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(mon, ref info)) return (0, 0);
+        var r = info.rcMonitor;
+        return (Math.Max(0, r.Right - r.Left), Math.Max(0, r.Bottom - r.Top));
+    }
+
     public static bool IsChild(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return false;
@@ -45,6 +59,7 @@ public static class NativeWindow
     }
 
     const uint SwpNoSize = 0x0001;
+    const int MonitorDefaultToNearest = 2;
 
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
@@ -55,9 +70,30 @@ public static class NativeWindow
     [DllImport("user32.dll")]
     static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
+    [DllImport("user32.dll")]
+    static extern IntPtr MonitorFromPoint(POINT pt, int flags);
+
+    [DllImport("user32.dll")]
+    static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct POINT
+    {
+        public int X, Y;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     struct RECT
     {
         public int Left, Top, Right, Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public int dwFlags;
     }
 }

@@ -71,7 +71,8 @@ public sealed class GpuPresentLayer : Grid
         if (!_loggedWall)
         {
             _loggedWall = true;
-            App.Session.Log($"Output wall {w}×{h} · Stage display {displayW}×{displayH}");
+            var cue = draws.Count > 0 ? $"{draws[0].W:0}×{draws[0].H:0}" : "none";
+            App.Session.Log($"Output wall {w}×{h} · Stage display {displayW}×{displayH} · cue {cue}");
         }
         NativeWindow.KeepTopmost(hwnd);
         GpuEngine.PresentOutput(hwnd, w, h, draws, display, playAudio, keepLastFrame);
