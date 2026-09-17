@@ -17,7 +17,7 @@ Build and install from **`main`**. You do not need an old `cursor/…` branch to
 
 ## Codecs
 
-**Play natively (DXVA):** H.264/AVC, H.265/HEVC, MPEG-2, WMV, JPEG/PNG stills, WAV, AAC, MP3.
+**Play natively (DXVA):** 8-bit H.264/AVC MP4 is the reliable path. H.265/HEVC, MPEG-2, WMV, JPEG/PNG stills, WAV, AAC, MP3 also open when Media Foundation can decode them. **Dolby Vision / HEVC HDR MP4s often open as NV12 with no picture** — WatchMe now falls back to RGB32, but those files can still stay black. Re-encode to 8-bit Rec.709 H.264 (Resolume Alley H.264 is fine) or use **Assets → Create H.264 version**. Deleting the cue and loading the same MP4 again does not fix that. NDI and capture are a different path and were not this bug.
 
 **Live NDI:** Resolume (or any NDI sender) at the source size — including **3840×2160**. Put the NDI cue on a **later timeline layer** than the H.264 clip so it sits in front on Stage and Output. Later layer = front.
 
