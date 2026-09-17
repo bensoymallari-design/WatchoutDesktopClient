@@ -257,6 +257,18 @@ public static class StageGeometry
             new Vec2 { X = RoundHundredths(rect.W / aw * 100), Y = RoundHundredths(rect.H / ah * 100) });
     }
 
+    /// <summary>
+    /// On-Stage pixel size of a cue (asset native × scale %). Watchout-style Width/Height.
+    /// </summary>
+    public static (double W, double H) CuePixelSize(Asset? asset, Vec2 scale)
+    {
+        var r = CueRect(new Cue { Scale = scale }, asset);
+        return (Math.Round(r.W), Math.Round(r.H));
+    }
+
+    public static Vec2 ScaleFromPixelSize(Asset? asset, double pixelW, double pixelH) =>
+        RectToCueTransform(new StageRect(0, 0, Math.Max(1, pixelW), Math.Max(1, pixelH)), asset ?? new Asset()).Scale;
+
     public static (double Value, double Dist)? NearestGuide(double value, IEnumerable<double> guides, double threshold)
     {
         double? best = null;

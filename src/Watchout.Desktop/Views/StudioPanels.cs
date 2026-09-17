@@ -1121,6 +1121,9 @@ public class PropertiesPanel : UserControl
                     cue.Name + cue.AssetId + cue.Speed + cue.WipeCompletion + cue.WipeAngle + cue.WipeFeather
                     + cue.Temperature + cue.Exposure + cue.ChromaKeyEnabled + cue.ChromaKeyColor + s.PickingChroma
                     + cue.Blend + cue.Brightness + cue.Contrast + cue.Saturation + cue.Hue
+                    + cue.Position.X + cue.Position.Y + cue.Scale.X + cue.Scale.Y + cue.Opacity
+                    + (show.Assets.FirstOrDefault(a => a.Id == cue.AssetId)?.Width)
+                    + (show.Assets.FirstOrDefault(a => a.Id == cue.AssetId)?.Height)
                     + show.Prefs.MediaReplaceMode + show.Prefs.AutoStart,
                 SelectionKind.Asset when show.Assets.FirstOrDefault(a => s.Selection.Ids.Contains(a.Id)) is { } a =>
                     a.Name + a.Notes + a.ActiveRevisionId + a.Url + a.Revisions.Count,
@@ -1139,7 +1142,15 @@ public class PropertiesPanel : UserControl
         {
             var cue = show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => s.Selection.Ids.Contains(c.Id));
             if (cue is null) return;
+            var media = show.Assets.FirstOrDefault(a => a.Id == cue.AssetId);
+            var pixel = StageGeometry.CuePixelSize(media, cue.Scale);
             Field("Name", cue.Name, v => s.UpdateCue(cue.Id, c => c.Name = v));
+            Field("X", cue.Position.X.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.X = n); });
+            Field("Y", cue.Position.Y.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.Y = n); });
+            Field("Width", pixel.W.ToString("0"), v => { if (double.TryParse(v, out var n)) s.SetCuePixelSize(cue.Id, width: n); });
+            Field("Height", pixel.H.ToString("0"), v => { if (double.TryParse(v, out var n)) s.SetCuePixelSize(cue.Id, height: n); });
+            ActionBtn("Fit cue to display", () => s.FitSelectedToDisplay());
+            ActionBtn("Fit cue to wall", () => s.FitSelectedToWall());
             Field("Start ms", cue.Start.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Start = n); });
             Field("Duration ms", cue.Duration.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Duration = n); });
             Field("Opacity", cue.Opacity.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Opacity = n); });
@@ -1164,8 +1175,6 @@ public class PropertiesPanel : UserControl
             Field("Saturation", cue.Saturation.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Saturation = n); });
             Field("Hue", cue.Hue.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Hue = n); });
             Field("Volume", cue.Volume.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Volume = n); });
-            Field("X", cue.Position.X.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.X = n); });
-            Field("Y", cue.Position.Y.ToString("0"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Position.Y = n); });
             Field("Scale X %", cue.Scale.X.ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Scale.X = n); });
             Field("Scale Y %", cue.Scale.Y.ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Scale.Y = n); });
             Field("Speed %", (cue.Speed <= 0 ? 100 : cue.Speed).ToString("0.##"), v => { if (double.TryParse(v, out var n)) s.UpdateCue(cue.Id, c => c.Speed = Math.Max(1, n)); });

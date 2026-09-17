@@ -196,6 +196,12 @@ public class StageGeometryTests
         Assert.Equal(10, transform.Position.X);
         Assert.Equal(200, transform.Scale.X);
         Assert.Equal(100, transform.Scale.Y);
+        var pixels = StageGeometry.CuePixelSize(new Asset { Width = 1920, Height = 1080 }, new Vec2 { X = 200, Y = 200 });
+        Assert.Equal(3840, pixels.W);
+        Assert.Equal(2160, pixels.H);
+        var fromPx = StageGeometry.ScaleFromPixelSize(new Asset { Width = 1920, Height = 1080 }, 3840, 2160);
+        Assert.Equal(200, fromPx.X);
+        Assert.Equal(200, fromPx.Y);
     }
 
     [Fact]
