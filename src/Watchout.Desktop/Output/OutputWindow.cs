@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Watchout.Core.Gpu;
 using Watchout.Core.Models;
 using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Interop;
@@ -16,8 +17,8 @@ public sealed class OutputWindow : Window
     readonly StageSurface _surface;
     GpuOutputWall? _wall;
 
-    public int PixelWidth => Math.Max(64, _screen.Width);
-    public int PixelHeight => Math.Max(64, _screen.Height);
+    public int PixelWidth => OutputViewMath.WallPixels(_screen.Width, _screen.Height).W;
+    public int PixelHeight => OutputViewMath.WallPixels(_screen.Width, _screen.Height).H;
     public IntPtr WallHwnd => _wall?.Hwnd ?? IntPtr.Zero;
 
     public OutputWindow(Display display, OutputScreen screen, bool playAudio)
@@ -35,8 +36,9 @@ public sealed class OutputWindow : Window
         SnapsToDevicePixels = true;
         Left = screen.Left;
         Top = screen.Top;
-        Width = Math.Max(64, screen.Width);
-        Height = Math.Max(64, screen.Height);
+        var dip = OutputViewMath.ScreenToDip(screen.Width, screen.Height, screen.ScaleFactor);
+        Width = Math.Max(64, dip.DipW);
+        Height = Math.Max(64, dip.DipH);
         _surface = new StageSurface
         {
             Editing = false,
@@ -70,10 +72,11 @@ public sealed class OutputWindow : Window
         if (owner == IntPtr.Zero) return;
         try
         {
+            var (w, h) = OutputViewMath.WallPixels(_screen.Width, _screen.Height);
             if (_wall is null)
-                _wall = GpuOutputWall.Create(owner, _screen.Left, _screen.Top, PixelWidth, PixelHeight);
+                _wall = GpuOutputWall.Create(owner, _screen.Left, _screen.Top, w, h);
             else
-                _wall.Place(_screen.Left, _screen.Top, PixelWidth, PixelHeight);
+                _wall.Place(_screen.Left, _screen.Top, w, h);
         }
         catch (Exception ex)
         {
@@ -85,22 +88,13 @@ public sealed class OutputWindow : Window
     {
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
-        NativeWindow.Place(hwnd, _screen.Left, _screen.Top, PixelWidth, PixelHeight, topmost: false);
-        SyncDipSize();
+        var (w, h) = OutputViewMath.WallPixels(_screen.Width, _screen.Height);
+        NativeWindow.Place(hwnd, _screen.Left, _screen.Top, w, h, topmost: false);
         EnsureWall();
         if (WallHwnd != IntPtr.Zero) NativeWindow.KeepTopmost(WallHwnd);
         if (!refresh) return;
         UpdateLayout();
         _surface.UpdateLayout();
         _surface.Refresh();
-    }
-
-    void SyncDipSize()
-    {
-        var src = PresentationSource.FromVisual(this);
-        var scale = src?.CompositionTarget?.TransformToDevice.M11 ?? 1;
-        if (scale < 0.1) scale = 1;
-        Width = PixelWidth / scale;
-        Height = PixelHeight / scale;
     }
 }

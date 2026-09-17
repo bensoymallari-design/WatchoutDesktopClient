@@ -100,13 +100,15 @@ public static class GpuLayerMath
         double destW,
         double destH,
         PlaybackState playback,
-        bool loop)
+        bool loop,
+        double scaleY = 0)
     {
+        var sy = scaleY == 0 ? scale : scaleY;
         var rect = StageGeometry.CueRect(ev, asset);
         var x = (float)((rect.X - originX) * scale);
-        var y = (float)((rect.Y - originY) * scale);
+        var y = (float)((rect.Y - originY) * sy);
         var w = (float)(rect.W * scale);
-        var h = (float)(rect.H * scale);
+        var h = (float)(rect.H * sy);
         var crop = ev.Crop;
         var u0 = (float)Math.Clamp(crop.Left / 100.0, 0, 0.99);
         var v0 = (float)Math.Clamp(crop.Top / 100.0, 0, 0.99);
@@ -149,11 +151,14 @@ public static class GpuLayerMath
     /// (Stage widget or one Output display).
     /// </summary>
     public static (float X, float Y, float W, float H) MapRect(
-        StageRect rect, double originX, double originY, double scale) =>
-        ((float)((rect.X - originX) * scale),
-         (float)((rect.Y - originY) * scale),
-         (float)(rect.W * scale),
-         (float)(rect.H * scale));
+        StageRect rect, double originX, double originY, double scaleX, double scaleY = 0)
+    {
+        var sy = scaleY == 0 ? scaleX : scaleY;
+        return ((float)((rect.X - originX) * scaleX),
+         (float)((rect.Y - originY) * sy),
+         (float)(rect.W * scaleX),
+         (float)(rect.H * sy));
+    }
 
     /// <summary>
     /// Column-major 4×4 acting on RGB. Matches Resolume-style brightness /

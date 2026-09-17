@@ -60,18 +60,16 @@ public sealed class GpuPresentLayer : Grid
         if (hwnd == IntPtr.Zero && win is not null)
             hwnd = new WindowInteropHelper(win).Handle;
         if (hwnd == IntPtr.Zero) return;
-        var w = win?.PixelWidth ?? 0;
-        var h = win?.PixelHeight ?? 0;
-        if (w < 64 || h < 64)
-        {
-            var displayW = display is null ? 0 : (int)Math.Round(display.Width);
-            var displayH = display is null ? 0 : (int)Math.Round(display.Height);
-            (w, h) = OutputViewMath.PresentSize(64, 64, displayW, displayH, w, h);
-        }
+        var client = NativeWindow.ClientSize(hwnd);
+        var displayW = display is null ? 0 : (int)Math.Round(display.Width);
+        var displayH = display is null ? 0 : (int)Math.Round(display.Height);
+        var (w, h) = OutputViewMath.PresentSize(
+            client.W, client.H, displayW, displayH,
+            win?.PixelWidth ?? 0, win?.PixelHeight ?? 0);
         if (!_loggedWall)
         {
             _loggedWall = true;
-            App.Session.Log($"Output wall HWND {w}×{h}");
+            App.Session.Log($"Output wall {w}×{h} · Stage display {displayW}×{displayH}");
         }
         NativeWindow.KeepTopmost(hwnd);
         GpuEngine.PresentOutput(hwnd, w, h, draws, display, playAudio, keepLastFrame);

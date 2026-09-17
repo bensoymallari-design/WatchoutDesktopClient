@@ -44,7 +44,9 @@ sealed class GpuOutputWall : IDisposable
         if (hwnd == IntPtr.Zero)
             throw new InvalidOperationException("Could not create the Output wall HWND");
         NativeWindow.Place(hwnd, left, top, width, height);
-        return new GpuOutputWall(hwnd, width, height);
+        var created = new GpuOutputWall(hwnd, width, height);
+        created.Place(left, top, width, height);
+        return created;
     }
 
     public void Place(int left, int top, int width, int height)
@@ -52,8 +54,9 @@ sealed class GpuOutputWall : IDisposable
         width = Math.Max(64, width);
         height = Math.Max(64, height);
         NativeWindow.Place(Hwnd, left, top, width, height);
-        Width = width;
-        Height = height;
+        var client = NativeWindow.ClientSize(Hwnd);
+        Width = client.W >= 64 ? client.W : width;
+        Height = client.H >= 64 ? client.H : height;
     }
 
     public void Dispose()
