@@ -5,6 +5,7 @@ namespace Watchout.Desktop.Interop;
 public static class NativeWindow
 {
     static readonly IntPtr HwndTopmost = new(-1);
+    static readonly IntPtr HwndNoTopmost = new(-2);
     const uint SwpShowWindow = 0x0040;
     const uint SwpNoActivate = 0x0010;
     const uint SwpNoMove = 0x0002;
@@ -12,10 +13,10 @@ public static class NativeWindow
     const int GwlStyle = -16;
     const int WsChild = 0x40000000;
 
-    public static void Place(IntPtr hwnd, int left, int top, int width, int height)
+    public static void Place(IntPtr hwnd, int left, int top, int width, int height, bool topmost = true)
     {
         if (hwnd == IntPtr.Zero || width <= 0 || height <= 0) return;
-        SetWindowPos(hwnd, HwndTopmost, left, top, width, height, SwpShowWindow | SwpNoActivate);
+        SetWindowPos(hwnd, topmost ? HwndTopmost : HwndNoTopmost, left, top, width, height, SwpShowWindow | SwpNoActivate);
     }
 
     public static void Resize(IntPtr hwnd, int width, int height)
@@ -36,6 +37,14 @@ public static class NativeWindow
         if (hwnd == IntPtr.Zero) return false;
         return (GetWindowLong(hwnd, GwlStyle) & WsChild) != 0;
     }
+
+    public static void KeepTopmost(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpShowWindow | SwpNoActivate);
+    }
+
+    const uint SwpNoSize = 0x0001;
 
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);

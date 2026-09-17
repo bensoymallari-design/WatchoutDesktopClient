@@ -13,6 +13,7 @@ using Watchout.Core.Playback;
 using Watchout.Core.Stage;
 using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Media;
+using Watchout.Desktop.Output;
 
 namespace Watchout.Desktop.Views;
 
@@ -289,7 +290,7 @@ public sealed class StageSurface : Canvas
             _decoderEpoch = session.DecoderEpoch;
         }
 
-        var (originX, originY, scale) = Viewport(show);
+        var (originX, originY, scale) = OutputViewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();
         var gpuDraws = new List<Watchout.Core.Gpu.GpuDraw>();
@@ -678,6 +679,30 @@ public sealed class StageSurface : Canvas
             FontSize = 16,
         });
         return grid;
+    }
+
+    (double OriginX, double OriginY, double Scale) OutputViewport(Show show)
+    {
+        if (!Editing && ViewDisplay is { } display)
+        {
+            var destW = PixelWidth();
+            var destH = PixelHeight();
+            return Watchout.Core.Gpu.OutputViewMath.OutputViewport(
+                display.X, display.Y, display.Width, display.Height, destW, destH);
+        }
+        return Viewport(show);
+    }
+
+    int PixelWidth()
+    {
+        if (Window.GetWindow(this) is OutputWindow win) return win.PixelWidth;
+        return Math.Max(2, (int)Math.Round(ActualWidth > 8 ? ActualWidth : ViewDisplay?.Width ?? 2));
+    }
+
+    int PixelHeight()
+    {
+        if (Window.GetWindow(this) is OutputWindow win) return win.PixelHeight;
+        return Math.Max(2, (int)Math.Round(ActualHeight > 8 ? ActualHeight : ViewDisplay?.Height ?? 2));
     }
 
     (double OriginX, double OriginY, double Scale) Viewport(Show show)

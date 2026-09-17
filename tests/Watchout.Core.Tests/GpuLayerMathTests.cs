@@ -138,6 +138,17 @@ public class GpuLayerMathTests
         var widget = OutputViewMath.PresentSize(1920, 1080, 0, 0, 0, 0);
         Assert.Equal(1920, widget.W);
         Assert.Equal(1080, widget.H);
+        var vp = OutputViewMath.OutputViewport(1920, 0, 3840, 2160, 3840, 2160);
+        Assert.Equal(1920, vp.OriginX);
+        Assert.Equal(1, vp.Scale, 3);
+        var mapped = GpuLayerMath.MapRect(new StageRect(1920, 0, 3840, 2160), vp.OriginX, vp.OriginY, vp.Scale);
+        Assert.Equal(0, mapped.X);
+        Assert.Equal(0, mapped.Y);
+        Assert.Equal(3840, mapped.W);
+        Assert.Equal(2160, mapped.H);
+        Assert.True(OutputViewMath.PulseClock(true, false));
+        Assert.True(OutputViewMath.PulseClock(false, true));
+        Assert.False(OutputViewMath.PulseClock(false, false));
     }
 
     [Fact]

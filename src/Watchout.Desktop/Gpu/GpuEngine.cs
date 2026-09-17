@@ -129,8 +129,13 @@ public static class GpuEngine
                 if (draws.Count > 0 || !GpuSourceLifetime.FreezeIdleWhilePlaying(playing, draws.Count))
                     SyncSources(draws, playAudio, playing);
                 var ready = draws.Count(d => _comp.Has(d.SourceKey));
+                if (playing && draws.Count > 0 && ready == 0)
+                    NoteWaiting(draws[0].SourceKey);
                 if (GpuSourceLifetime.ClearToBlack(ready))
+                {
                     _comp.Render(swap.Rtv, width, height, draws, display);
+                    NotePicture();
+                }
                 PresentSwap(swap);
                 return true;
             }
@@ -251,6 +256,10 @@ public static class GpuEngine
 
     static readonly HashSet<string> SwapLogged = new(StringComparer.OrdinalIgnoreCase);
 
+    static readonly HashSet<string> WaitingLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    static bool _pictureLogged;
+
     static void NoteMissing(string path)
     {
         if (!MissingLogged.Add(path)) return;
@@ -283,6 +292,19 @@ public static class GpuEngine
         if ((DateTime.UtcNow - _swapRetryUtc).TotalSeconds < 2) return;
         _swapRetryUtc = DateTime.UtcNow;
         App.Session.Log($"Output swap retry after {message}", "warn");
+    }
+
+    static void NoteWaiting(string key)
+    {
+        if (!WaitingLogged.Add(key)) return;
+        App.Session.Log($"Output waiting for the first DXVA frame — {key}");
+    }
+
+    static void NotePicture()
+    {
+        if (_pictureLogged) return;
+        _pictureLogged = true;
+        App.Session.Log("Output has picture on the wall");
     }
 
     static void AgeIdle(HashSet<string> live, bool playing)
@@ -362,7 +384,7 @@ public static class GpuEngine
     {
         try
         {
-            swap.Chain.Present(1, PresentFlags.DoNotWait);
+            swap.Chain.Present(1, PresentFlags.None);
         }
         catch (SharpGenException ex) when (ex.HResult == unchecked((int)0x887A000A))
         {
@@ -391,6 +413,8 @@ public static class GpuEngine
         Rebuilt.Clear();
         SoftwareLogged.Clear();
         SwapLogged.Clear();
+        WaitingLogged.Clear();
+        _pictureLogged = false;
         foreach (var hold in LiveHolds)
         {
             if (hold.Key.StartsWith("ndi:", StringComparison.OrdinalIgnoreCase))

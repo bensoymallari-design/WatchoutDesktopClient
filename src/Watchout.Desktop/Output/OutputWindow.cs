@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using Watchout.Core.Models;
+using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Interop;
 using Watchout.Desktop.Views;
 
@@ -13,9 +14,11 @@ public sealed class OutputWindow : Window
     public string DisplayId { get; }
     readonly OutputScreen _screen;
     readonly StageSurface _surface;
+    GpuOutputWall? _wall;
 
     public int PixelWidth => Math.Max(64, _screen.Width);
     public int PixelHeight => Math.Max(64, _screen.Height);
+    public IntPtr WallHwnd => _wall?.Hwnd ?? IntPtr.Zero;
 
     public OutputWindow(Display display, OutputScreen screen, bool playAudio)
     {
@@ -26,7 +29,7 @@ public sealed class OutputWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowState = WindowState.Normal;
         Background = Brushes.Black;
-        Topmost = true;
+        Topmost = false;
         ShowInTaskbar = false;
         UseLayoutRounding = true;
         SnapsToDevicePixels = true;
@@ -53,19 +56,39 @@ public sealed class OutputWindow : Window
         DpiChanged += (_, _) => PlaceOnScreen(refresh: true);
         Closing += (_, _) =>
         {
-            Topmost = false;
+            _wall?.Dispose();
+            _wall = null;
             Hide();
         };
     }
 
     public void BindDisplay(Display display) => _surface.ViewDisplay = display;
 
+    public void EnsureWall()
+    {
+        var owner = new WindowInteropHelper(this).Handle;
+        if (owner == IntPtr.Zero) return;
+        try
+        {
+            if (_wall is null)
+                _wall = GpuOutputWall.Create(owner, _screen.Left, _screen.Top, PixelWidth, PixelHeight);
+            else
+                _wall.Place(_screen.Left, _screen.Top, PixelWidth, PixelHeight);
+        }
+        catch (Exception ex)
+        {
+            App.Session.Log($"Output wall HWND failed — {ex.Message}", "error");
+        }
+    }
+
     public void PlaceOnScreen(bool refresh = false)
     {
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
-        NativeWindow.Place(hwnd, _screen.Left, _screen.Top, PixelWidth, PixelHeight);
+        NativeWindow.Place(hwnd, _screen.Left, _screen.Top, PixelWidth, PixelHeight, topmost: false);
         SyncDipSize();
+        EnsureWall();
+        if (WallHwnd != IntPtr.Zero) NativeWindow.KeepTopmost(WallHwnd);
         if (!refresh) return;
         UpdateLayout();
         _surface.UpdateLayout();
