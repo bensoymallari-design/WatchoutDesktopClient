@@ -38,6 +38,7 @@ public sealed class ProducerSession
 
     readonly List<string> _history = [];
     readonly List<string> _future = [];
+    bool _liveLayoutDirty;
 
     public event Action? Changed;
     public event Action? Clock;
@@ -722,7 +723,19 @@ public sealed class ProducerSession
             && sx == cue.Scale.X && sy == cue.Scale.Y)
             return;
         Show.ModifiedAt = DateTime.UtcNow.ToString("o");
+        _liveLayoutDirty = true;
         LayoutChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Mouse-up after Stage drag/resize. Properties and Devices read X/Y/Width
+    /// from Changed; live drag only fires LayoutChanged so Output does not hitch.
+    /// </summary>
+    public void CommitLiveLayout()
+    {
+        if (!_liveLayoutDirty) return;
+        _liveLayoutDirty = false;
+        Changed?.Invoke();
     }
 
     public void MoveCues(IEnumerable<string> ids, double dStart, string? layerId = null)
@@ -1229,6 +1242,7 @@ public sealed class ProducerSession
         if (x == display.X && y == display.Y && w == display.Width && h == display.Height)
             return;
         Show.ModifiedAt = DateTime.UtcNow.ToString("o");
+        _liveLayoutDirty = true;
         LayoutChanged?.Invoke();
     }
 
@@ -1809,6 +1823,7 @@ public sealed class ProducerSession
         if (record) _future.Clear();
         mutator(Show);
         Show.ModifiedAt = DateTime.UtcNow.ToString("o");
+        _liveLayoutDirty = false;
         Changed?.Invoke();
     }
 
