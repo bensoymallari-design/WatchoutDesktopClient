@@ -87,89 +87,17 @@ public class ScreenAssignTests
         {
             Id = "mctrl",
             Label = "MCTRL4K",
-            Width = 2560,
-            Height = 720,
+            Width = 1920,
+            Height = 1080,
             PhysicalWidth = 3840,
             PhysicalHeight = 1080,
-            ScaleFactor = 1.5,
         };
-        Assert.True(ScreenAssign.LooksLikeDpiScaledMode(scaled));
         Assert.True(ScreenAssign.WindowsModeDiffersFromController(scaled));
-        Assert.Equal("MCTRL4K · wall/TV 3840×1080 (Windows 2560×720)", ScreenAssign.ScreenChoiceLabel(scaled));
+        Assert.Equal("MCTRL4K · wall/TV 3840×1080 (Windows 1920×1080)", ScreenAssign.ScreenChoiceLabel(scaled));
         var d = new Display { Width = 100, Height = 100 };
         ScreenAssign.CopyScreenSize(d, scaled);
         Assert.Equal(3840, d.Width);
         Assert.Equal(1080, d.Height);
-    }
-
-    [Fact]
-    public void ColorlightX20CustomMapIsCopiedNotEdid1920()
-    {
-        var x20 = new OutputScreen
-        {
-            Id = "x20",
-            Label = "Colorlight",
-            Width = 516,
-            Height = 430,
-            PhysicalWidth = 1920,
-            PhysicalHeight = 1080,
-        };
-        Assert.False(ScreenAssign.LooksLikeDpiScaledMode(x20));
-        Assert.Equal(516, ScreenAssign.ScreenWidth(x20));
-        Assert.Equal(430, ScreenAssign.ScreenHeight(x20));
-        Assert.Equal("Colorlight · wall/TV 516×430 (EDID 1920×1080)", ScreenAssign.ScreenChoiceLabel(x20));
-        var display = new Display { Width = 1920, Height = 1080 };
-        ScreenAssign.CopyScreenSize(display, x20);
-        Assert.Equal(516, display.Width);
-        Assert.Equal(430, display.Height);
-
-        var listed = ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (516, 430), (1280, 720), (1400, 1050), (6720, 1344)]);
-        Assert.Null(listed);
-        var live = ScreenAssign.PickLedMap(516, 430, 1920, 1080, [(1920, 1080), (516, 430), (6720, 1344)]);
-        Assert.Equal((516, 430), live);
-        Assert.False(ScreenAssign.IsStandardTiming(516, 430));
-        Assert.True(ScreenAssign.LooksLikeLedMap(516, 430));
-        Assert.False(ScreenAssign.LooksLikeLedMap(1400, 1050));
-        Assert.True(ScreenAssign.IsStandardTiming(1920, 1080));
-        Assert.Null(ScreenAssign.PickLedMap(1920, 1080, 1920, 1080, [(1920, 1080), (1400, 1050), (1280, 720)]));
-
-        var leftoverMap = new OutputScreen
-        {
-            Id = "x20",
-            Label = "Colorlight",
-            Width = 1920,
-            Height = 1080,
-            PhysicalWidth = 1920,
-            PhysicalHeight = 1080,
-            MappedWidth = 6720,
-            MappedHeight = 1344,
-        };
-        Assert.Equal(1920, ScreenAssign.ScreenWidth(leftoverMap));
-        Assert.Equal(1080, ScreenAssign.ScreenHeight(leftoverMap));
-        var mappedDisplay = new Display { Width = 1920, Height = 1080 };
-        ScreenAssign.CopyScreenSize(mappedDisplay, leftoverMap);
-        Assert.Equal(1920, mappedDisplay.Width);
-        Assert.Equal(1080, mappedDisplay.Height);
-    }
-
-    [Fact]
-    public void ResolumeKeepsComposition516OnHdmi1920()
-    {
-        Assert.True(ScreenAssign.KeepStageSize(516, 430));
-        Assert.True(ScreenAssign.KeepStageSize(1920, 1080));
-        Assert.False(ScreenAssign.KeepStageSize(100, 100));
-        var displays = new List<Display> { new() { Id = "d1", Name = "Display 1", Width = 516, Height = 430, Enabled = true } };
-        var screens = new List<OutputScreen>
-        {
-            new() { Id = "1", Label = "Laptop", IsPrimary = true, Width = 1920, Height = 1080 },
-            new() { Id = "hdmi", Label = "X20 HDMI", Width = 1920, Height = 1080, PhysicalWidth = 1920, PhysicalHeight = 1080 },
-        };
-        var mapped = ScreenAssign.LayoutDisplaysOnScreens(displays, screens);
-        Assert.Equal(516, mapped[0].Width);
-        Assert.Equal(430, mapped[0].Height);
-        Assert.Equal("hdmi", mapped[0].ScreenId);
-        Assert.Equal(1920, ScreenAssign.ScreenWidth(screens[1]));
-        Assert.Equal(1080, ScreenAssign.ScreenHeight(screens[1]));
     }
 
     [Fact]

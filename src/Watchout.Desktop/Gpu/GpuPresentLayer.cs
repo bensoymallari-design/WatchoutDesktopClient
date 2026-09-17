@@ -72,7 +72,7 @@ public sealed class GpuPresentLayer : Grid
         {
             _loggedWall = true;
             var cue = draws.Count > 0 ? $"{draws[0].W:0}×{draws[0].H:0}" : "none";
-            App.Session.Log($"Output wall {w}×{h} · Stage display {displayW}×{displayH} · cue {cue} — 1:1 top-left (Resolume Composition on Screen)");
+            App.Session.Log($"Output wall {w}×{h} · Stage display {displayW}×{displayH} · cue {cue}");
         }
         NativeWindow.KeepTopmost(hwnd);
         GpuEngine.PresentOutput(hwnd, w, h, draws, display, playAudio, keepLastFrame);
