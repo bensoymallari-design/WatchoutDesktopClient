@@ -148,6 +148,37 @@ public class GpuLayerMathTests
     }
 
     [Fact]
+    public void OutputPictureCauseNamesBlackAndStuck()
+    {
+        var play = new OutputPictureHint(true, 1, 1, false, GpuSourceKind.File, false, true, false, false, false, false, null);
+        Assert.Equal(OutputPictureKind.Picture, OutputPictureCause.Classify(play));
+        var opening = play with { ReadyTextures = 0, DecoderOpening = true, DecoderReady = false };
+        Assert.Equal(OutputPictureKind.Opening, OutputPictureCause.Classify(opening));
+        Assert.False(OutputPictureCause.ShouldLog(OutputPictureKind.Opening, false, 100));
+        Assert.True(OutputPictureCause.ShouldLog(OutputPictureKind.Opening, false, OutputPictureCause.QuietMs));
+        Assert.False(OutputPictureCause.ShouldLog(OutputPictureKind.Opening, true, 5000));
+        var dead = play with { ReadyTextures = 0, DecoderDead = true, DecodeError = "no picture" };
+        Assert.Equal(OutputPictureKind.DecodeFailed, OutputPictureCause.Classify(dead));
+        Assert.True(OutputPictureCause.ShouldLog(OutputPictureKind.DecodeFailed, false, 0));
+        Assert.Contains("could not decode this MP4", OutputPictureCause.Message(OutputPictureKind.DecodeFailed, "file:wall.mp4", "no picture"));
+        var stalled = play with { DecoderStalled = true };
+        Assert.Equal(OutputPictureKind.Stalled, OutputPictureCause.Classify(stalled));
+        Assert.Contains("stuck", OutputPictureCause.Message(OutputPictureKind.Stalled, "file:wall.mp4", null));
+        var missing = play with { ReadyTextures = 0, FileMissing = true };
+        Assert.Equal(OutputPictureKind.MissingFile, OutputPictureCause.Classify(missing));
+        var noCue = play with { DrawCount = 0, ReadyTextures = 0 };
+        Assert.Equal(OutputPictureKind.NoCue, OutputPictureCause.Classify(noCue));
+        var hold = noCue with { KeepLastFrame = true };
+        Assert.Equal(OutputPictureKind.HoldingLastFrame, OutputPictureCause.Classify(hold));
+        var ndi = play with { Kind = GpuSourceKind.Ndi, ReadyTextures = 0, LiveHasPixels = false };
+        Assert.Equal(OutputPictureKind.LiveEmpty, OutputPictureCause.Classify(ndi));
+        Assert.Contains("NDI/capture", OutputPictureCause.Message(OutputPictureKind.LiveEmpty, "ndi:cam", null));
+        Assert.Equal(OutputPictureKind.Idle, OutputPictureCause.Classify(play with { Playing = false, ReadyTextures = 0 }));
+        Assert.Equal("error", OutputPictureCause.Level(OutputPictureKind.DecodeFailed));
+        Assert.Equal("warn", OutputPictureCause.Level(OutputPictureKind.Stalled));
+    }
+
+    [Fact]
     public void OutputPresentsAtTheScreenSizeNotThe64HostStub()
     {
         var nested = OutputViewMath.PresentSize(64, 64, 3840, 2160, 3840, 2160);

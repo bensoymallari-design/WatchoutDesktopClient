@@ -50,6 +50,7 @@ sealed class MfGpuDecoder : IDisposable
     public bool UsedGpuSurfaces { get { lock (_gate) return _gpuSurfaces; } }
     public bool FellBackFromNv12 { get { lock (_gate) return _fellBackFromNv12; } }
     public bool Ready { get { lock (_gate) return _ready; } }
+    public bool Opening { get { lock (_gate) return !_openFinished && _error is null; } }
     public double DurationMs { get { lock (_gate) return _durationMs; } }
     public bool Dead
     {
