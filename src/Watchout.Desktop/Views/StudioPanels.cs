@@ -750,7 +750,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Each NDI source is a row on the Switches tab (next to Devices / Layers / Log). Click the Stage 1 / Stage 2 circle to assign it and auto-fit that canvas. Browse still imports into Assets if you want to drag later.",
+            Text = "Each NDI source is an input card on the Switches tab. Click the orange LED under STAGE 1 / STAGE 2 to assign it and auto-fit that canvas. Browse still imports into Assets if you want to drag later.",
         });
         _root.Children.Add(Btn("Browse NDI sources", () =>
         {
@@ -815,7 +815,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. The Switches tab is the radio matrix: Card 1 / Card 2 rows, Stage 1 / Stage 2 columns. Click a circle to assign and auto-fit. Connect all still maps card 1 → Display 1, card 2 → Display 2.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. The Switches tab is the H9-style matrix: HDMI Card 1 / Card 2 and NDI 1 on the left, STAGE 1 / STAGE 2 on top. Click an orange lamp to assign and auto-fit. Connect all still maps card 1 → Display 1, card 2 → Display 2.",
         });
         _root.Children.Add(new TextBlock
         {

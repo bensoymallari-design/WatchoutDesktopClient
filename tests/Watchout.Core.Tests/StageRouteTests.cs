@@ -101,4 +101,27 @@ public class StageRouteTests
         Assert.Equal(right.X, cue!.Position.X);
         Assert.Equal(right.Id, LiveSources.CaptureDisplayKey(session.Show, "card-a"));
     }
+
+    [Fact]
+    public void ClearLiveFromStageRemovesTheCue()
+    {
+        var session = new ProducerSession();
+        session.NewShow();
+        session.AddDisplay();
+        var left = session.Show!.Displays[0];
+        session.AssignCaptureToDisplay("card-a", left.Id, "Card A");
+        session.AssignNdiToDisplay("Arena", session.Show.Displays[1].Id);
+        Assert.NotNull(LiveSources.CaptureCue(session.Show, "card-a"));
+        Assert.NotNull(LiveSources.NdiCue(session.Show, "Arena"));
+
+        session.ClearLiveFromStage(StageRoute.Capture, "card-a");
+        Assert.Null(LiveSources.CaptureCue(session.Show, "card-a"));
+        Assert.Null(StageRoute.AssignedDisplayId(session.Show, StageRoute.Capture, "card-a"));
+        Assert.NotNull(session.Show.Assets.FirstOrDefault(a => LiveSources.CaptureDeviceId(a) == "card-a"));
+
+        session.ClearLiveFromStage(StageRoute.Ndi, "Arena");
+        Assert.Null(LiveSources.NdiCue(session.Show, "Arena"));
+        Assert.Null(StageRoute.AssignedDisplayId(session.Show, StageRoute.Ndi, "Arena"));
+        Assert.NotNull(LiveSources.NdiAssetOnShow(session.Show, "Arena"));
+    }
 }
