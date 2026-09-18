@@ -39,11 +39,12 @@ public sealed class GpuPresentLayer : Grid
         }
         var w = Math.Max(2, (int)Math.Round(ActualWidth > 8 ? ActualWidth : Width));
         var h = Math.Max(2, (int)Math.Round(ActualHeight > 8 ? ActualHeight : Height));
-        if (display is not null && w < 64)
+        if (w < 64 && display is not null)
         {
             w = Math.Max(64, (int)Math.Round(display.Width));
             h = Math.Max(64, (int)Math.Round(display.Height));
         }
+        (w, h) = GpuResidentPath.StagePreviewSize(w, h);
         if (_image is null) return;
         if (_bmp is null || _bmp.PixelWidth != w || _bmp.PixelHeight != h)
         {

@@ -74,8 +74,20 @@ public static class AppBoot
     static (bool, string) Controller(Action? startClock)
     {
         startClock?.Invoke();
-        App.Session.Changed += () => App.Outputs.PushShow(App.Session.PlaybackShow);
-        App.Session.PlaybackChanged += () => App.Outputs.PushShow(App.Session.PlaybackShow);
+        App.Session.Changed += () =>
+        {
+            void Push() => App.Outputs.PushShow(App.Session.PlaybackShow);
+            var d = Application.Current?.Dispatcher;
+            if (d is null || d.CheckAccess()) Push();
+            else d.BeginInvoke(Push);
+        };
+        App.Session.PlaybackChanged += () =>
+        {
+            void Push() => App.Outputs.PushShow(App.Session.PlaybackShow);
+            var d = Application.Current?.Dispatcher;
+            if (d is null || d.CheckAccess()) Push();
+            else d.BeginInvoke(Push);
+        };
         return (true, $"{Brand.Name} {Brand.Version} · 60 Hz clock");
     }
 

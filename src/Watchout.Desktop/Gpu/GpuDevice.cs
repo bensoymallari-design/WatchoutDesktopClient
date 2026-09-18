@@ -8,13 +8,19 @@ namespace Watchout.Desktop.Gpu;
 
 sealed class GpuDevice : IDisposable
 {
+    /// <summary>
+    /// Intel UHD has returned E_INVALIDARG when 11.1 is first. Try 11.0 first
+    /// (Resolume's D3D11 path), then 11.1, then 10.x.
+    /// </summary>
     static readonly FeatureLevel[] Levels =
     [
-        FeatureLevel.Level_11_1,
         FeatureLevel.Level_11_0,
+        FeatureLevel.Level_11_1,
         FeatureLevel.Level_10_1,
         FeatureLevel.Level_10_0,
     ];
+
+    static readonly FeatureLevel[] Levels11Only = [FeatureLevel.Level_11_0];
 
     public ID3D11Device Device { get; }
     public ID3D11DeviceContext Context { get; }
@@ -141,7 +147,9 @@ sealed class GpuDevice : IDisposable
                     DeviceCreationFlags.BgraSupport,
                 })
                 {
-                    try { return CreateOn(adapter, DriverType.Unknown, flags); }
+                    try { return CreateOn(adapter, DriverType.Unknown, flags, Levels); }
+                    catch (Exception ex) { last = ex; }
+                    try { return CreateOn(adapter, DriverType.Unknown, flags, Levels11Only); }
                     catch (Exception ex) { last = ex; }
                 }
             }
@@ -155,6 +163,8 @@ sealed class GpuDevice : IDisposable
         {
             try { return D3D11.D3D11CreateDevice(DriverType.Hardware, flags, Levels); }
             catch (Exception ex) { last = ex; }
+            try { return D3D11.D3D11CreateDevice(DriverType.Hardware, flags, Levels11Only); }
+            catch (Exception ex) { last = ex; }
         }
 
         try { return D3D11.D3D11CreateDevice(DriverType.Warp, DeviceCreationFlags.BgraSupport, Levels); }
@@ -164,9 +174,9 @@ sealed class GpuDevice : IDisposable
         }
     }
 
-    static ID3D11Device CreateOn(IDXGIAdapter adapter, DriverType type, DeviceCreationFlags flags)
+    static ID3D11Device CreateOn(IDXGIAdapter adapter, DriverType type, DeviceCreationFlags flags, FeatureLevel[] levels)
     {
-        var hr = D3D11.D3D11CreateDevice(adapter, type, flags, Levels, out ID3D11Device? device);
+        var hr = D3D11.D3D11CreateDevice(adapter, type, flags, levels, out ID3D11Device? device);
         if (hr.Failure || device is null)
             throw new InvalidOperationException(hr.ToString());
         return device;

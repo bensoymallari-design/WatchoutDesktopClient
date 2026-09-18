@@ -146,16 +146,18 @@ public static class MachineLoad
     }
 
     /// <summary>
-    /// RAM-only Tight is "close a browser" — not why Output goes black.
-    /// Keep it on the meter; do not spam the Log as a machine failure.
+    /// RAM-only Tight/Full is "close a browser" — Resolume sits at 83% RAM
+    /// too. Keep it on the meter; do not spam the Log as a machine failure.
+    /// GPU/CPU Tight and Full still warn (that is the frame path).
     /// </summary>
     public static bool LogAsMachineWarn(MachineSample s) => LogAsMachineWarn(s, RamLevel(s));
 
     public static bool LogAsMachineWarn(MachineSample s, LoadLevel ram)
     {
+        _ = ram;
         var cpu = CpuLevel(s);
         var gpu = GpuLevel(s);
-        if (cpu == LoadLevel.Full || ram == LoadLevel.Full || gpu == LoadLevel.Full) return true;
+        if (cpu == LoadLevel.Full || gpu == LoadLevel.Full) return true;
         if (cpu == LoadLevel.Tight || gpu == LoadLevel.Tight) return true;
         return false;
     }

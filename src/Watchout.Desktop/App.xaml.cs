@@ -1,8 +1,11 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SharpGen.Runtime;
 using Watchout.Core;
+using Watchout.Core.Gpu;
 using Watchout.Core.Models;
 using Watchout.Core.Persistence;
 using Watchout.Desktop.Engine;
@@ -28,6 +31,17 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
         {
+            if (SurviveGpuGlitch(args.Exception))
+            {
+                Session.Log(
+                    "WatchMe kept running after a GPU/screenshot error — "
+                    + args.Exception.Message
+                    + ". Not RAM. Play again if the wall went black.",
+                    "warn");
+                try { GpuEngine.TryStart(); } catch { /* retry next clock */ }
+                args.Handled = true;
+                return;
+            }
             ReleaseHardware();
             args.Handled = false;
         };
@@ -70,6 +84,14 @@ public partial class App : Application
         try { NdiHub.Shutdown(); } catch { /* ndi */ }
         try { GpuEngine.Shutdown(); } catch { /* dxgi */ }
         try { DisplayReset.Restore(); } catch { /* display mode */ }
+    }
+
+    static bool SurviveGpuGlitch(Exception ex)
+    {
+        if (ex is OutOfMemoryException) return true;
+        if (ex is COMException com) return OutputViewMath.SurviveUnhandled(com.HResult);
+        if (ex is SharpGenException sg) return OutputViewMath.SurviveUnhandled(sg.HResult);
+        return OutputViewMath.SurviveUnhandled(ex.HResult);
     }
 
     void StartClock()

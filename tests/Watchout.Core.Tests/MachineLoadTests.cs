@@ -55,7 +55,12 @@ public class MachineLoadTests
         var gpuTight = Sample(cpu: 20, ramUsed: 4, ramTotal: 16, gpuUsed: 6.2, gpuTotal: 8);
         Assert.True(MachineLoad.LogAsMachineWarn(gpuTight));
         var fullRam = Sample(cpu: 10, ramUsed: 15.5, ramTotal: 16, gpuUsed: 1, gpuTotal: 8);
-        Assert.True(MachineLoad.LogAsMachineWarn(fullRam));
+        Assert.False(MachineLoad.LogAsMachineWarn(fullRam));
+        var laptopRamFull = Sample(cpu: 18, ramUsed: 7.5, ramTotal: 7.7, gpuUsed: 0.9, gpuTotal: 3.5);
+        Assert.Equal(LoadLevel.Full, MachineLoad.RamLevel(laptopRamFull));
+        Assert.False(MachineLoad.LogAsMachineWarn(laptopRamFull));
+        var gpuFull = Sample(cpu: 18, ramUsed: 7.5, ramTotal: 7.7, gpuUsed: 3.4, gpuTotal: 3.5);
+        Assert.True(MachineLoad.LogAsMachineWarn(gpuFull));
     }
 
     [Fact]

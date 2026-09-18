@@ -34,6 +34,32 @@ public static class GpuResidentPath
         stageHasNoDraws && keepLastFrame;
 
     /// <summary>
+    /// Resolume's composition preview is a scaled GPU view, not a 4K BGRA
+    /// staging texture. Cap Stage's CPU bitmap so Intel UHD is not filled
+    /// with a second 3840×2160 Map while the wall already Presents.
+    /// </summary>
+    public const int StagePreviewMaxEdge = 1280;
+
+    public static (int W, int H) StagePreviewSize(int width, int height, int maxEdge = StagePreviewMaxEdge)
+    {
+        width = Math.Max(2, width);
+        height = Math.Max(2, height);
+        var cap = maxEdge < 64 ? StagePreviewMaxEdge : maxEdge;
+        var edge = Math.Max(width, height);
+        if (edge <= cap) return (width, height);
+        var s = cap / (double)edge;
+        var w = Math.Max(2, (int)Math.Round(width * s) / 2 * 2);
+        var h = Math.Max(2, (int)Math.Round(height * s) / 2 * 2);
+        return (w, h);
+    }
+
+    /// <summary>
+    /// When a DXGI/HAP texture is bound, do not also copy RGB32. That second
+    /// path is the RAM fill Resolume avoids.
+    /// </summary>
+    public static bool NeedCpuPixels(bool gpuTextureReady) => !gpuTextureReady;
+
+    /// <summary>
     /// Reuse a scratch buffer instead of <c>new byte[]</c> every capture, NDI,
     /// or PCM packet. Same length (or larger) is a hit.
     /// </summary>
