@@ -244,7 +244,7 @@ public sealed class StageSurface : Canvas
                 ?? (outputLive
                     ? (gpuOn
                         ? $"{display.Width:0}×{display.Height:0}  ·  Output stack"
-                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — Stage poster (one decode on the wall)")
+                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — Stage video")
                     : string.IsNullOrEmpty(key)
                         ? $"{display.Width:0}×{display.Height:0}"
                         : $"{display.Width:0}×{display.Height:0}  ·  {key}");
@@ -349,7 +349,8 @@ public sealed class StageSurface : Canvas
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scaleX, scaleY);
             // Shared GPU textures — Stage draws the same Output stack. No
-            // second H.264 decode. MediaElement fallback still yields.
+            // second H.264 decode. If the compositor is off, MediaElement
+            // still plays so Stage is not a black poster.
             if (gpuOn && asset is not null && GpuLayerMath.StageDrawsSharedGpu(gpuOn, asset))
             {
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
@@ -605,16 +606,6 @@ public sealed class StageSurface : Canvas
         if (asset.Kind == AssetKind.Composition)
             return Placeholder(native, asset.Name, asset.Color);
 
-        if (Editing && App.Session.StageYieldsFileDecoder)
-        {
-            if (GpuEngine.Available)
-                return new StagePreviewBox { Width = native.W, Height = native.H, CueName = asset.Name };
-            var poster = MediaLibrary.LoadStill(asset);
-            if (poster is not null)
-                return new Image { Source = poster, Stretch = Stretch.Fill, Width = native.W, Height = native.H, IsHitTestVisible = false };
-            return Placeholder(native, asset.Name, asset.Color);
-        }
-
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
         if (file is null) return Placeholder(native, asset.Name, asset.Color);
@@ -686,11 +677,6 @@ public sealed class StageSurface : Canvas
         if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
-        if (Editing && App.Session.StageYieldsFileDecoder)
-        {
-            if (GpuEngine.Available) return el is StagePreviewBox;
-            return el is not MediaElement && el is not CaptureLayer;
-        }
         if (asset is { Kind: AssetKind.Video })
             return el is MediaElement;
         return el is not CaptureLayer;
@@ -1368,33 +1354,6 @@ public sealed class StageSurface : Canvas
     {
         var (ox, oy, scale) = Viewport(show);
         return (ox + p.X / scale, oy + p.Y / scale);
-    }
-}
-
-sealed class StagePreviewBox : Border
-{
-    readonly TextBlock _label = new()
-    {
-        FontSize = 14,
-        FontWeight = FontWeights.SemiBold,
-        Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
-        HorizontalAlignment = HorizontalAlignment.Center,
-        VerticalAlignment = VerticalAlignment.Center,
-        TextAlignment = TextAlignment.Center,
-        TextWrapping = TextWrapping.Wrap,
-        IsHitTestVisible = false,
-    };
-
-    public string CueName { get => _label.Text; set => _label.Text = value; }
-
-    public StagePreviewBox()
-    {
-        IsHitTestVisible = false;
-        SnapsToDevicePixels = true;
-        Background = new SolidColorBrush(Color.FromArgb(50, 245, 166, 35));
-        BorderBrush = new SolidColorBrush(Color.FromRgb(245, 166, 35));
-        BorderThickness = new Thickness(1);
-        Child = _label;
     }
 }
 

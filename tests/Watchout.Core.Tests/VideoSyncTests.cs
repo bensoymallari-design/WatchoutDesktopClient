@@ -54,4 +54,13 @@ public class VideoSyncTests
         Assert.False(VideoSync.VideoLayoutChanged(100, 101));
         Assert.True(VideoSync.VideoLayoutChanged(100, 104));
     }
+
+    [Fact]
+    public void PauseSeekReadsANewFrameEvenIfTheLastOneWasReady()
+    {
+        Assert.True(VideoSync.ReadFrameAfterIdleSeek(seeked: true, hadFrame: true));
+        Assert.True(VideoSync.ReadFrameAfterIdleSeek(seeked: true, hadFrame: false));
+        Assert.True(VideoSync.ReadFrameAfterIdleSeek(seeked: false, hadFrame: false));
+        Assert.False(VideoSync.ReadFrameAfterIdleSeek(seeked: false, hadFrame: true));
+    }
 }

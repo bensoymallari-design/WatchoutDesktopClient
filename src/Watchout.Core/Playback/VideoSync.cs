@@ -21,6 +21,12 @@ public static class VideoSync
     public static bool SeekWhileIdle(double driftMs) => driftMs > ScrubSeekMs;
 
     /// <summary>
+    /// Pause/scrub: after Seek the last DXGI/CPU frame is stale. Read one
+    /// sample even if a previous frame was already ready.
+    /// </summary>
+    public static bool ReadFrameAfterIdleSeek(bool seeked, bool hadFrame) => seeked || !hadFrame;
+
+    /// <summary>
     /// Resizing the DXVA HWND on Output every mouse-move while a Stage cue is
     /// dragged makes the wall hitch several seconds behind. Keep the last
     /// Output video rectangle until the mouse is up.
