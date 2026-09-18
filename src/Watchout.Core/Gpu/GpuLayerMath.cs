@@ -66,9 +66,7 @@ public static class GpuLayerMath
 
     /// <summary>
     /// GPU compositor is up: Producer Stage skips MediaElement and draws the
-    /// shared DXVA texture (one decode with Output). If the compositor is off,
-    /// this is false so Stage keeps MediaElement — a 0.15s poster is often a
-    /// black frame and looks like the cue has no content.
+    /// shared DXVA texture (one decode with Output).
     /// </summary>
     public static bool StageYieldsFilePreview(bool editing, bool outputLive, Asset? asset) =>
         StageYieldsFilePreview(editing, outputLive, gpuOn: false, asset);
@@ -77,14 +75,31 @@ public static class GpuLayerMath
         gpuOn && editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
 
     /// <summary>
-    /// Never. A first-frame JPEG at 0.15s stays black on this clip while the
-    /// playhead is at 7 s. Dual MediaElement is the GPU-off fallback.
+    /// Two 4K MediaElements (Producer Stage + Output) freeze Intel UHD DXVA —
+    /// both the wall and the cue go black/stuck. Keep the only HWND decode on
+    /// Output when the compositor is off.
+    /// </summary>
+    public static bool DualFileDxvaKillsOutput(bool editing, bool outputLive, bool gpuOn) =>
+        editing && outputLive && !gpuOn;
+
+    /// <summary>
+    /// GPU-off Producer Stage: software RGB32 preview (no DXVA), so the cue
+    /// still has picture while Output keeps the MediaElement.
+    /// </summary>
+    public static bool StageUsesSoftPreview(bool editing, bool outputLive, bool gpuOn, Asset? asset) =>
+        DualFileDxvaKillsOutput(editing, outputLive, gpuOn)
+        && asset is not null && SourceKind(asset) == GpuSourceKind.File;
+
+    /// <summary>
+    /// Never a 0.15s JPEG. That still stays black on this clip at Pause 7 s.
     /// </summary>
     public static bool StageShowsPoster(bool editing, bool outputLive, bool gpuOn, Asset? asset)
     {
         _ = (editing, outputLive, gpuOn, asset);
         return false;
     }
+
+    public static int SoftPreviewSleepMs(bool playing) => playing ? 66 : 40;
 
     /// <summary>
     /// Shared D3D11 textures. Stage and Output both draw this asset. Skip the

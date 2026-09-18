@@ -117,6 +117,14 @@ public class GpuLayerMathTests
         Assert.False(GpuLayerMath.StageShowsPoster(true, true, gpuOn: false, clip));
         Assert.False(GpuLayerMath.StageShowsPoster(true, true, gpuOn: true, clip));
         Assert.False(GpuLayerMath.StageShowsPoster(true, false, gpuOn: false, clip));
+        Assert.True(GpuLayerMath.DualFileDxvaKillsOutput(true, true, gpuOn: false));
+        Assert.False(GpuLayerMath.DualFileDxvaKillsOutput(true, true, gpuOn: true));
+        Assert.False(GpuLayerMath.DualFileDxvaKillsOutput(false, true, gpuOn: false));
+        Assert.True(GpuLayerMath.StageUsesSoftPreview(true, true, gpuOn: false, clip));
+        Assert.False(GpuLayerMath.StageUsesSoftPreview(true, true, gpuOn: true, clip));
+        Assert.False(GpuLayerMath.StageUsesSoftPreview(true, false, gpuOn: false, clip));
+        Assert.Equal(66, GpuLayerMath.SoftPreviewSleepMs(true));
+        Assert.Equal(40, GpuLayerMath.SoftPreviewSleepMs(false));
         var ndi = new Asset { Id = "n", Kind = AssetKind.Ndi, Url = "ndi://cam" };
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, ndi));
         Assert.True(GpuLayerMath.StageDrawsSharedGpu(true, clip));
