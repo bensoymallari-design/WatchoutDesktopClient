@@ -15,6 +15,8 @@ public static class MachineProbe
     static ulong _user;
     static bool _cpuPrimed;
 
+    public static double LastCpuPercent { get; private set; }
+
     public static MachineSample Read()
     {
         var ram = ReadRam();
@@ -24,8 +26,10 @@ public static class MachineProbe
         catch { /* process query optional */ }
         var show = App.Session.Show;
         var load = MachineLoad.CountShow(show, App.Session.LiveOutputs.Count);
+        var cpu = ReadCpuPercent();
+        LastCpuPercent = cpu;
         return new MachineSample(
-            ReadCpuPercent(),
+            cpu,
             ram.Used,
             ram.Total,
             gpu.Used,

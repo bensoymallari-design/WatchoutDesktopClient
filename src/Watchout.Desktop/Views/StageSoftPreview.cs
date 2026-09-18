@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Watchout.Core.Gpu;
+using Watchout.Desktop.Engine;
 using Watchout.Desktop.Media;
 
 namespace Watchout.Desktop.Views;
@@ -45,7 +46,8 @@ sealed class StageSoftPreview : Image, IDisposable
         var since = (_grabUtc == DateTime.MinValue)
             ? double.PositiveInfinity
             : (DateTime.UtcNow - _grabUtc).TotalMilliseconds;
-        if (_busy || !GpuLayerMath.SoftPreviewShouldGrab(_shownMs, mediaMs, since, playing, Source is not null))
+        if (_busy || !GpuLayerMath.SoftPreviewShouldGrab(
+                _shownMs, mediaMs, since, playing, Source is not null, MachineProbe.LastCpuPercent))
             return;
         _busy = true;
         _grabUtc = DateTime.UtcNow;
@@ -60,7 +62,7 @@ sealed class StageSoftPreview : Image, IDisposable
             if (!_logged)
             {
                 _logged = true;
-                Ui(() => App.Session.Log("Stage software preview — ffmpeg frame at the playhead; Output keeps DXVA"));
+                Ui(() => App.Session.Log("Stage software preview — cheap ffmpeg keyframe (~2 s); Output keeps DXVA"));
             }
             if (!FfmpegTools.Available)
             {

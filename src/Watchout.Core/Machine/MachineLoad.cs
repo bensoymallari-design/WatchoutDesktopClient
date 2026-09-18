@@ -201,7 +201,7 @@ public static class MachineLoad
         if (ram == LoadLevel.Full)
             return "System memory is full. Close other apps before loading more video.";
         if (cpu == LoadLevel.Full)
-            return "CPU is maxed. Pause or drop a live NDI / capture before adding more.";
+            return "CPU is maxed. Stage preview was grabbing 4K ffmpeg stills too often — it now holds the last frame. Pause if the wall still hitchs.";
         if (gpu == LoadLevel.Tight)
             return "GPU is busy. One more 1080p is safer than another 4K.";
         if (ram == LoadLevel.Tight)
