@@ -16,7 +16,7 @@ public class HapCodecTests
         Assert.False(Codecs.NeedsH264Transcode("hap", "clip.mov"));
         Assert.True(HapCodec.NeedsHapEncode("h264", "clip.mp4"));
         Assert.False(HapCodec.NeedsHapEncode("hap", "clip.hap.mov"));
-        Assert.True(MediaPolicy.ShouldBuildHap(200L * 1024 * 1024, 3840, 2160));
+        Assert.False(MediaPolicy.ShouldBuildHap(200L * 1024 * 1024, 3840, 2160));
         Assert.False(MediaPolicy.ShouldBuildFullProxy(200L * 1024 * 1024, 3840, 2160));
     }
 
@@ -50,7 +50,7 @@ public class HapCodecTests
     }
 
     [Fact]
-    public void PlaybackPrefersHapProxyOverHandbrakeMp4()
+    public void PlaybackPrefersNativeH264OverLeftoverHapProxy()
     {
         var dir = Path.Combine(Path.GetTempPath(), "watchout-hap-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
@@ -66,6 +66,29 @@ public class HapCodecTests
                 OriginalPath = mp4,
                 ProxyPath = hap,
                 Url = new Uri(mp4).AbsoluteUri,
+            };
+            Assert.Equal(mp4, Codecs.PlaybackPath(asset));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void PlaybackUsesHapWhenTheOriginalFileIsHap()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "watchout-hap-orig-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        var hap = Path.Combine(dir, "clip.hap.mov");
+        File.WriteAllText(hap, "y");
+        try
+        {
+            var asset = new Watchout.Core.Models.Asset
+            {
+                Codec = "hap_q",
+                OriginalPath = hap,
+                Url = new Uri(hap).AbsoluteUri,
             };
             Assert.Equal(hap, Codecs.PlaybackPath(asset));
         }

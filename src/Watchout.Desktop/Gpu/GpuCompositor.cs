@@ -119,8 +119,20 @@ sealed class GpuCompositor : IDisposable
         ], vsBlob);
         vsBlob.Dispose();
         psBlob.Dispose();
-        _vb = gpu.Device.CreateBuffer((uint)(6 * Marshal.SizeOf<Vert>()), BindFlags.VertexBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
-        _cb = gpu.Device.CreateBuffer((uint)OutputViewMath.ConstantBufferBytes(Marshal.SizeOf<LayerCbuffer>()), BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
+        _vb = gpu.Device.CreateBuffer(new BufferDescription
+        {
+            ByteWidth = (uint)(6 * Marshal.SizeOf<Vert>()),
+            Usage = ResourceUsage.Dynamic,
+            BindFlags = BindFlags.VertexBuffer,
+            CPUAccessFlags = CpuAccessFlags.Write,
+        });
+        _cb = gpu.Device.CreateBuffer(new BufferDescription
+        {
+            ByteWidth = (uint)OutputViewMath.ConstantBufferBytes(Marshal.SizeOf<LayerCbuffer>()),
+            Usage = ResourceUsage.Dynamic,
+            BindFlags = BindFlags.ConstantBuffer,
+            CPUAccessFlags = CpuAccessFlags.Write,
+        });
         _sampler = gpu.Device.CreateSamplerState(SamplerDescription.LinearWrap);
         _raster = gpu.Device.CreateRasterizerState(RasterizerDescription.CullNone);
         _depth = gpu.Device.CreateDepthStencilState(DepthStencilDescription.None);

@@ -11,6 +11,7 @@ public static class FfmpegTools
     public static string? FfmpegPath { get; private set; }
     public static string? FfprobePath { get; private set; }
     public static string H264Encoder { get; private set; } = "libx264";
+    public static bool HasHapEncoder { get; private set; }
 
     public static bool Available => FfmpegPath is not null && FfprobePath is not null;
 
@@ -21,7 +22,9 @@ public static class FfmpegTools
         if (FfmpegPath is not null)
         {
             var encoders = await RunAsync(FfmpegPath, ["-hide_banner", "-encoders"]);
-            H264Encoder = Codecs.PickH264Encoder(ParseEncoders(encoders.Stdout));
+            var names = ParseEncoders(encoders.Stdout).ToList();
+            H264Encoder = Codecs.PickH264Encoder(names);
+            HasHapEncoder = names.Any(n => n.Equals("hap", StringComparison.OrdinalIgnoreCase));
         }
         return Available;
     }
@@ -102,18 +105,25 @@ public static class FfmpegTools
             if (line.Contains("time=")) progress?.Report(line.Trim());
         });
         if (result.Code != 0)
-            throw new InvalidOperationException(result.Stderr.Length > 400 ? result.Stderr[^400..] : result.Stderr);
+            throw new InvalidOperationException(Codecs.FfmpegUsefulError(result.Stderr));
     }
 
     public static async Task HapEncodeAsync(string src, string dest, bool alpha, IProgress<string>? progress)
     {
         if (FfmpegPath is null) throw new InvalidOperationException("ffmpeg not found");
+        if (!HasHapEncoder)
+            throw new InvalidOperationException("ffmpeg has no hap encoder — install a full build (gyan.dev essentials is missing hap). Play stays DXVA until then.");
         var result = await RunAsync(FfmpegPath, Codecs.HapEncodeArgs(src, dest, alpha), line =>
         {
             if (line.Contains("time=")) progress?.Report(line.Trim());
         });
-        if (result.Code != 0)
-            throw new InvalidOperationException(result.Stderr.Length > 400 ? result.Stderr[^400..] : result.Stderr);
+        if (result.Code == 0) return;
+        var plain = await RunAsync(FfmpegPath, Codecs.HapEncodePlainArgs(src, dest), line =>
+        {
+            if (line.Contains("time=")) progress?.Report(line.Trim());
+        });
+        if (plain.Code == 0) return;
+        throw new InvalidOperationException(Codecs.FfmpegUsefulError(result.Stderr) + " / " + Codecs.FfmpegUsefulError(plain.Stderr));
     }
 
     static IEnumerable<string> ParseEncoders(string stdout)

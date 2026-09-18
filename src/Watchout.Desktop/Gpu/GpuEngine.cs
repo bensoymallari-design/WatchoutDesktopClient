@@ -14,8 +14,8 @@ namespace Watchout.Desktop.Gpu;
 
 /// <summary>
 /// One D3D11 compositor for Stage and every Output. File decode (Media Foundation
-/// + DXVA DXGI surfaces) stays on the GPU like Resolume; NDI/capture still upload
-/// into the same scene. Resize is a shader quad, not an EVR HWND rebuild.
+/// + DXVA DXGI surfaces) stays on the GPU; NDI/capture still upload into the
+/// same scene. Resize is a shader quad, not an EVR HWND rebuild.
 /// </summary>
 public static class GpuEngine
 {
@@ -74,11 +74,22 @@ public static class GpuEngine
             var startedMf = false;
             try
             {
-                MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 0), "MFStartup");
+                try { MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 0), "MFStartup"); }
+                catch
+                {
+                    MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 1), "MFStartup");
+                }
                 startedMf = true;
                 _mfUsers++;
                 _gpu = GpuDevice.Create();
-                _comp = new GpuCompositor(_gpu);
+                try
+                {
+                    _comp = new GpuCompositor(_gpu);
+                }
+                catch (Exception compEx)
+                {
+                    throw new InvalidOperationException("D3D11 compositor shaders/buffers: " + compEx.Message, compEx);
+                }
                 _failed = false;
                 _error = null;
                 return true;
@@ -424,8 +435,8 @@ public static class GpuEngine
     {
         if (!GpuSurfaceLogged.Add(key)) return;
         App.Session.Log(hapQ || HapCodec.IsHap("", key)
-            ? $"HAP GPU texture — {key} stays on the GPU (Resolume Alley / HAP Q, DXT, no RGB32 RAM copy)"
-            : $"DXVA GPU texture — {key} stays on the GPU (Resolume path, no RGB32 RAM copy)");
+            ? $"HAP GPU texture — {key} stays on the GPU (DXT, no RGB32 RAM copy)"
+            : $"DXVA GPU texture — {key} stays on the GPU (no RGB32 RAM copy)");
     }
 
     static void NoteSwap(nint hwnd, int w, int h, bool flip, bool child)

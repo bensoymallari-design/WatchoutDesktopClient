@@ -5,7 +5,7 @@ namespace Watchout.Desktop.Gpu;
 
 /// <summary>
 /// Hardware NV12/P010/YUY2 → BGRA on the GPU (D3D11 video processor).
-/// Same idea as Resolume: the DXVA surface never becomes an RGB32 byte[].
+/// The DXVA surface never becomes an RGB32 byte[].
 /// </summary>
 sealed class GpuVideoConvert : IDisposable
 {

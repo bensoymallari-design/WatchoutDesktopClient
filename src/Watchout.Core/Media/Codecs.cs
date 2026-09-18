@@ -250,15 +250,66 @@ public static class Codecs
     {
         return
         [
-            "-y", "-i", src,
+            "-y", "-hide_banner", "-i", src,
             "-map", "0:v:0", "-map", "0:a:0?",
             "-c:v", "hap",
-            "-format", alpha ? "hap_alpha" : "hap_q",
-            "-chunks", "1",
+            "-format:v", alpha ? "hap_alpha" : "hap_q",
             "-threads", "2",
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
             dest,
         ];
+    }
+
+    /// <summary>
+    /// Older ffmpeg builds reject <c>-chunks</c> as a global option and abort
+    /// before HAP Q is written. Plain hap still makes a GPU DXT MOV.
+    /// </summary>
+    public static string[] HapEncodePlainArgs(string src, string dest)
+    {
+        return
+        [
+            "-y", "-hide_banner", "-i", src,
+            "-map", "0:v:0", "-map", "0:a:0?",
+            "-c:v", "hap",
+            "-threads", "2",
+            "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
+            dest,
+        ];
+    }
+
+    /// <summary>
+    /// ffmpeg dumps its configure banner on stderr. The operator needs the
+    /// last real error (Unrecognized option, Unknown encoder), not librubberband.
+    /// </summary>
+    public static string FfmpegUsefulError(string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stderr)) return "ffmpeg failed";
+        var lines = stderr.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0)
+            .ToArray();
+        string[] keys =
+        [
+            "Unrecognized option",
+            "Unknown encoder",
+            "Error splitting",
+            "Error opening",
+            "No such file",
+            "Invalid argument",
+            "Unknown format",
+        ];
+        foreach (var key in keys)
+        {
+            var hit = lines.LastOrDefault(l => l.Contains(key, StringComparison.OrdinalIgnoreCase));
+            if (hit is not null) return hit;
+        }
+        var last = lines.LastOrDefault(l =>
+            !l.StartsWith("ffmpeg version", StringComparison.OrdinalIgnoreCase)
+            && !l.StartsWith("libav", StringComparison.OrdinalIgnoreCase)
+            && !l.StartsWith("libsw", StringComparison.OrdinalIgnoreCase)
+            && !l.Contains("configuration:", StringComparison.OrdinalIgnoreCase)
+            && !l.Contains("--enable-", StringComparison.OrdinalIgnoreCase));
+        return last ?? "ffmpeg failed";
     }
 
     public static string[] AudioDownmixArgs(string src, string dest, int channels)
@@ -290,16 +341,23 @@ public static class Codecs
     }
 
     /// <summary>
-    /// Prefer the original H.264/MOV/MP4 for DXVA. Fall back to an H.264 sidecar, then a leftover Electron WebM.
+    /// Prefer the original H.264/MOV/MP4 for DXVA. A leftover .hap.mov from a
+    /// failed encode must not steal Play. HAP only when the original is HAP or
+    /// the file is not Media-Foundation-native. Then an H.264 sidecar, then a
+    /// leftover Electron WebM.
     /// </summary>
     public static string PlaybackPath(Asset asset)
     {
-        if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
-            && HapCodec.IsHap(asset.Codec, asset.ProxyPath))
-            return asset.ProxyPath;
         if (!string.IsNullOrWhiteSpace(asset.OriginalPath) && File.Exists(asset.OriginalPath)
             && HapCodec.IsHap(asset.Codec, asset.OriginalPath))
             return asset.OriginalPath;
+        if (!string.IsNullOrWhiteSpace(asset.OriginalPath) && File.Exists(asset.OriginalPath)
+            && PlaysNatively(asset.Codec, asset.OriginalPath)
+            && !PrefersPreparedH264(asset.Codec, asset.OriginalPath))
+            return asset.OriginalPath;
+        if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
+            && HapCodec.IsHap(asset.Codec, asset.ProxyPath))
+            return asset.ProxyPath;
         if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
             && IsPreparedH264Sidecar(asset.OriginalPath ?? "", asset.ProxyPath)
             && (asset.Optimized || PrefersPreparedH264(asset.Codec, asset.OriginalPath)))

@@ -146,8 +146,8 @@ public static class MachineLoad
     }
 
     /// <summary>
-    /// RAM-only Tight/Full is "close a browser" — Resolume sits at 83% RAM
-    /// too. Keep it on the meter; do not spam the Log as a machine failure.
+    /// RAM-only Tight/Full is "close a browser" — one 4K H.264 is still OK.
+    /// Keep it on the meter; do not spam the Log as a machine failure.
     /// GPU/CPU Tight and Full still warn (that is the frame path).
     /// </summary>
     public static bool LogAsMachineWarn(MachineSample s) => LogAsMachineWarn(s, RamLevel(s));
@@ -205,7 +205,7 @@ public static class MachineLoad
         if (gpu == LoadLevel.Tight)
             return "GPU is busy. One more 1080p is safer than another 4K.";
         if (ram == LoadLevel.Tight)
-            return "RAM is high (Windows + other apps). Close browsers. This laptop can still run 4K — Resolume does. H.264 stays on the GPU; NDI/capture still touch RAM.";
+            return "RAM is high (Windows + other apps). Close browsers. One 8-bit H.264 4K still plays; a second 4K decode on Stage is what filled RAM.";
         if (cpu == LoadLevel.Tight)
             return "CPU is busy. Another 4K file may hitch Stage and the wall.";
         if (s.Show.FourK >= 1.8)

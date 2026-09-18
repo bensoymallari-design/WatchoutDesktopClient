@@ -19,8 +19,8 @@ public readonly record struct HapFrame(HapTextureKind Kind, byte[] Blocks, int W
 }
 
 /// <summary>
-/// Vidvox HAP (Resolume Alley DXV-style GPU texture). Decode Snappy to DXT
-/// blocks that stay on the GPU — not RGB32 system RAM, not DXVA.
+/// Vidvox HAP GPU texture. Decode Snappy to DXT blocks that stay on the GPU
+/// — not RGB32 system RAM, not DXVA. Opt-in via Assets → Encode HAP.
 /// </summary>
 public static class HapCodec
 {

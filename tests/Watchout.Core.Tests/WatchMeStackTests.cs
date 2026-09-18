@@ -69,13 +69,19 @@ public class WatchMeStackTests
     {
         Assert.True(Codecs.NeedsH264Transcode("notchlc", "clip.mov"));
         Assert.False(Codecs.PlaysNatively("notchlc", "clip.mov"));
+        Assert.False(MediaPolicy.ShouldBuildHap(200L * 1024 * 1024, 3840, 2160));
         var hap = Codecs.HapEncodeArgs("in.mov", "out.mov");
         Assert.Contains("hap", hap);
         Assert.Contains("hap_q", hap);
         Assert.Contains("aac", hap);
         Assert.Contains("-threads", hap);
         Assert.Equal("2", hap[Array.IndexOf(hap, "-threads") + 1]);
+        Assert.DoesNotContain("-chunks", hap);
+        Assert.DoesNotContain("chunks", hap);
         Assert.DoesNotContain("-an", hap);
+        var banner = "ffmpeg version 7.1 Copyright\n  configuration: --enable-librubberband\nlibavutil      59.\nUnrecognized option 'chunks'\nError splitting the argument list: Option not found\n";
+        Assert.Contains("chunks", Codecs.FfmpegUsefulError(banner));
+        Assert.DoesNotContain("librubberband", Codecs.FfmpegUsefulError(banner));
         Assert.DoesNotContain(hap, a => a.Contains("webm", StringComparison.OrdinalIgnoreCase));
     }
 

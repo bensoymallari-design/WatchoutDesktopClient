@@ -1,6 +1,6 @@
 # WatchMe (native Windows)
 
-WatchMe is a **.NET 8 WPF** show composer: Stage, Timeline, Assets, Runner outputs, **NDI**, and **live HDMI/SDI capture**. It replaces [WatchOutElctron](https://github.com/bensoymallari-design/WatchOutElctron). Video is **H.264 through Windows Media Foundation + DXVA on the GPU** (Resolume-style DXGI surfaces, not RGB32 copies through system RAM), not a VP9/WebM proxy inside Chromium.
+WatchMe is a **.NET 8 WPF** show composer: Stage, Timeline, Assets, Runner outputs, **NDI**, and **live HDMI/SDI capture**. It replaces [WatchOutElctron](https://github.com/bensoymallari-design/WatchOutElctron). Video is **H.264 through Windows Media Foundation + DXVA on the GPU** (DXGI surfaces, not RGB32 copies through system RAM), not a VP9/WebM proxy inside Chromium.
 
 Build and install from **`main`**. You do not need an old `cursor/…` branch to get the installer.
 
@@ -17,9 +17,9 @@ Build and install from **`main`**. You do not need an old `cursor/…` branch to
 
 ## Codecs
 
-**Play natively (DXVA):** 8-bit H.264/AVC MP4 is the reliable path. H.265/HEVC, MPEG-2, WMV, JPEG/PNG stills, WAV, AAC, MP3 also open when Media Foundation can decode them. **Dolby Vision / HEVC HDR MP4s often open as NV12 with no picture** — WatchMe now falls back to RGB32, but those files can still stay black. Re-encode to 8-bit Rec.709 H.264 (Resolume Alley H.264 is fine) or use **Assets → Create H.264 version**. Deleting the cue and loading the same MP4 again does not fix that. NDI and capture are a different path and were not this bug.
+**Play natively (DXVA):** 8-bit H.264/AVC MP4 is the reliable path. Import **links** that file and Play uses one decoder — WatchMe does not encode HAP in the background. H.265/HEVC, MPEG-2, WMV, JPEG/PNG stills, WAV, AAC, MP3 also open when Media Foundation can decode them. **Dolby Vision / HEVC HDR MP4s often open as NV12 with no picture** — WatchMe now falls back to RGB32, but those files can still stay black. Re-encode to 8-bit Rec.709 H.264 or use **Assets → Create H.264 version**. Deleting the cue and loading the same MP4 again does not fix that. NDI and capture are a different path and were not this bug.
 
-**Live NDI:** Resolume (or any NDI sender) at the source size — including **3840×2160**. Put the NDI cue on a **later timeline layer** than the H.264 clip so it sits in front on Stage and Output. Later layer = front.
+**Live NDI:** Any NDI sender at the source size — including **3840×2160**. Put the NDI cue on a **later timeline layer** than the H.264 clip so it sits in front on Stage and Output. Later layer = front.
 
 **Live capture:** HDMI/SDI from one or **many** cards at the same time (Elgato, Blackmagic, Magewell, USB, NDI Webcam Input). **Live → Connect All Capture Cards**. Each card gets a Stage display. The same session is shared on Runner outputs. A camera in front of video works if that cue is on a later layer than the file.
 
@@ -27,32 +27,32 @@ Build and install from **`main`**. You do not need an old `cursor/…` branch to
 
 Imported clips are **linked**, not copied into AppData. 4K files stream from the original disk path.
 
-Launch shows a Resolume-style splash that **initializes the engines** before Welcome: framework (folders/settings), application controller (60 Hz clock), WASAPI audio, D3D11/DXVA video, displays, NDI Runtime, capture cards, ffmpeg. Those are real startups, not labels. Help → About lists which ones came up.
+Launch shows a splash that **initializes the engines** before Welcome: framework (folders/settings), application controller (60 Hz clock), WASAPI audio, D3D11/DXVA video, displays, NDI Runtime, capture cards, ffmpeg. Those are real startups, not labels. Help → About lists which ones came up.
 
 Opening an old Electron `.watch.json` prefers the original H.264 file over a leftover `.webm` sidecar.
 
 Loop a file with **Loop** checked. The decoder restarts when the clip hits the end so Stage and the wall do not go black.
 
-## Resolume → WatchMe
+## NDI and capture into WatchMe
 
 **NDI (typical)**
 
 1. Install [NDI Runtime / NDI Tools](https://ndi.video/tools/) on the WatchMe PC.
-2. In Resolume, enable NDI output at the composition size (for example 3840×2160, High / full NDI).
-3. WatchMe → **Assets → NDI** (or **Live**) → pick the Resolume source. Drag it onto a timeline layer **in front of** the video.
+2. Enable NDI output at the composition size (for example 3840×2160, High / full NDI).
+3. WatchMe → **Assets → NDI** (or **Live**) → pick the source. Drag it onto a timeline layer **in front of** the video.
 4. **Devices** → assign the wall screen (not the laptop) → **Output**.
-5. Check the log for `NDI … 3840×2160 60p`. If it says 1920×1080, Resolume is sending HD.
+5. Check the log for `NDI … 3840×2160 60p`. If it says 1920×1080, the sender is sending HD.
 
 **HDMI / SDI capture cards**
 
-1. In Resolume, send Advanced Output (or Preview/Program) to the HDMI/SDI that feeds each card.
+1. Send the program HDMI/SDI that feeds each card.
 2. Plug those cables into Elgato / Blackmagic / Magewell / USB capture on the WatchMe PC.
 3. WatchMe → **Live → Connect All Capture Cards** (or **Connect Capture Cards…**).
 4. Map extra HDMI monitors in Devices, then **Output all displays**.
 
 USB bandwidth (not WatchMe) usually caps how many Elgato-style dongles you can run; DeckLink / Magewell PCIe cards scale further.
 
-4K NDI is copied on the CPU onto Stage and Output. H.264 files stay on the GPU (DXVA DXGI textures, Resolume-style). NDI will not feel as fluid as Resolume’s GPU output.
+4K NDI is copied on the CPU onto Stage and Output. H.264 files stay on the GPU (DXVA DXGI textures). NDI will not feel as fluid as a GPU file decode.
 
 ## Install WatchMe on any Windows PC (`WatchMe-Setup.exe`)
 

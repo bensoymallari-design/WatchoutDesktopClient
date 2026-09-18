@@ -14,9 +14,9 @@ public enum GpuSourceKind
 }
 
 /// <summary>
-/// One layer in the Watchout/Resolume-style GPU scene: a textured quad in
-/// destination pixels, with crop UVs, blend, color, wipe, and chroma.
-/// Stage and Output draw the same list from one decoder.
+/// One layer in the GPU scene: a textured quad in destination pixels, with
+/// crop UVs, blend, color, wipe, and chroma. Stage and Output draw the same
+/// list from one decoder.
 /// </summary>
 public readonly record struct GpuDraw(
     string CueId,
@@ -66,11 +66,25 @@ public static class GpuLayerMath
 
     /// <summary>
     /// Producer Stage does not run a second H.264 MediaElement while Output is
-    /// live (that dual DXVA path froze 4K PCs). The GPU compositor still draws
-    /// the same textures Output uses — the layer stack image, Resolume-style.
+    /// live (that dual DXVA path froze 4K on Intel UHD). GPU compositor draws
+    /// the shared texture. If the compositor is off, Stage shows a poster so
+    /// Output's MediaElement is the only 4K decode.
     /// </summary>
     public static bool StageYieldsFilePreview(bool editing, bool outputLive, Asset? asset) =>
-        editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
+        StageYieldsFilePreview(editing, outputLive, gpuOn: false, asset);
+
+    public static bool StageYieldsFilePreview(bool editing, bool outputLive, bool gpuOn, Asset? asset)
+    {
+        _ = gpuOn;
+        return editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
+    }
+
+    /// <summary>
+    /// GPU compositor is off and Output is live — Stage holds a still, not a
+    /// gold name box and not a second MediaElement.
+    /// </summary>
+    public static bool StageShowsPoster(bool editing, bool outputLive, bool gpuOn, Asset? asset) =>
+        StageYieldsFilePreview(editing, outputLive, gpuOn, asset) && !gpuOn;
 
     /// <summary>
     /// Shared D3D11 textures. Stage and Output both draw this asset. Skip the
@@ -192,8 +206,8 @@ public static class GpuLayerMath
     }
 
     /// <summary>
-    /// Column-major 4×4 acting on RGB. Matches Resolume-style brightness /
-    /// contrast / saturation / hue plus Watchout temperature and exposure.
+    /// Column-major 4×4 acting on RGB. Brightness / contrast / saturation /
+    /// hue plus Watchout temperature and exposure.
     /// </summary>
     public static float[] ColorMatrix(GpuDraw draw)
     {
