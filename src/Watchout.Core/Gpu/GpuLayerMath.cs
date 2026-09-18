@@ -65,26 +65,26 @@ public static class GpuLayerMath
     }
 
     /// <summary>
-    /// Producer Stage does not run a second H.264 MediaElement while Output is
-    /// live (that dual DXVA path froze 4K on Intel UHD). GPU compositor draws
-    /// the shared texture. If the compositor is off, Stage shows a poster so
-    /// Output's MediaElement is the only 4K decode.
+    /// GPU compositor is up: Producer Stage skips MediaElement and draws the
+    /// shared DXVA texture (one decode with Output). If the compositor is off,
+    /// this is false so Stage keeps MediaElement — a 0.15s poster is often a
+    /// black frame and looks like the cue has no content.
     /// </summary>
     public static bool StageYieldsFilePreview(bool editing, bool outputLive, Asset? asset) =>
         StageYieldsFilePreview(editing, outputLive, gpuOn: false, asset);
 
-    public static bool StageYieldsFilePreview(bool editing, bool outputLive, bool gpuOn, Asset? asset)
-    {
-        _ = gpuOn;
-        return editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
-    }
+    public static bool StageYieldsFilePreview(bool editing, bool outputLive, bool gpuOn, Asset? asset) =>
+        gpuOn && editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
 
     /// <summary>
-    /// GPU compositor is off and Output is live — Stage holds a still, not a
-    /// gold name box and not a second MediaElement.
+    /// Never. A first-frame JPEG at 0.15s stays black on this clip while the
+    /// playhead is at 7 s. Dual MediaElement is the GPU-off fallback.
     /// </summary>
-    public static bool StageShowsPoster(bool editing, bool outputLive, bool gpuOn, Asset? asset) =>
-        StageYieldsFilePreview(editing, outputLive, gpuOn, asset) && !gpuOn;
+    public static bool StageShowsPoster(bool editing, bool outputLive, bool gpuOn, Asset? asset)
+    {
+        _ = (editing, outputLive, gpuOn, asset);
+        return false;
+    }
 
     /// <summary>
     /// Shared D3D11 textures. Stage and Output both draw this asset. Skip the

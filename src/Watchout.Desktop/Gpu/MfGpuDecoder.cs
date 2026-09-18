@@ -346,9 +346,11 @@ sealed class MfGpuDecoder : IGpuFileDecoder
         var pos = _frameTime100ns / 10_000.0;
         if (!playing)
         {
-            if (Math.Abs(pos - targetMs) > VideoSync.ScrubSeekMs)
+            var seeked = Math.Abs(pos - targetMs) > VideoSync.ScrubSeekMs;
+            if (seeked)
                 Seek(reader, targetMs);
-            if (!_ready) ReadOne(reader, preroll: true);
+            if (VideoSync.ReadFrameAfterIdleSeek(seeked, _ready))
+                ReadOne(reader, preroll: true);
             return;
         }
         if (targetMs + 80 < pos && pos - targetMs > VideoSync.PlayReseekMs)

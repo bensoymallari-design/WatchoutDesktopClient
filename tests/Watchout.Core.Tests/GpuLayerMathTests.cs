@@ -109,12 +109,12 @@ public class GpuLayerMathTests
     public void StageYieldsTheFilePreviewWhileOutputIsLive()
     {
         var clip = new Asset { Id = "a", Kind = AssetKind.Video, Url = "/tmp/wall.mp4", OriginalPath = "/tmp/wall.mp4" };
-        Assert.True(GpuLayerMath.StageYieldsFilePreview(true, true, clip));
+        Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, clip));
         Assert.False(GpuLayerMath.StageYieldsFilePreview(false, true, clip));
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, false, clip));
-        Assert.True(GpuLayerMath.StageYieldsFilePreview(true, true, gpuOn: false, clip));
+        Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, gpuOn: false, clip));
         Assert.True(GpuLayerMath.StageYieldsFilePreview(true, true, gpuOn: true, clip));
-        Assert.True(GpuLayerMath.StageShowsPoster(true, true, gpuOn: false, clip));
+        Assert.False(GpuLayerMath.StageShowsPoster(true, true, gpuOn: false, clip));
         Assert.False(GpuLayerMath.StageShowsPoster(true, true, gpuOn: true, clip));
         Assert.False(GpuLayerMath.StageShowsPoster(true, false, gpuOn: false, clip));
         var ndi = new Asset { Id = "n", Kind = AssetKind.Ndi, Url = "ndi://cam" };
