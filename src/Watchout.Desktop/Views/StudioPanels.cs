@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using Watchout.Core;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
+using Watchout.Core.Scheduling;
 using Watchout.Core.Stage;
 using Watchout.Desktop.Media;
 
@@ -1099,6 +1100,8 @@ public class PropertiesPanel : UserControl
                     + cue.Temperature + cue.Exposure + cue.ChromaKeyEnabled + cue.ChromaKeyColor + s.PickingChroma
                     + cue.Blend + cue.Brightness + cue.Contrast + cue.Saturation + cue.Hue
                     + cue.Position.X + cue.Position.Y + cue.Scale.X + cue.Scale.Y + cue.Opacity
+                    + cue.FadeIn + cue.FadeOut + cue.FadeInDuration + cue.FadeOutDuration
+                    + cue.FadeInFilter + cue.FadeOutFilter + cue.FadeCurve
                     + (show.Assets.FirstOrDefault(a => a.Id == cue.AssetId)?.Width)
                     + (show.Assets.FirstOrDefault(a => a.Id == cue.AssetId)?.Height)
                     + show.Prefs.MediaReplaceMode + show.Prefs.AutoStart,
@@ -1201,8 +1204,18 @@ public class PropertiesPanel : UserControl
             };
             _root.Children.Add(replaceBox);
             Check("Muted", cue.Muted == true, v => s.UpdateCue(cue.Id, c => c.Muted = v));
-            Check("Fade in", cue.FadeIn, v => s.UpdateCue(cue.Id, c => c.FadeIn = v));
-            Check("Fade out", cue.FadeOut, v => s.UpdateCue(cue.Id, c => c.FadeOut = v));
+            Combo("Start transition", CueTransitions.ResolvedIn(cue), CueTransitions.Filters,
+                v => s.SetCueTransition("in", v));
+            Field("Start duration ms", cue.FadeInDuration.ToString("0"), v =>
+            {
+                if (double.TryParse(v, out var n)) s.SetCueTransitionDuration("in", n);
+            });
+            Combo("End transition", CueTransitions.ResolvedOut(cue), CueTransitions.Filters,
+                v => s.SetCueTransition("out", v));
+            Field("End duration ms", cue.FadeOutDuration.ToString("0"), v =>
+            {
+                if (double.TryParse(v, out var n)) s.SetCueTransitionDuration("out", n);
+            });
             ActionBtn("Delete cue", () => s.DeleteSelected());
         }
         else if (s.Selection.Kind == SelectionKind.Display)
@@ -1457,6 +1470,24 @@ public class PropertiesPanel : UserControl
     {
         var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 8, 0, 0) };
         box.Click += (_, _) => set(box.IsChecked == true);
+        _root.Children.Add(box);
+    }
+
+    void Combo<T>(string label, T current, IEnumerable<(T Value, string Name)> items, Action<T> set)
+    {
+        _root.Children.Add(new TextBlock { Text = label, Foreground = (Brush)FindResource("Wo.Muted"), Margin = new Thickness(0, 8, 0, 2) });
+        var box = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+        foreach (var (value, name) in items)
+            box.Items.Add(new ComboBoxItem { Content = name, Tag = value });
+        foreach (ComboBoxItem item in box.Items)
+            if (Equals(item.Tag, current)) box.SelectedItem = item;
+        if (box.SelectedItem is null) box.SelectedIndex = 0;
+        box.SelectionChanged += (_, _) =>
+        {
+            if (_building) return;
+            if (box.SelectedItem is ComboBoxItem item && item.Tag is T value)
+                set(value);
+        };
         _root.Children.Add(box);
     }
 

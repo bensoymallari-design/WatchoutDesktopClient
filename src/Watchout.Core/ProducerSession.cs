@@ -1163,10 +1163,25 @@ public sealed class ProducerSession
         Mutate(show =>
         {
             foreach (var cue in SelectedCues(show))
-            {
-                if (which == "in") cue.FadeIn = !cue.FadeIn;
-                else cue.FadeOut = !cue.FadeOut;
-            }
+                CueTransitions.Apply(cue, which, TransitionFilter.Fade, toggleSame: true);
+        });
+    }
+
+    public void SetCueTransition(string which, TransitionFilter filter, bool toggleSame = false)
+    {
+        Mutate(show =>
+        {
+            foreach (var cue in SelectedCues(show))
+                CueTransitions.Apply(cue, which, filter, toggleSame);
+        });
+    }
+
+    public void SetCueTransitionDuration(string which, double ms)
+    {
+        Mutate(show =>
+        {
+            foreach (var cue in SelectedCues(show))
+                CueTransitions.ApplyDuration(cue, which, ms);
         });
     }
 
@@ -1178,8 +1193,8 @@ public sealed class ProducerSession
             if (tl is null) return;
             var pair = TimelineMath.FindCrossfadePair(tl.Cues, Selection.Ids);
             if (pair is null) return;
-            pair.Value.A.FadeOut = true;
-            pair.Value.B.FadeIn = true;
+            CueTransitions.Apply(pair.Value.A, "out", TransitionFilter.Fade);
+            CueTransitions.Apply(pair.Value.B, "in", TransitionFilter.Fade);
         });
     }
 

@@ -141,6 +141,28 @@ public static class TimelineMath
     public static double OverlapMs(Cue a, Cue b) =>
         Math.Max(0, Math.Min(CueEnd(a), CueEnd(b)) - Math.Max(a.Start, b.Start));
 
+    public enum CueBarPart { Start, Body, End }
+
+    public const double CueEdgeMinPx = 16;
+    public const double CueEdgeMaxPx = 72;
+
+    /// <summary>
+    /// Right-click the left third of a cue bar for start effects, the right third for end effects.
+    /// </summary>
+    public static CueBarPart HitCueBar(double localX, double widthPx)
+    {
+        widthPx = Math.Max(1, widthPx);
+        localX = Math.Clamp(localX, 0, widthPx);
+        if (widthPx < CueEdgeMinPx * 2)
+            return localX < widthPx * 0.5 ? CueBarPart.Start : CueBarPart.End;
+        var edge = Math.Clamp(widthPx * 0.28, CueEdgeMinPx, CueEdgeMaxPx);
+        if (edge * 2 >= widthPx)
+            return localX < widthPx * 0.5 ? CueBarPart.Start : CueBarPart.End;
+        if (localX <= edge) return CueBarPart.Start;
+        if (localX >= widthPx - edge) return CueBarPart.End;
+        return CueBarPart.Body;
+    }
+
     public static bool IsMedia(Cue cue) => cue.Type == CueType.Media;
 
     public static bool IsAllowedOverlap(Cue a, Cue b)
@@ -176,20 +198,8 @@ public static class TimelineMath
         return (fadeIn, fadeOut);
     }
 
-    public static double FadeMultiplier(Cue cue, double localTime, IReadOnlyList<Cue>? others = null)
-    {
-        var m = 1.0;
-        var curve = cue.FadeCurve;
-        var (fadeIn, fadeOut) = FadeDurations(cue, others);
-        if (fadeIn > 0)
-            m *= EasingCurves.Ease(curve, Math.Min(1, Math.Max(0, localTime / fadeIn)));
-        if (fadeOut > 0)
-        {
-            var remain = cue.Duration - localTime;
-            m *= EasingCurves.Ease(curve, Math.Min(1, Math.Max(0, remain / fadeOut)));
-        }
-        return m;
-    }
+    public static double FadeMultiplier(Cue cue, double localTime, IReadOnlyList<Cue>? others = null) =>
+        CueTransitions.Evaluate(cue, localTime, others).OpacityMul;
 
     public static double SnapTime(double value, IEnumerable<double> anchors, double threshold)
     {

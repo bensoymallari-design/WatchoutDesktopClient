@@ -81,6 +81,16 @@ public enum BlendMode
     Screen
 }
 
+/// <summary>Timed start/end effect on a timeline cue (fade, dissolve, wipe, or scale).</summary>
+public enum TransitionFilter
+{
+    None,
+    Fade,
+    Dissolve,
+    Wipe,
+    Scale
+}
+
 public enum AccessRole
 {
     Producer,
@@ -208,6 +218,8 @@ public sealed class Cue
     public double FadeInDuration { get; set; } = 500;
     public double FadeOutDuration { get; set; } = 500;
     public Easing FadeCurve { get; set; } = Easing.Linear;
+    public TransitionFilter FadeInFilter { get; set; } = TransitionFilter.None;
+    public TransitionFilter FadeOutFilter { get; set; } = TransitionFilter.None;
     public List<Tween> Tweens { get; set; } = [];
     public double Speed { get; set; } = 100;
     public double WipeCompletion { get; set; } = 100;
