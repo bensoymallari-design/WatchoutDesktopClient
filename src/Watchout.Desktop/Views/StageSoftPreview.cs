@@ -1,24 +1,26 @@
-using System.Windows;
+using System.IO;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Watchout.Core.Gpu;
-using Watchout.Desktop.Gpu;
+using Watchout.Desktop.Media;
 
 namespace Watchout.Desktop.Views;
 
 /// <summary>
 /// Producer Stage picture when Output already owns the DXVA MediaElement.
-/// Software RGB32, hardware transforms off, capped at Stage preview size so
-/// Intel UHD does not run two 4K DXVA sessions (that blacks wall and cue).
+/// ffmpeg grabs a JPEG at the playhead so Stage never opens a second MF
+/// reader (that stayed black on this clip, and dual DXVA killed the wall).
 /// </summary>
 sealed class StageSoftPreview : Image, IDisposable
 {
-    MfGpuDecoder? _decoder;
-    WriteableBitmap? _bmp;
-    string? _url;
+    string? _path;
+    double _shownMs = -1;
+    DateTime _grabUtc = DateTime.MinValue;
+    int _gen;
+    bool _busy;
     bool _logged;
-    bool _loggedError;
+    bool _loggedFail;
 
     public StageSoftPreview()
     {
@@ -28,67 +30,111 @@ sealed class StageSoftPreview : Image, IDisposable
         SnapsToDevicePixels = true;
     }
 
-    public void Sync(string fileUrl, double mediaMs, bool playing, bool loop)
+    public void Sync(string filePath, double mediaMs, bool playing, bool loop)
     {
-        if (!string.Equals(_url, fileUrl, StringComparison.OrdinalIgnoreCase))
+        _ = loop;
+        if (!string.Equals(_path, filePath, StringComparison.OrdinalIgnoreCase))
         {
-            _decoder?.Dispose();
-            _decoder = null;
-            _url = fileUrl;
-            _bmp = null;
+            _gen++;
+            _path = filePath;
+            _shownMs = -1;
             Source = null;
-            try
-            {
-                _decoder = new MfGpuDecoder(
-                    fileUrl,
-                    audio: false,
-                    gpu: null,
-                    softwareOnly: true,
-                    maxEdge: GpuResidentPath.StagePreviewMaxEdge);
-            }
-            catch (Exception ex)
-            {
-                App.Session.Log($"Stage software preview failed — {ex.Message}", "warn");
-                return;
-            }
+            _busy = false;
+            _loggedFail = false;
+        }
+        var since = (_grabUtc == DateTime.MinValue)
+            ? double.PositiveInfinity
+            : (DateTime.UtcNow - _grabUtc).TotalMilliseconds;
+        if (_busy || !GpuLayerMath.SoftPreviewShouldGrab(_shownMs, mediaMs, since, playing, Source is not null))
+            return;
+        _busy = true;
+        _grabUtc = DateTime.UtcNow;
+        var gen = _gen;
+        _ = GrabAsync(gen, filePath, mediaMs);
+    }
+
+    async Task GrabAsync(int gen, string path, double timeMs)
+    {
+        try
+        {
             if (!_logged)
             {
                 _logged = true;
-                App.Session.Log("Stage software preview — Output keeps the only DXVA decode");
+                Ui(() => App.Session.Log("Stage software preview — ffmpeg frame at the playhead; Output keeps DXVA"));
             }
+            if (!FfmpegTools.Available)
+            {
+                Fail("ffmpeg is not available");
+                return;
+            }
+            var dest = Path.Combine(Path.GetTempPath(), "WatchMe", $"stage-preview-{Environment.ProcessId}-{gen}.jpg");
+            var file = await FfmpegTools.ExtractFrameAsync(path, timeMs, dest);
+            if (file is null)
+            {
+                Fail("ffmpeg could not grab a frame at the playhead");
+                return;
+            }
+            var bmp = LoadJpeg(file);
+            try { File.Delete(file); } catch { /* temp */ }
+            if (bmp is null)
+            {
+                Fail("Stage could not load the preview JPEG");
+                return;
+            }
+            Ui(() =>
+            {
+                if (gen != _gen) return;
+                Source = bmp;
+                _shownMs = timeMs;
+            });
         }
-        _decoder?.Sync(mediaMs, playing, loop, 0, false);
-        if (!_loggedError && _decoder?.Error is { Length: > 0 } err)
+        catch (Exception ex)
         {
-            _loggedError = true;
-            App.Session.Log($"Stage software preview failed — {err}", "warn");
+            Fail(ex.Message);
         }
-        Blit();
+        finally
+        {
+            Ui(() => { if (gen == _gen) _busy = false; });
+        }
     }
 
-    void Blit()
+    void Fail(string detail)
     {
-        if (_decoder is null) return;
-        if (!_decoder.TryCopyFrame(out var pixels, out var w, out var h, out var stride, out var dirty))
-            return;
-        if (!dirty && Source is not null) return;
-        if (w < 2 || h < 2 || stride < 8 || pixels.Length < stride) return;
-        if (_bmp is null || _bmp.PixelWidth != w || _bmp.PixelHeight != h)
+        if (_loggedFail) return;
+        _loggedFail = true;
+        Ui(() => App.Session.Log($"Stage software preview failed — {detail}", "warn"));
+    }
+
+    void Ui(Action action)
+    {
+        if (Dispatcher.CheckAccess()) action();
+        else Dispatcher.BeginInvoke(action);
+    }
+
+    static BitmapImage? LoadJpeg(string file)
+    {
+        try
         {
-            _bmp = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgr32, null);
-            Source = _bmp;
+            using var fs = File.OpenRead(file);
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.StreamSource = fs;
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
         }
-        var copyH = Math.Min(h, pixels.Length / stride);
-        if (copyH < 1) return;
-        _bmp.WritePixels(new Int32Rect(0, 0, w, copyH), pixels, stride, 0);
+        catch
+        {
+            return null;
+        }
     }
 
     public void Dispose()
     {
-        _decoder?.Dispose();
-        _decoder = null;
-        _url = null;
+        _gen++;
+        _path = null;
         Source = null;
-        _bmp = null;
+        _busy = false;
     }
 }

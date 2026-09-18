@@ -83,8 +83,8 @@ public static class GpuLayerMath
         editing && outputLive && !gpuOn;
 
     /// <summary>
-    /// GPU-off Producer Stage: software RGB32 preview (no DXVA), so the cue
-    /// still has picture while Output keeps the MediaElement.
+    /// GPU-off Producer Stage: ffmpeg still at the playhead (no second MF/DXVA
+    /// reader). Output keeps the only HWND decode.
     /// </summary>
     public static bool StageUsesSoftPreview(bool editing, bool outputLive, bool gpuOn, Asset? asset) =>
         DualFileDxvaKillsOutput(editing, outputLive, gpuOn)
@@ -100,6 +100,26 @@ public static class GpuLayerMath
     }
 
     public static int SoftPreviewSleepMs(bool playing) => playing ? 66 : 40;
+
+    public static string SoftPreviewSeekArg(double timeMs)
+    {
+        var sec = Math.Max(0, timeMs) / 1000.0;
+        return sec.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Grab a new ffmpeg still. Retry quickly until the first picture lands;
+    /// then follow the playhead without spawning ffmpeg every clock tick.
+    /// </summary>
+    public static bool SoftPreviewShouldGrab(
+        double shownMs, double timeMs, double sinceGrabMs, bool playing, bool hasPicture)
+    {
+        if (sinceGrabMs < 0) sinceGrabMs = 0;
+        if (!hasPicture) return sinceGrabMs >= 80;
+        if (playing)
+            return sinceGrabMs >= 250 && Math.Abs(timeMs - shownMs) >= 80;
+        return sinceGrabMs >= 80 && Math.Abs(timeMs - shownMs) > 120;
+    }
 
     /// <summary>
     /// Shared D3D11 textures. Stage and Output both draw this asset. Skip the

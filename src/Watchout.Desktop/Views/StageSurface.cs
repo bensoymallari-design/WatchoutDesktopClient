@@ -349,8 +349,8 @@ public sealed class StageSurface : Canvas
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scaleX, scaleY);
             // Shared GPU textures — Stage draws the same Output stack. No
-            // second H.264 decode. If the compositor is off, Stage uses a
-            // software RGB32 preview so Output keeps the only DXVA HWND.
+            // second H.264 decode. If the compositor is off, Stage grabs an
+            // ffmpeg still at the playhead so Output keeps the only DXVA HWND.
             if (gpuOn && asset is not null && GpuLayerMath.StageDrawsSharedGpu(gpuOn, asset))
             {
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
@@ -709,7 +709,7 @@ public sealed class StageSurface : Canvas
         var local = loop && asset.Duration > 1
             ? PlaybackClock.LoopFileTime(ev.LocalTime, asset.Duration)
             : ev.LocalTime;
-        preview.Sync(new Uri(System.IO.Path.GetFullPath(file)).AbsoluteUri, local, playback == PlaybackState.Play, loop);
+        preview.Sync(file, local, playback == PlaybackState.Play, loop);
     }
 
     void SyncVideo(string cueId, MediaElement video, EvaluatedCue ev, PlaybackState playback, bool loop, double fileMs)
@@ -933,13 +933,20 @@ public sealed class StageSurface : Canvas
         var h = Math.Max(1, mapped.Height);
         if (el is MediaElement && VideoSync.HoldOutputVideoLayout(!Editing, App.Session.StageLayoutBusy))
             return;
-        if (el is MediaElement)
+        if (el is MediaElement
+            || el is StageSoftPreview
+            || (el is CueLookHost boxed && boxed.Media is StageSoftPreview))
         {
             var inset = GpuLayerMath.CueVideoInset(mapped.X, mapped.Y, w, h, Editing, hwndLayer: true);
             if (VideoSync.VideoLayoutChanged(GetLeft(el), inset.X)) SetLeft(el, inset.X);
             if (VideoSync.VideoLayoutChanged(GetTop(el), inset.Y)) SetTop(el, inset.Y);
             if (VideoSync.VideoLayoutChanged(el.Width, inset.W)) el.Width = inset.W;
             if (VideoSync.VideoLayoutChanged(el.Height, inset.H)) el.Height = inset.H;
+            if (el is CueLookHost previewHost)
+            {
+                if (LayoutDiffers(previewHost.Media.Width, inset.W)) previewHost.Media.Width = inset.W;
+                if (LayoutDiffers(previewHost.Media.Height, inset.H)) previewHost.Media.Height = inset.H;
+            }
             return;
         }
         if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);

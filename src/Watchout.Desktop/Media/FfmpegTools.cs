@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using Watchout.Core.Gpu;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
 
@@ -164,6 +165,29 @@ public static class FfmpegTools
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// One JPEG at <paramref name="timeMs"/> for Producer Stage. Output keeps
+    /// DXVA; this process does not open Media Foundation.
+    /// </summary>
+    public static async Task<string?> ExtractFrameAsync(string src, double timeMs, string dest)
+    {
+        if (FfmpegPath is null || string.IsNullOrWhiteSpace(src) || !File.Exists(src)) return null;
+        try
+        {
+            var dir = Path.GetDirectoryName(dest);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+            var ss = GpuLayerMath.SoftPreviewSeekArg(timeMs);
+            var scale = $"{GpuResidentPath.StagePreviewMaxEdge}:-2";
+            var result = await RunAsync(FfmpegPath, ["-y", "-ss", ss, "-i", src, "-frames:v", "1", "-vf", "scale=" + scale, "-q:v", "3", dest]);
+            if (result.Code != 0 || !File.Exists(dest)) return null;
+            return new FileInfo(dest).Length > 32 ? dest : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public static async Task<(string Stdout, string Stderr, int Code)> RunAsync(string file, IReadOnlyList<string> args, Action<string>? onStderr = null)

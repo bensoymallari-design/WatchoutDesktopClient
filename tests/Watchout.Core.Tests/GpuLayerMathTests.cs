@@ -125,6 +125,15 @@ public class GpuLayerMathTests
         Assert.False(GpuLayerMath.StageUsesSoftPreview(true, false, gpuOn: false, clip));
         Assert.Equal(66, GpuLayerMath.SoftPreviewSleepMs(true));
         Assert.Equal(40, GpuLayerMath.SoftPreviewSleepMs(false));
+        Assert.Equal("1", GpuLayerMath.SoftPreviewSeekArg(1000));
+        Assert.Equal("22.5", GpuLayerMath.SoftPreviewSeekArg(22_500));
+        Assert.Equal("0", GpuLayerMath.SoftPreviewSeekArg(-8));
+        Assert.False(GpuLayerMath.SoftPreviewShouldGrab(-1, 22_203, 0, true, false));
+        Assert.True(GpuLayerMath.SoftPreviewShouldGrab(-1, 22_203, 80, true, false));
+        Assert.False(GpuLayerMath.SoftPreviewShouldGrab(22_000, 22_200, 100, true, true));
+        Assert.True(GpuLayerMath.SoftPreviewShouldGrab(22_000, 22_400, 250, true, true));
+        Assert.False(GpuLayerMath.SoftPreviewShouldGrab(7_409, 7_409, 200, false, true));
+        Assert.True(GpuLayerMath.SoftPreviewShouldGrab(7_409, 8_000, 80, false, true));
         var ndi = new Asset { Id = "n", Kind = AssetKind.Ndi, Url = "ndi://cam" };
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, ndi));
         Assert.True(GpuLayerMath.StageDrawsSharedGpu(true, clip));
