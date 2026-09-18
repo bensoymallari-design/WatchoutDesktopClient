@@ -42,6 +42,10 @@ public class VideoSyncTests
         Assert.False(VideoSync.SeekCatchUp(22_000, 22_100));
         Assert.True(VideoSync.SeekCatchUp(0, 22_203));
         Assert.False(VideoSync.SeekCatchUp(22_203, 0));
+        Assert.True(VideoSync.SnapOutputAfterDisplayWake(true, 400));
+        Assert.False(VideoSync.SnapOutputAfterDisplayWake(false, 400));
+        Assert.False(VideoSync.SnapOutputAfterDisplayWake(true, 50));
+        Assert.Equal(2000, VideoSync.DisplayWakeResnapMs);
     }
 
     [Fact]

@@ -1,4 +1,8 @@
+using System.Windows;
+using System.Windows.Threading;
+using Microsoft.Win32;
 using Watchout.Core.Models;
+using Watchout.Core.Playback;
 using Watchout.Core.Stage;
 using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Interop;
@@ -8,8 +12,20 @@ namespace Watchout.Desktop.Output;
 public sealed class OutputManager
 {
     readonly Dictionary<string, OutputWindow> _windows = [];
+    readonly DispatcherTimer _wakeSnap;
 
     public IReadOnlyCollection<string> LiveIds => _windows.Keys;
+
+    public OutputManager()
+    {
+        _wakeSnap = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(VideoSync.DisplayWakeResnapMs) };
+        _wakeSnap.Tick += (_, _) =>
+        {
+            _wakeSnap.Stop();
+            ReviveAfterDisplayChange(log: false);
+        };
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+    }
 
     public void Open(Display display, OutputScreen? screen = null, bool fullscreen = true)
     {
@@ -83,6 +99,33 @@ public sealed class OutputManager
     }
 
     public void PushClock(Show? _) { /* StageSurface listens to Session.Clock */ }
+
+    void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        var disp = Application.Current?.Dispatcher;
+        if (disp is null) return;
+        if (disp.CheckAccess()) ScheduleWakeSnap();
+        else disp.BeginInvoke(ScheduleWakeSnap);
+    }
+
+    void ScheduleWakeSnap()
+    {
+        ReviveAfterDisplayChange(log: true);
+        _wakeSnap.Stop();
+        _wakeSnap.Start();
+    }
+
+    void ReviveAfterDisplayChange(bool log)
+    {
+        if (_windows.Count == 0) return;
+        foreach (var win in _windows.Values.ToList())
+        {
+            try { win.ReviveAfterSinkChange(); }
+            catch { /* display still training */ }
+        }
+        if (!log) return;
+        App.Session.Log("Output snapped to the playhead after the TV / display woke (HDMI was off; the cue kept running).");
+    }
 
     static bool OutputShouldPlayAudio(OutputScreen target, IReadOnlyList<OutputScreen> screens)
     {
