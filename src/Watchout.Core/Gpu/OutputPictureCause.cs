@@ -15,7 +15,9 @@ public enum OutputPictureKind
     MissingFile,
     NoCue,
     HoldingLastFrame,
-    LiveEmpty
+    LiveEmpty,
+    GpuOff,
+    NoHwnd
 }
 
 public readonly record struct OutputPictureHint(
@@ -65,9 +67,23 @@ public static class OutputPictureCause
     {
         if (kind is OutputPictureKind.Picture or OutputPictureKind.Idle) return false;
         if (alreadyLoggedThisKind) return false;
-        if (kind is OutputPictureKind.Opening or OutputPictureKind.WaitingFirstFrame or OutputPictureKind.HoldingLastFrame)
+        if (kind is OutputPictureKind.Opening or OutputPictureKind.WaitingFirstFrame
+            or OutputPictureKind.HoldingLastFrame or OutputPictureKind.GpuOff
+            or OutputPictureKind.NoHwnd)
             return msInThisKind >= QuietMs;
         return true;
+    }
+
+    /// <summary>
+    /// Play + Output live but PresentOutput never ran (HWND 0 or GPU off).
+    /// Log after QuietMs so a healthy first Present is not a false alarm.
+    /// </summary>
+    public static OutputPictureKind WhenPresentSkipped(bool playing, int liveOutputs, bool gpuOn, bool hwndOk)
+    {
+        if (!playing || liveOutputs <= 0) return OutputPictureKind.Idle;
+        if (!gpuOn) return OutputPictureKind.GpuOff;
+        if (!hwndOk) return OutputPictureKind.NoHwnd;
+        return OutputPictureKind.Idle;
     }
 
     public static string Level(OutputPictureKind kind) => kind switch
@@ -101,6 +117,12 @@ public static class OutputPictureCause
                 $"Output stuck — holding the last frame while the next MP4 opens ({src}).",
             OutputPictureKind.LiveEmpty =>
                 $"Output black — {src} has no live pixels yet (NDI/capture, not the MP4).",
+            OutputPictureKind.GpuOff =>
+                "Output black — D3D11 compositor is off so Play never presented"
+                + (string.IsNullOrWhiteSpace(error) ? "" : $" ({error})")
+                + ". Not RAM and not this MP4. WatchMe drops the empty wall HWND so the WPF window can show picture.",
+            OutputPictureKind.NoHwnd =>
+                "Output black — Output window has no wall HWND (CreateWindow failed or handle is 0). Play is not presenting. Not the MP4 and not RAM.",
             _ => ""
         };
     }

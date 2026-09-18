@@ -70,6 +70,13 @@ public class CodecTests
     {
         Assert.Equal(Path.Combine("C:", "Shows", "clip.mp4"), Codecs.SiblingH264Path(Path.Combine("C:", "Shows", "clip.mov")));
         Assert.Equal("/shows/loop.mp4", Codecs.SiblingH264Path("/shows/loop.mp4"));
+        Assert.DoesNotContain("/shows/loop.mp4", Codecs.PreparedSidecarCandidates("/shows/loop.mp4"));
+        Assert.Contains(Path.Combine("C:", "Shows", "clip.mp4"), Codecs.PreparedSidecarCandidates(Path.Combine("C:", "Shows", "clip.mov")));
+        Assert.False(Codecs.IsPreparedH264Sidecar("/shows/hdr.mp4", "/shows/hdr.mp4"));
+        Assert.True(Codecs.IsPreparedH264Sidecar("/shows/clip.mov", "/shows/clip.mp4"));
+        Assert.True(Codecs.PrefersPreparedH264("hevc", "clip.mp4"));
+        Assert.True(Codecs.PrefersPreparedH264("h264", "Ultimate 4K Dolby Vision.mp4"));
+        Assert.False(Codecs.PrefersPreparedH264("h264", "clip.mp4"));
     }
 
     [Fact]
@@ -125,6 +132,33 @@ public class CodecTests
             Width = 3840,
             Height = 2160,
         }));
+    }
+
+    [Fact]
+    public void PlaybackPrefersH264SidecarForHevcOriginal()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "watchout-codec-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        var hevc = Path.Combine(dir, "hdr.mp4");
+        var h264 = Path.Combine(dir, "hdr.prepared.mp4");
+        File.WriteAllText(hevc, "x");
+        File.WriteAllText(h264, "y");
+        try
+        {
+            var asset = new Asset
+            {
+                Codec = "hevc",
+                OriginalPath = hevc,
+                ProxyPath = h264,
+                Optimized = true,
+                Url = new Uri(hevc).AbsoluteUri,
+            };
+            Assert.Equal(h264, Codecs.PlaybackPath(asset));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
     }
 
     [Fact]

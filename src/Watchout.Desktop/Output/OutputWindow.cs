@@ -17,6 +17,8 @@ public sealed class OutputWindow : Window
     readonly OutputScreen _screen;
     readonly StageSurface _surface;
     GpuOutputWall? _wall;
+    bool _loggedOwnerFail;
+    bool _loggedDropWall;
 
     public (int W, int H) DestSize
     {
@@ -79,10 +81,28 @@ public sealed class OutputWindow : Window
 
     public void BindDisplay(Display display) => _surface.ViewDisplay = display;
 
+    public void DropWall()
+    {
+        if (_wall is null) return;
+        _wall.Dispose();
+        _wall = null;
+        if (_loggedDropWall) return;
+        _loggedDropWall = true;
+        App.Session.Log("Output black — D3D11 compositor is off so the empty GPU wall HWND was covering Play. Showing the WPF window instead. Not RAM.", "warn");
+    }
+
     public void EnsureWall()
     {
         var owner = new WindowInteropHelper(this).Handle;
-        if (owner == IntPtr.Zero) return;
+        if (owner == IntPtr.Zero)
+        {
+            if (!_loggedOwnerFail)
+            {
+                _loggedOwnerFail = true;
+                App.Session.Log("Output black — Output window handle is 0; wall HWND was not created.", "error");
+            }
+            return;
+        }
         try
         {
             var (w, h) = OutputViewMath.WallPixels(ScreenW, ScreenH);
@@ -103,7 +123,8 @@ public sealed class OutputWindow : Window
         var hwnd = new WindowInteropHelper(this).Handle;
         var (w, h) = OutputViewMath.WallPixels(ScreenW, ScreenH);
         NativeWindow.Place(hwnd, _screen.Left, _screen.Top, w, h, topmost: false);
-        EnsureWall();
+        if (GpuEngine.Available) EnsureWall();
+        else DropWall();
         if (WallHwnd != IntPtr.Zero) NativeWindow.KeepTopmost(WallHwnd);
         if (!refresh) return;
         UpdateLayout();

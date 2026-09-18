@@ -1,11 +1,21 @@
+using SharpGen.Runtime;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
+using Watchout.Core.Gpu;
 
 namespace Watchout.Desktop.Gpu;
 
 sealed class GpuDevice : IDisposable
 {
+    static readonly FeatureLevel[] Levels =
+    [
+        FeatureLevel.Level_11_1,
+        FeatureLevel.Level_11_0,
+        FeatureLevel.Level_10_1,
+        FeatureLevel.Level_10_0,
+    ];
+
     public ID3D11Device Device { get; }
     public ID3D11DeviceContext Context { get; }
     public IDXGIFactory2 Factory { get; }
@@ -71,23 +81,11 @@ sealed class GpuDevice : IDisposable
 
     public static GpuDevice Create()
     {
-        var flags = DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport;
-        ID3D11Device device;
-        try
-        {
-            device = D3D11.D3D11CreateDevice(DriverType.Hardware, flags);
-        }
-        catch
-        {
-            try
-            {
-                device = D3D11.D3D11CreateDevice(DriverType.Hardware, DeviceCreationFlags.BgraSupport);
-            }
-            catch
-            {
-                device = D3D11.D3D11CreateDevice(DriverType.Warp, DeviceCreationFlags.BgraSupport);
-            }
-        }
+        if (!OutputViewMath.D3D11CreateNeedsFeatureLevels(Levels.Length))
+            throw new InvalidOperationException("D3D11CreateDevice needs an explicit feature-level list");
+
+        var factory = CreateFactory();
+        var device = CreateDevice(factory);
         var context = device.ImmediateContext;
         var level = device.FeatureLevel;
         ID3D11Multithread? mt = null;
@@ -121,11 +119,75 @@ sealed class GpuDevice : IDisposable
             }
         }
 
-        using var dxgi = device.QueryInterface<IDXGIDevice>();
-        using var adapter = dxgi.GetAdapter();
-        using var fac = adapter.GetParent<IDXGIFactory2>();
-        var factory = fac.QueryInterface<IDXGIFactory2>();
         return new GpuDevice(device, context, factory, level, manager, mt, hasVpe);
+    }
+
+    static IDXGIFactory2 CreateFactory()
+    {
+        try { return DXGI.CreateDXGIFactory2<IDXGIFactory2>(false); }
+        catch { return DXGI.CreateDXGIFactory1<IDXGIFactory2>(); }
+    }
+
+    static ID3D11Device CreateDevice(IDXGIFactory2 factory)
+    {
+        Exception? last = null;
+        foreach (var adapter in HardwareAdapters(factory))
+        {
+            using (adapter)
+            {
+                foreach (var flags in new[]
+                {
+                    DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
+                    DeviceCreationFlags.BgraSupport,
+                })
+                {
+                    try { return CreateOn(adapter, DriverType.Unknown, flags); }
+                    catch (Exception ex) { last = ex; }
+                }
+            }
+        }
+
+        foreach (var flags in new[]
+        {
+            DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
+            DeviceCreationFlags.BgraSupport,
+        })
+        {
+            try { return D3D11.D3D11CreateDevice(DriverType.Hardware, flags, Levels); }
+            catch (Exception ex) { last = ex; }
+        }
+
+        try { return D3D11.D3D11CreateDevice(DriverType.Warp, DeviceCreationFlags.BgraSupport, Levels); }
+        catch (Exception ex)
+        {
+            throw last ?? ex;
+        }
+    }
+
+    static ID3D11Device CreateOn(IDXGIAdapter adapter, DriverType type, DeviceCreationFlags flags)
+    {
+        var hr = D3D11.D3D11CreateDevice(adapter, type, flags, Levels, out ID3D11Device? device);
+        if (hr.Failure || device is null)
+            throw new InvalidOperationException(hr.ToString());
+        return device;
+    }
+
+    static IEnumerable<IDXGIAdapter> HardwareAdapters(IDXGIFactory2 factory)
+    {
+        for (uint i = 0; i < 8; i++)
+        {
+            IDXGIAdapter adapter;
+            try { factory.EnumAdapters(i, out adapter); }
+            catch { yield break; }
+            var name = adapter.Description.Description ?? "";
+            if (name.Contains("Microsoft Basic Render", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Software Adapter", StringComparison.OrdinalIgnoreCase))
+            {
+                adapter.Dispose();
+                continue;
+            }
+            yield return adapter;
+        }
     }
 
     static void MarshalRelease(object com) =>

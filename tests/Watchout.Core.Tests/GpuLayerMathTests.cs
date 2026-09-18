@@ -176,6 +176,17 @@ public class GpuLayerMathTests
         Assert.Equal(OutputPictureKind.Idle, OutputPictureCause.Classify(play with { Playing = false, ReadyTextures = 0 }));
         Assert.Equal("error", OutputPictureCause.Level(OutputPictureKind.DecodeFailed));
         Assert.Equal("warn", OutputPictureCause.Level(OutputPictureKind.Stalled));
+        Assert.Equal(OutputPictureKind.GpuOff, OutputPictureCause.WhenPresentSkipped(true, 1, gpuOn: false, hwndOk: true));
+        Assert.Equal(OutputPictureKind.NoHwnd, OutputPictureCause.WhenPresentSkipped(true, 1, gpuOn: true, hwndOk: false));
+        Assert.Equal(OutputPictureKind.Idle, OutputPictureCause.WhenPresentSkipped(true, 1, gpuOn: true, hwndOk: true));
+        Assert.Equal(OutputPictureKind.Idle, OutputPictureCause.WhenPresentSkipped(false, 1, gpuOn: false, hwndOk: false));
+        Assert.False(OutputPictureCause.ShouldLog(OutputPictureKind.GpuOff, false, 100));
+        Assert.True(OutputPictureCause.ShouldLog(OutputPictureKind.GpuOff, false, OutputPictureCause.QuietMs));
+        Assert.False(OutputPictureCause.ShouldLog(OutputPictureKind.NoHwnd, false, 100));
+        Assert.True(OutputPictureCause.ShouldLog(OutputPictureKind.NoHwnd, false, OutputPictureCause.QuietMs));
+        Assert.Contains("compositor is off", OutputPictureCause.Message(OutputPictureKind.GpuOff, "", "E_INVALIDARG"));
+        Assert.Contains("E_INVALIDARG", OutputPictureCause.Message(OutputPictureKind.GpuOff, "", "E_INVALIDARG"));
+        Assert.Contains("no wall HWND", OutputPictureCause.Message(OutputPictureKind.NoHwnd, "", null));
     }
 
     [Fact]
@@ -269,6 +280,8 @@ public class GpuLayerMathTests
         Assert.True(OutputViewMath.PulseClock(true, false));
         Assert.True(OutputViewMath.PulseClock(false, true));
         Assert.False(OutputViewMath.PulseClock(false, false));
+        Assert.True(OutputViewMath.D3D11CreateNeedsFeatureLevels(4));
+        Assert.False(OutputViewMath.D3D11CreateNeedsFeatureLevels(0));
     }
 
     [Fact]

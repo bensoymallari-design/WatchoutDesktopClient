@@ -199,7 +199,7 @@ public static class MediaLibrary
     {
         foreach (var candidate in Codecs.PreparedSidecarCandidates(src, dest))
         {
-            if (File.Exists(candidate) && Codecs.PlaysNatively("h264", candidate))
+            if (File.Exists(candidate) && Codecs.IsPreparedH264Sidecar(src, candidate) && Codecs.PlaysNatively("h264", candidate))
                 return candidate;
         }
         return null;

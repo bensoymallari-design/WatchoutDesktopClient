@@ -29,6 +29,8 @@ public static class GpuEngine
     static bool _failed;
     static string? _error;
     static int _mfUsers;
+    static DateTime _retryUtc;
+    static bool _loggedStartFail;
 
     static readonly Dictionary<string, Action> LiveHolds = new(StringComparer.OrdinalIgnoreCase);
 
@@ -59,11 +61,20 @@ public static class GpuEngine
     {
         lock (Gate)
         {
+            if (_gpu is not null && !_failed) return true;
+            if (_failed)
+            {
+                if ((DateTime.UtcNow - _retryUtc).TotalSeconds < 2) return false;
+                _started = false;
+                _failed = false;
+            }
             if (_started) return !_failed && _gpu is not null;
             _started = true;
+            var startedMf = false;
             try
             {
                 MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 0), "MFStartup");
+                startedMf = true;
                 _mfUsers++;
                 _gpu = GpuDevice.Create();
                 _comp = new GpuCompositor(_gpu);
@@ -75,6 +86,22 @@ public static class GpuEngine
             {
                 _failed = true;
                 _error = ex.Message;
+                _retryUtc = DateTime.UtcNow;
+                _started = false;
+                if (startedMf)
+                {
+                    try { MfNative.MFShutdown(); } catch { /* paired */ }
+                    _mfUsers = Math.Max(0, _mfUsers - 1);
+                }
+                if (!_loggedStartFail)
+                {
+                    _loggedStartFail = true;
+                    App.Session.Log(
+                        "Output black — D3D11 compositor failed at boot"
+                        + (string.IsNullOrWhiteSpace(ex.Message) ? "" : $" ({ex.Message})")
+                        + ". Play never presented. Not RAM. WatchMe will retry and show the WPF window instead of an empty wall HWND.",
+                        "error");
+                }
                 return false;
             }
         }
@@ -179,6 +206,23 @@ public static class GpuEngine
                 DropKey(key);
                 Rebuilt.Remove(key);
             }
+        }
+    }
+
+    /// <summary>
+    /// Play + Output can stay black with no decoder log if Present never runs
+    /// (HWND 0 or compositor off). Call from the 60 Hz clock.
+    /// </summary>
+    public static void WatchPlay(bool playing, int liveOutputs)
+    {
+        lock (Gate)
+        {
+            if (_pictureLogged) return;
+            var gpuOn = _gpu is not null && !_failed;
+            var hwndOk = Swaps.Count > 0;
+            var kind = OutputPictureCause.WhenPresentSkipped(playing, liveOutputs, gpuOn, hwndOk);
+            if (kind == OutputPictureKind.Idle) return;
+            NoteKind(kind, "", LastError);
         }
     }
 
@@ -298,6 +342,11 @@ public static class GpuEngine
             liveHas,
             decoder?.Error);
         var cause = OutputPictureCause.Classify(hint);
+        NoteKind(cause, key, decoder?.Error);
+    }
+
+    static void NoteKind(OutputPictureKind cause, string key, string? error)
+    {
         if (cause != _wallKind)
         {
             _wallKind = cause;
@@ -314,7 +363,7 @@ public static class GpuEngine
         }
         var ms = (DateTime.UtcNow - _wallKindUtc).TotalMilliseconds;
         if (!OutputPictureCause.ShouldLog(cause, _wallKindLogged, ms)) return;
-        var text = OutputPictureCause.Message(cause, key, decoder?.Error);
+        var text = OutputPictureCause.Message(cause, key, error);
         if (text.Length == 0) return;
         _wallKindLogged = true;
         App.Session.Log(text, OutputPictureCause.Level(cause));
