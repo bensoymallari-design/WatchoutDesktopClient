@@ -126,8 +126,12 @@ public class GpuLayerMathTests
         Assert.True(GpuLayerMath.ShowCueStageLabel(true));
         Assert.False(GpuLayerMath.ShowCueStageLabel(false));
         Assert.Equal("majdoul3", GpuLayerMath.CueStageLabel("majdoul3", "clip.mp4"));
+        Assert.Equal("majdoul3", GpuLayerMath.CueStageLabel("Cue", "majdoul3"));
         Assert.Equal("wall", GpuLayerMath.CueStageLabel("  ", "wall"));
         Assert.Equal("", GpuLayerMath.CueStageLabel(null, null));
+        Assert.Equal(26, GpuLayerMath.CueLabelBarHeight(40));
+        Assert.Equal(40, GpuLayerMath.CueLabelBarHeight(1080));
+        Assert.Equal(0, GpuLayerMath.CueLabelBarHeight(10));
     }
 
     [Fact]
