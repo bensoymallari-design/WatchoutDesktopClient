@@ -101,9 +101,22 @@ public static class GpuLayerMath
 
     public static string CueStageLabel(string? cueName, string? assetName)
     {
-        if (!string.IsNullOrWhiteSpace(cueName)) return cueName.Trim();
-        if (!string.IsNullOrWhiteSpace(assetName)) return assetName.Trim();
-        return "";
+        var cue = cueName?.Trim() ?? "";
+        var asset = assetName?.Trim() ?? "";
+        if (cue.Length > 0 && !cue.Equals("Cue", StringComparison.OrdinalIgnoreCase))
+            return cue;
+        if (asset.Length > 0) return asset;
+        return cue;
+    }
+
+    /// <summary>
+    /// Opaque title bar on Producer Stage so a black clip still shows its name.
+    /// Output walls stay unlabeled.
+    /// </summary>
+    public static double CueLabelBarHeight(double mappedHeight)
+    {
+        if (mappedHeight < 20) return 0;
+        return Math.Clamp(mappedHeight * 0.12, 26, 40);
     }
 
     public static GpuSourceKind SourceKind(Asset asset)

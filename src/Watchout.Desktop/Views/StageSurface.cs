@@ -285,7 +285,7 @@ public sealed class StageSurface : Canvas
             if (!GpuLayerMath.ShowCueStageLabel(true) || string.IsNullOrEmpty(name)) continue;
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
-            DrawCueNamePlate(mapped, name);
+            DrawCueNamePlate(mapped, name, ev.Cue.Color);
         }
 
         if (session.Selection.Kind != SelectionKind.Cue) return;
@@ -486,32 +486,59 @@ public sealed class StageSurface : Canvas
                 yield return GetZIndex(el);
     }
 
-    void DrawCueNamePlate(Rect mapped, string name)
+    void DrawCueNamePlate(Rect mapped, string name, string colorHex)
     {
         if (mapped.Width < 24 || mapped.Height < 16) return;
-        var plate = new Border
+        var barH = GpuLayerMath.CueLabelBarHeight(mapped.Height);
+        var outline = new Rectangle
         {
-            Background = new SolidColorBrush(Color.FromArgb(200, 12, 12, 12)),
-            Padding = new Thickness(8, 3, 8, 3),
-            CornerRadius = new CornerRadius(2),
+            Width = Math.Max(1, mapped.Width),
+            Height = Math.Max(1, mapped.Height),
+            Stroke = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+            StrokeThickness = 1,
+            Fill = Brushes.Transparent,
             IsHitTestVisible = false,
-            MaxWidth = Math.Max(40, mapped.Width - 12),
-            Child = new TextBlock
-            {
-                Text = name,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            },
         };
-        plate.Measure(new Size(Math.Max(40, mapped.Width - 12), 40));
-        var h = Math.Max(18, plate.DesiredSize.Height);
-        SetLeft(plate, mapped.X + 6);
-        SetTop(plate, mapped.Y + Math.Max(4, mapped.Height - h - 6));
-        SetZIndex(plate, 24);
-        Children.Add(plate);
-        _chrome.Add(plate);
+        SetLeft(outline, mapped.X);
+        SetTop(outline, mapped.Y);
+        SetZIndex(outline, 22);
+        Children.Add(outline);
+        _chrome.Add(outline);
+        if (barH < 18) return;
+
+        var row = new DockPanel { LastChildFill = true, IsHitTestVisible = false };
+        var chip = new Border
+        {
+            Width = 6,
+            Background = BrushFrom(string.IsNullOrWhiteSpace(colorHex) ? "#f5a623" : colorHex),
+            IsHitTestVisible = false,
+        };
+        DockPanel.SetDock(chip, Dock.Left);
+        row.Children.Add(chip);
+        row.Children.Add(new TextBlock
+        {
+            Text = name,
+            FontSize = barH >= 34 ? 16 : 14,
+            FontWeight = FontWeights.Bold,
+            Foreground = Brushes.White,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(10, 0, 10, 0),
+            IsHitTestVisible = false,
+        });
+        var bar = new Border
+        {
+            Width = Math.Max(1, mapped.Width),
+            Height = barH,
+            Background = new SolidColorBrush(Color.FromArgb(235, 8, 8, 8)),
+            IsHitTestVisible = false,
+            Child = row,
+        };
+        SetLeft(bar, mapped.X);
+        SetTop(bar, mapped.Y);
+        SetZIndex(bar, 24);
+        Children.Add(bar);
+        _chrome.Add(bar);
     }
 
     void DrawHandles(Rect mapped, int z)
