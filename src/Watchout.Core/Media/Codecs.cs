@@ -111,6 +111,18 @@ public static class Codecs
         _ => "#f59e0b",
     };
 
+    /// <summary>
+    /// HEVC / Dolby Vision / HDR often opens on Intel UHD with no DXGI frame.
+    /// Prefer a prepared 8-bit H.264 sidecar when one exists.
+    /// </summary>
+    public static bool PrefersPreparedH264(string codec, string? filePath)
+    {
+        var blob = $"{codec} {filePath}";
+        return GpuGpuCodec.IsMatch(blob)
+            || blob.Contains("dolby", StringComparison.OrdinalIgnoreCase)
+            || blob.Contains("hdr", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string SiblingH264Path(string filePath)
     {
         var ext = ExtOf(filePath);
@@ -123,11 +135,27 @@ public static class Codecs
     public static IReadOnlyList<string> PreparedSidecarCandidates(string src, string? dest = null)
     {
         dest ??= src;
-        return new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        var skip = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { src };
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in new[] { SiblingH264Path(src), SiblingH264Path(dest) })
         {
-            SiblingH264Path(src),
-            SiblingH264Path(dest),
-        }.ToList();
+            if (string.IsNullOrWhiteSpace(raw) || skip.Contains(raw)) continue;
+            set.Add(raw);
+        }
+        return set.ToList();
+    }
+
+    /// <summary>
+    /// A sidecar is a different file next to the master (clip.mov → clip.mp4).
+    /// The master .mp4 itself is not a prepared H.264 — Dolby Vision HEVC
+    /// files are .mp4 and were logged as “Using prepared H.264”.
+    /// </summary>
+    public static bool IsPreparedH264Sidecar(string sourcePath, string candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return false;
+        if (string.Equals(sourcePath, candidate, StringComparison.OrdinalIgnoreCase)) return false;
+        var ext = ExtOf(candidate);
+        return ext is "mp4" or "m4v";
     }
 
     public static List<string> CollapseImportPaths(IEnumerable<string> paths)
@@ -265,6 +293,10 @@ public static class Codecs
     /// </summary>
     public static string PlaybackPath(Asset asset)
     {
+        if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
+            && IsPreparedH264Sidecar(asset.OriginalPath ?? "", asset.ProxyPath)
+            && (asset.Optimized || PrefersPreparedH264(asset.Codec, asset.OriginalPath)))
+            return asset.ProxyPath;
         if (!string.IsNullOrWhiteSpace(asset.OriginalPath) && File.Exists(asset.OriginalPath) && PlaysNatively(asset.Codec, asset.OriginalPath))
             return asset.OriginalPath;
         if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath))

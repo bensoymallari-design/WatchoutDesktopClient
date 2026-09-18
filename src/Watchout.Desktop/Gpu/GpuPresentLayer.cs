@@ -16,6 +16,7 @@ public sealed class GpuPresentLayer : Grid
     readonly Image? _image;
     WriteableBitmap? _bmp;
     bool _loggedWall;
+    bool _loggedHwndFail;
 
     public GpuPresentLayer(bool output)
     {
@@ -59,7 +60,15 @@ public sealed class GpuPresentLayer : Grid
         var hwnd = win?.WallHwnd ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero && win is not null)
             hwnd = new WindowInteropHelper(win).Handle;
-        if (hwnd == IntPtr.Zero) return;
+        if (hwnd == IntPtr.Zero)
+        {
+            if (!_loggedHwndFail)
+            {
+                _loggedHwndFail = true;
+                App.Session.Log("Output black — wall HWND is 0 so Play cannot present. Not RAM.", "error");
+            }
+            return;
+        }
         var client = NativeWindow.ClientSize(hwnd);
         var displayW = display is null ? 0 : (int)Math.Round(display.Width);
         var displayH = display is null ? 0 : (int)Math.Round(display.Height);

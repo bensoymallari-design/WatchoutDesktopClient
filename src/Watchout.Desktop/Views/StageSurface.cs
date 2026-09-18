@@ -186,7 +186,10 @@ public sealed class StageSurface : Canvas
             var selected = session.Selection.Kind == SelectionKind.Display && session.Selection.Ids.Contains(display.Id);
             var hover = display.Id == _hoverDisplayId;
             var outputLive = session.LiveOutputs.Contains(display.Id) || session.StageYieldsFileDecoder;
-            var stackLive = outputLive && GpuEngine.Available;
+            var gpuOn = GpuEngine.Available;
+            // Compact corner label whenever Output is live so the gold HUD
+            // does not cover MediaElement when the compositor failed at boot.
+            var compactHud = outputLive;
             var border = new Border
             {
                 Width = Math.Max(2, r.Width),
@@ -195,7 +198,7 @@ public sealed class StageSurface : Canvas
                 BorderThickness = new Thickness(hover || selected ? 3 : 1),
                 Background = new SolidColorBrush(hover
                     ? Color.FromArgb(50, 74, 222, 128)
-                    : stackLive
+                    : compactHud
                         ? Color.FromArgb(0, 0, 0, 0)
                         : Color.FromArgb(40, 20, 20, 20)),
                 IsHitTestVisible = false,
@@ -210,11 +213,11 @@ public sealed class StageSurface : Canvas
             var key = display.Role == DisplayRole.Key ? $"KEY {Math.Max(1, display.KeyChannel)}" : "";
             var hud = new StackPanel
             {
-                Width = stackLive ? double.NaN : Math.Max(2, r.Width),
+                Width = compactHud ? double.NaN : Math.Max(2, r.Width),
                 IsHitTestVisible = false,
-                Margin = stackLive ? new Thickness(10, 8, 10, 8) : new Thickness(0),
+                Margin = compactHud ? new Thickness(10, 8, 10, 8) : new Thickness(0),
             };
-            if (!stackLive)
+            if (!compactHud)
             {
                 hud.Children.Add(new TextBlock
                 {
@@ -230,18 +233,18 @@ public sealed class StageSurface : Canvas
             hud.Children.Add(new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(display.Name) ? "Display" : display.Name,
-                FontSize = stackLive ? 13 : Math.Clamp(r.Height * 0.09, 18, 42),
+                FontSize = compactHud ? 13 : Math.Clamp(r.Height * 0.09, 18, 42),
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromArgb((byte)(stackLive ? 200 : 235), 245, 166, 35)),
-                HorizontalAlignment = stackLive ? HorizontalAlignment.Left : HorizontalAlignment.Center,
-                TextAlignment = stackLive ? TextAlignment.Left : TextAlignment.Center,
+                Foreground = new SolidColorBrush(Color.FromArgb((byte)(compactHud ? 200 : 235), 245, 166, 35)),
+                HorizontalAlignment = compactHud ? HorizontalAlignment.Left : HorizontalAlignment.Center,
+                TextAlignment = compactHud ? TextAlignment.Left : TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
             });
             var sub = cap
                 ?? (outputLive
-                    ? (stackLive
+                    ? (gpuOn
                         ? $"{display.Width:0}×{display.Height:0}  ·  Output stack"
-                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — picture is on the wall")
+                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — GPU compositor off (see Log)")
                     : string.IsNullOrEmpty(key)
                         ? $"{display.Width:0}×{display.Height:0}"
                         : $"{display.Width:0}×{display.Height:0}  ·  {key}");
@@ -250,12 +253,12 @@ public sealed class StageSurface : Canvas
                 Text = sub,
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(180, 175, 168)),
-                HorizontalAlignment = stackLive ? HorizontalAlignment.Left : HorizontalAlignment.Center,
-                TextAlignment = stackLive ? TextAlignment.Left : TextAlignment.Center,
-                Margin = stackLive ? new Thickness(0, 2, 0, 0) : new Thickness(8, 8, 8, 0),
+                HorizontalAlignment = compactHud ? HorizontalAlignment.Left : HorizontalAlignment.Center,
+                TextAlignment = compactHud ? TextAlignment.Left : TextAlignment.Center,
+                Margin = compactHud ? new Thickness(0, 2, 0, 0) : new Thickness(8, 8, 8, 0),
                 TextWrapping = TextWrapping.Wrap,
             });
-            if (stackLive)
+            if (compactHud)
             {
                 SetLeft(hud, r.X);
                 SetTop(hud, r.Y);
@@ -311,13 +314,16 @@ public sealed class StageSurface : Canvas
             _decoderEpoch = session.DecoderEpoch;
         }
 
+        var gpuOn = GpuEngine.Available || GpuEngine.TryStart();
         if (!Editing && Window.GetWindow(this) is OutputWindow wall)
-            wall.EnsureWall();
+        {
+            if (gpuOn) wall.EnsureWall();
+            else wall.DropWall();
+        }
         var (originX, originY, scaleX, scaleY) = OutputViewport(show);
         var live = PlaybackClock.VisibleMedia(show);
         var liveIds = live.Select(e => e.Cue.Id).ToHashSet();
         var gpuDraws = new List<Watchout.Core.Gpu.GpuDraw>();
-        var gpuOn = GpuEngine.Available || GpuEngine.TryStart();
         foreach (var stale in _layers.Keys.Where(id => !liveIds.Contains(id)).ToList())
             DropMedia(stale);
 

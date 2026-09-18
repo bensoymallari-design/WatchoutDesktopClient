@@ -143,4 +143,13 @@ public static class OutputViewMath
     /// </summary>
     public static bool PulseClock(bool timelinePlaying, bool outputLive) =>
         timelinePlaying || outputLive;
+
+    /// <summary>
+    /// Vortice <c>D3D11CreateDevice(params FeatureLevel[])</c> with no levels
+    /// sends count 0 and a non-null pointer. Intel UHD returns E_INVALIDARG,
+    /// the compositor stays off, Play never Presents, and the black/stuck Log
+    /// never runs.
+    /// </summary>
+    public static bool D3D11CreateNeedsFeatureLevels(int featureLevelCount) =>
+        featureLevelCount > 0;
 }

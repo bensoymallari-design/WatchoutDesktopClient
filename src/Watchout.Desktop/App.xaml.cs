@@ -87,6 +87,9 @@ public partial class App : Application
         if (dt is <= 0 or > 250) dt = 1000.0 / 60;
         Session.Tick(dt);
         Outputs.PushClock(Session.PlaybackShow);
+        GpuEngine.WatchPlay(
+            Session.Show?.Timelines.Any(t => t.Playback == PlaybackState.Play) == true,
+            Session.LiveOutputs.Count);
     }
 
     public static string DataDir()
