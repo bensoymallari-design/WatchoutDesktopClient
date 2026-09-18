@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 using Watchout.Core;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
@@ -9,13 +11,28 @@ using Watchout.Desktop.Media;
 namespace Watchout.Desktop.Views;
 
 /// <summary>
-/// Switches tab: circular radios. Columns are Stage 1 / Stage 2; rows are
-/// Card 1, Card 2, NDI 1. Clicking a circle assigns that input and auto-fits
-/// the cue to that Stage canvas.
+/// Switches tab, H9 / V-Can style: SCREEN tiles, HDMI/NDI input cards,
+/// orange LED crosspoints. Click a lamp to assign and auto-fit that Stage.
 /// </summary>
 public sealed class StageRouteBar : UserControl
 {
-    readonly StackPanel _root = new() { Margin = new Thickness(16, 12, 16, 12) };
+    static readonly SolidColorBrush Ink = Brush(232, 230, 227);
+    static readonly SolidColorBrush Muted = Brush(154, 149, 141);
+    static readonly SolidColorBrush Nova = Brush(255, 106, 0);
+    static readonly SolidColorBrush Live = Brush(33, 196, 90);
+    static readonly SolidColorBrush Panel = Brush(18, 18, 18);
+    static readonly SolidColorBrush Tile = Brush(30, 30, 30);
+    static readonly SolidColorBrush Line = Brush(48, 48, 48);
+    static readonly SolidColorBrush RowAlt = Brush(22, 22, 22);
+
+    static SolidColorBrush Brush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    readonly StackPanel _root = new();
     string _fp = "";
     bool _building;
 
@@ -26,7 +43,8 @@ public sealed class StageRouteBar : UserControl
             Content = _root,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Background = Brushes.Transparent,
+            Background = Panel,
+            Padding = new Thickness(12),
         };
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
         CaptureHub.Changed += () => Dispatcher.BeginInvoke(Reload);
@@ -50,17 +68,18 @@ public sealed class StageRouteBar : UserControl
         _root.Children.Clear();
         try
         {
+            _root.Children.Add(TitleBar());
             var columns = show is null ? [] : StageRoute.Columns(show);
             if (columns.Count == 0)
             {
-                _root.Children.Add(Hint("Add a display on Stage first. Each column is Stage 1, Stage 2, …"));
+                _root.Children.Add(Hint("Add a display on Stage first. Each column is a SCREEN like Nova H9."));
                 return;
             }
 
             var rows = StageRoute.Rows(show, incoming);
-            _root.Children.Add(Matrix(columns, rows));
+            _root.Children.Add(Chassis(Matrix(columns, rows)));
             if (rows.Count == 0)
-                _root.Children.Add(Hint("No live inputs yet. Plug in a capture card or start Resolume NDI, then Refresh in Devices. Each source becomes a row: Card 1, Card 2, NDI 1."));
+                _root.Children.Add(Hint("No live inputs yet. Plug in a capture card or start Resolume NDI, then Refresh in Devices. Rows appear as HDMI Card 1 / Card 2 and NDI 1."));
         }
         finally
         {
@@ -68,15 +87,68 @@ public sealed class StageRouteBar : UserControl
         }
     }
 
+    static UIElement TitleBar()
+    {
+        var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        bar.Children.Add(new Rectangle
+        {
+            Width = 4,
+            Height = 22,
+            Fill = Nova,
+            Margin = new Thickness(0, 0, 10, 0),
+            RadiusX = 1,
+            RadiusY = 1,
+        });
+        DockPanel.SetDock(bar.Children[0], Dock.Left);
+        var titles = new StackPanel();
+        titles.Children.Add(new TextBlock
+        {
+            Text = "SWITCHING",
+            FontSize = 13,
+            FontWeight = FontWeights.Bold,
+            Foreground = Ink,
+        });
+        titles.Children.Add(new TextBlock
+        {
+            Text = "INPUT  →  SCREEN",
+            FontSize = 10,
+            Foreground = Muted,
+            Margin = new Thickness(0, 1, 0, 0),
+        });
+        bar.Children.Add(titles);
+        return bar;
+    }
+
+    static Border Chassis(UIElement child) => new()
+    {
+        Background = new SolidColorBrush(Color.FromRgb(14, 14, 14)),
+        BorderBrush = Line,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(12, 14, 14, 12),
+        Child = child,
+        HorizontalAlignment = HorizontalAlignment.Left,
+    };
+
     UIElement Matrix(IReadOnlyList<Display> columns, IReadOnlyList<StageRoute.Row> rows)
     {
-        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(168) });
         foreach (var _ in columns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(108) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112), MinWidth = 100 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         for (var i = 0; i < rows.Count; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(64) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(72) });
+
+        grid.Children.Add(Cell(0, 0, new TextBlock
+        {
+            Text = "INPUT",
+            Foreground = Muted,
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(4, 0, 8, 10),
+        }));
 
         for (var c = 0; c < columns.Count; c++)
         {
@@ -84,11 +156,10 @@ public sealed class StageRouteBar : UserControl
             var displayId = display.Id;
             var header = new Button
             {
-                Content = StageRoute.ColumnLabel(display, c),
                 Style = (Style)FindResource("Wo.StageHeader"),
-                Margin = new Thickness(8, 0, 8, 8),
                 ToolTip = $"{display.Name}  {StageRoute.ColumnHint(display)}",
             };
+            header.Content = HeaderCopy(StageRoute.ColumnLabel(display, c).ToUpperInvariant(), StageRoute.ColumnHint(display));
             header.Click += (_, _) => App.Session.Select(SelectionKind.Display, displayId);
             grid.Children.Add(Cell(c + 1, 0, header));
         }
@@ -100,16 +171,18 @@ public sealed class StageRouteBar : UserControl
             var row = rows[r];
             var ndi = row.Kind == StageRoute.Ndi;
             var title = ndi ? StageRoute.NdiRowLabel(++ndiN) : StageRoute.CaptureRowLabel(++cardN);
-            grid.Children.Add(Cell(0, r + 1, new TextBlock
+            var stripe = r % 2 == 1 ? RowAlt : Brushes.Transparent;
+            var rowBg = new Border
             {
-                Text = title,
-                Foreground = new SolidColorBrush(Color.FromRgb(242, 139, 130)),
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 0, 12, 0),
-                FontSize = 13,
-                ToolTip = row.Label,
-            }));
+                Background = stripe,
+                Margin = new Thickness(-8, 2, -8, 2),
+            };
+            Grid.SetColumn(rowBg, 0);
+            Grid.SetColumnSpan(rowBg, columns.Count + 1);
+            Grid.SetRow(rowBg, r + 1);
+            grid.Children.Add(rowBg);
+
+            grid.Children.Add(Cell(0, r + 1, SourceCard(title, row.Label, ndi, row.DisplayId is not null)));
             var group = $"stage-route:{row.Kind}:{row.Key}";
             for (var c = 0; c < columns.Count; c++)
             {
@@ -120,8 +193,18 @@ public sealed class StageRouteBar : UserControl
                     GroupName = group,
                     IsChecked = on,
                     Style = (Style)FindResource("Wo.StageSwitch"),
-                    ToolTip = $"Assign {title} ({row.Label}) to {StageRoute.ColumnLabel(display, c)} and auto-fit {display.Width:0}×{display.Height:0}",
+                    ToolTip = $"Switch {title} ({row.Label}) → {StageRoute.ColumnLabel(display, c)}  ·  auto-fit {display.Width:0}×{display.Height:0}",
                 };
+                if (on)
+                {
+                    radio.Effect = new DropShadowEffect
+                    {
+                        Color = Color.FromRgb(255, 106, 0),
+                        BlurRadius = 12,
+                        ShadowDepth = 0,
+                        Opacity = 0.85,
+                    };
+                }
                 var kind = row.Kind;
                 var key = row.Key;
                 var label = row.Label;
@@ -136,6 +219,90 @@ public sealed class StageRouteBar : UserControl
         }
 
         return grid;
+    }
+
+    static UIElement HeaderCopy(string title, string hint)
+    {
+        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        stack.Children.Add(new TextBlock
+        {
+            Text = title,
+            Foreground = Ink,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = hint,
+            Foreground = Muted,
+            FontSize = 10,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        return stack;
+    }
+
+    static UIElement SourceCard(string title, string device, bool ndi, bool routed)
+    {
+        var card = new Border
+        {
+            Background = Tile,
+            BorderBrush = Line,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 8, 12, 8),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var body = new DockPanel();
+        var pip = new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = routed ? Live : new SolidColorBrush(Color.FromRgb(70, 70, 70)),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        DockPanel.SetDock(pip, Dock.Left);
+        body.Children.Add(pip);
+        var text = new StackPanel();
+        var top = new StackPanel { Orientation = Orientation.Horizontal };
+        top.Children.Add(new Border
+        {
+            Background = ndi ? new SolidColorBrush(Color.FromRgb(36, 54, 40)) : new SolidColorBrush(Color.FromRgb(54, 36, 24)),
+            CornerRadius = new CornerRadius(2),
+            Padding = new Thickness(5, 1, 5, 1),
+            Margin = new Thickness(0, 0, 8, 0),
+            Child = new TextBlock
+            {
+                Text = ndi ? "NDI" : "HDMI",
+                FontSize = 9,
+                FontWeight = FontWeights.Bold,
+                Foreground = ndi ? Live : Nova,
+            },
+        });
+        top.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Ink,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        text.Children.Add(top);
+        text.Children.Add(new TextBlock
+        {
+            Text = device,
+            FontSize = 10,
+            Foreground = Muted,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        body.Children.Add(text);
+        card.Child = body;
+        card.ToolTip = device;
+        return card;
     }
 
     static UIElement Cell(int column, int row, UIElement child)
@@ -175,7 +342,7 @@ public sealed class StageRouteBar : UserControl
     {
         Text = text,
         TextWrapping = TextWrapping.Wrap,
-        Foreground = (Brush)Application.Current.FindResource("Wo.Muted"),
+        Foreground = Muted,
         FontSize = 12,
         Margin = new Thickness(0, 12, 0, 0),
     };
