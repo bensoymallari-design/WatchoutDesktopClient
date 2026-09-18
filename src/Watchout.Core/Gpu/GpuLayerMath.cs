@@ -116,7 +116,20 @@ public static class GpuLayerMath
     public static double CueLabelBarHeight(double mappedHeight)
     {
         if (mappedHeight < 20) return 0;
-        return Math.Clamp(mappedHeight * 0.12, 26, 40);
+        return Math.Clamp(mappedHeight * 0.12, 28, 36);
+    }
+
+    /// <summary>
+    /// MediaElement / capture HWNDs cover WPF drawn on top of them. Inset the
+    /// video so the title bar sits in a WPF strip the decoder cannot hide.
+    /// </summary>
+    public static (double X, double Y, double W, double H) CueVideoInset(
+        double x, double y, double w, double h, bool editing, bool hwndLayer)
+    {
+        if (!editing || !hwndLayer) return (x, y, w, h);
+        var barH = CueLabelBarHeight(h);
+        if (barH < 18 || h - barH < 16) return (x, y, w, h);
+        return (x, y + barH, w, h - barH);
     }
 
     public static GpuSourceKind SourceKind(Asset asset)
