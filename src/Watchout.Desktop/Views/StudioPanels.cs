@@ -750,7 +750,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Click NDI in Assets (or Browse below) to pick which sources to import — same idea as Resolume. Drag the clip onto a timeline layer. Picture comes from NDI Runtime.",
+            Text = "Each NDI source is a row in STAGE COLUMNS (above Devices / Layers / Log). Click Display 1, Display 2, … to assign it and auto-fit that canvas. Browse still imports into Assets if you want to drag later.",
         });
         _root.Children.Add(Btn("Browse NDI sources", () =>
         {
@@ -779,7 +779,6 @@ public class DevicesPanel : UserControl
                 Foreground = (Brush)FindResource("Wo.Text"),
             });
             _root.Children.Add(Btn($"Import {advert.Name} to Assets", () => ImportNdi(advert.Name)));
-            _root.Children.Add(Btn($"Place {advert.Name} on a layer", () => PlaceNdi(advert.Name)));
         }
         foreach (var cam in ndiCams)
         {
@@ -793,7 +792,6 @@ public class DevicesPanel : UserControl
             var id = cam.Id;
             var name = cam.Name;
             _root.Children.Add(Btn($"Import {name} to Assets", () => App.Session.ImportNdi(name, id)));
-            _root.Children.Add(Btn($"Place {name} on a layer", () => App.Session.ConnectNdi(name, id)));
         }
         if (ndiCams.Count == 0)
         {
@@ -817,7 +815,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. On each card pick Display 1, Display 2, … then Connect. Or click a Stage display and choose the card in Properties. Connect all maps card 1 → Display 1, card 2 → Display 2, and so on.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. STAGE COLUMNS above this tab is the switcher: row 1 = capture 1, row 2 = capture 2. Click a Stage column to assign and auto-fit. Connect all still maps card 1 → Display 1, card 2 → Display 2.",
         });
         _root.Children.Add(new TextBlock
         {
@@ -946,46 +944,26 @@ public class DevicesPanel : UserControl
         var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var assigned = show is null ? null : StageRoute.AssignedDisplayId(show, StageRoute.Capture, device.Id);
+        var dest = assigned is null ? "Stage column above" : show?.Displays.FirstOrDefault(d => d.Id == assigned)?.Name ?? "Stage";
         var name = new TextBlock
         {
-            Text = $"{device.Name}  ·  {device.Kind}{(live ? "  ·  live" : "")}",
+            Text = $"{device.Name}  ·  {device.Kind}{(live ? "  ·  live" : "")}  →  {dest}",
             Foreground = (Brush)FindResource("Wo.Text"),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
         };
         Grid.SetColumn(name, 0);
-        var box = new ComboBox
-        {
-            MinWidth = 168,
-            Margin = new Thickness(8, 0, 8, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        box.Items.Add(Choice("Auto (next display)", LiveSources.AutoDisplayKey));
-        foreach (var display in show?.Displays ?? [])
-            box.Items.Add(Choice(LiveSources.DisplayChoiceLabel(display), display.Id));
-        var want = show is null ? LiveSources.AutoDisplayKey : LiveSources.CaptureDisplayKey(show, device.Id);
-        foreach (ComboBoxItem item in box.Items)
-            if (Equals(item.Tag, want)) box.SelectedItem = item;
-        if (box.SelectedItem is null) box.SelectedIndex = 0;
         var deviceId = device.Id;
         var deviceName = device.Name;
-        box.SelectionChanged += (_, _) =>
-        {
-            if (_building) return;
-            if (box.SelectedItem is not ComboBoxItem item || item.Tag is not string key) return;
-            App.Session.AssignCaptureToDisplay(deviceId, key, deviceName);
-        };
-        Grid.SetColumn(box, 1);
         var connect = Btn(live ? "Reconnect" : "Connect", () =>
         {
-            var key = box.SelectedItem is ComboBoxItem item ? item.Tag as string : LiveSources.AutoDisplayKey;
+            var key = show is null ? LiveSources.AutoDisplayKey : LiveSources.CaptureDisplayKey(show, deviceId);
             App.Session.ConnectCapture(deviceId, deviceName, displayId: LiveSources.IsAutoDisplay(key) ? null : key);
         }, live ? "" : "amber", compact: true);
-        connect.Margin = new Thickness(0);
-        Grid.SetColumn(connect, 2);
+        connect.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(connect, 1);
         row.Children.Add(name);
-        row.Children.Add(box);
         row.Children.Add(connect);
         return row;
     }
@@ -1072,9 +1050,6 @@ public class DevicesPanel : UserControl
 
     static void ImportNdi(string sourceName, bool announce = true) =>
         App.Session.ImportNdi(sourceName, WebcamId(sourceName), placeOnLayer: false, announce);
-
-    static void PlaceNdi(string sourceName) =>
-        App.Session.ConnectNdi(sourceName, WebcamId(sourceName));
 
     static void Beep()
     {

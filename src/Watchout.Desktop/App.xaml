@@ -144,6 +144,37 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="Wo.StageSwitch" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{StaticResource Wo.Text}"/>
+      <Setter Property="Background" Value="#1F1F1F"/>
+      <Setter Property="BorderBrush" Value="#3A3A3A"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="Margin" Value="0,0,6,4"/>
+      <Setter Property="MinWidth" Value="88"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1" CornerRadius="3" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#F5A623"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#F5A623"/>
+                <Setter Property="Foreground" Value="#111111"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#F5A623"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style TargetType="CheckBox">
       <Setter Property="Foreground" Value="{StaticResource Wo.Text}"/>
     </Style>
