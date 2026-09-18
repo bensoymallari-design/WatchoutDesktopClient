@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
@@ -133,7 +134,7 @@ public sealed class StageRouteBar : UserControl
     UIElement Matrix(IReadOnlyList<Display> columns, IReadOnlyList<StageRoute.Row> rows)
     {
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(168) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
         foreach (var _ in columns)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112), MinWidth = 100 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -182,22 +183,22 @@ public sealed class StageRouteBar : UserControl
             Grid.SetRow(rowBg, r + 1);
             grid.Children.Add(rowBg);
 
-            grid.Children.Add(Cell(0, r + 1, SourceCard(title, row.Label, ndi, row.DisplayId is not null)));
-            var group = $"stage-route:{row.Kind}:{row.Key}";
+            grid.Children.Add(Cell(0, r + 1, SourceCard(title, row, ndi, columns)));
             for (var c = 0; c < columns.Count; c++)
             {
                 var display = columns[c];
                 var on = row.DisplayId == display.Id;
-                var radio = new RadioButton
+                var lamp = new ToggleButton
                 {
-                    GroupName = group,
                     IsChecked = on,
                     Style = (Style)FindResource("Wo.StageSwitch"),
-                    ToolTip = $"Switch {title} ({row.Label}) → {StageRoute.ColumnLabel(display, c)}  ·  auto-fit {display.Width:0}×{display.Height:0}",
+                    ToolTip = on
+                        ? $"Take {title} off {StageRoute.ColumnLabel(display, c)}"
+                        : $"Switch {title} ({row.Label}) → {StageRoute.ColumnLabel(display, c)}  ·  auto-fit {display.Width:0}×{display.Height:0}",
                 };
                 if (on)
                 {
-                    radio.Effect = new DropShadowEffect
+                    lamp.Effect = new DropShadowEffect
                     {
                         Color = Color.FromRgb(255, 106, 0),
                         BlurRadius = 12,
@@ -209,12 +210,17 @@ public sealed class StageRouteBar : UserControl
                 var key = row.Key;
                 var label = row.Label;
                 var displayId = display.Id;
-                radio.Checked += (_, _) =>
+                lamp.Checked += (_, _) =>
                 {
                     if (_building) return;
                     Assign(kind, key, label, displayId);
                 };
-                grid.Children.Add(Cell(c + 1, r + 1, radio));
+                lamp.Unchecked += (_, _) =>
+                {
+                    if (_building) return;
+                    App.Session.ClearLiveFromStage(kind, key);
+                };
+                grid.Children.Add(Cell(c + 1, r + 1, lamp));
             }
         }
 
@@ -243,8 +249,9 @@ public sealed class StageRouteBar : UserControl
         return stack;
     }
 
-    static UIElement SourceCard(string title, string device, bool ndi, bool routed)
+    UIElement SourceCard(string title, StageRoute.Row row, bool ndi, IReadOnlyList<Display> columns)
     {
+        var routed = row.DisplayId is not null;
         var card = new Border
         {
             Background = Tile,
@@ -256,6 +263,31 @@ public sealed class StageRouteBar : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
         var body = new DockPanel();
+        var arm = new ToggleButton
+        {
+            Content = routed ? "ON" : "OFF",
+            IsChecked = routed,
+            Style = (Style)FindResource("Wo.StageArm"),
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = routed ? $"Take {title} off Stage" : $"Put {title} on Stage 1",
+        };
+        var kind = row.Kind;
+        var key = row.Key;
+        var label = row.Label;
+        var first = columns.FirstOrDefault()?.Id;
+        arm.Checked += (_, _) =>
+        {
+            if (_building) return;
+            if (first is not null) Assign(kind, key, label, first);
+        };
+        arm.Unchecked += (_, _) =>
+        {
+            if (_building) return;
+            App.Session.ClearLiveFromStage(kind, key);
+        };
+        DockPanel.SetDock(arm, Dock.Right);
+        body.Children.Add(arm);
         var pip = new Ellipse
         {
             Width = 8,
@@ -293,7 +325,7 @@ public sealed class StageRouteBar : UserControl
         text.Children.Add(top);
         text.Children.Add(new TextBlock
         {
-            Text = device,
+            Text = row.Label,
             FontSize = 10,
             Foreground = Muted,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -301,7 +333,7 @@ public sealed class StageRouteBar : UserControl
         });
         body.Children.Add(text);
         card.Child = body;
-        card.ToolTip = device;
+        card.ToolTip = row.Label;
         return card;
     }
 

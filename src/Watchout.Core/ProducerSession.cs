@@ -1586,11 +1586,7 @@ public sealed class ProducerSession
                  ?? deviceId;
         if (LiveSources.IsAutoDisplay(displayKey))
         {
-            Mutate(show =>
-            {
-                var rec = show.CaptureDevices.FirstOrDefault(d => d.Signal == deviceId);
-                if (rec is not null) rec.DisplayId = null;
-            }, record: false);
+            ClearLiveFromStage(StageRoute.Capture, deviceId);
             return;
         }
         var display = Show.Displays.FirstOrDefault(d => d.Id == displayKey);
@@ -1639,11 +1635,7 @@ public sealed class ProducerSession
         var name = NdiNames.FriendlyName(sourceName);
         if (LiveSources.IsAutoDisplay(displayKey))
         {
-            Mutate(show =>
-            {
-                var rec = LiveSources.NdiRecord(show, name);
-                if (rec is not null) rec.DisplayId = null;
-            }, record: false);
+            ClearLiveFromStage(StageRoute.Ndi, name);
             return;
         }
         var display = Show!.Displays.FirstOrDefault(d => d.Id == displayKey);
@@ -1691,6 +1683,38 @@ public sealed class ProducerSession
                 });
         }, record: false);
         Log($"NDI {name} → {display.Name} on Stage · auto-fit {display.Width:0}×{display.Height:0}");
+    }
+
+    public void ClearLiveFromStage(string kind, string key)
+    {
+        if (Show is null || string.IsNullOrWhiteSpace(key)) return;
+        string? name = null;
+        Mutate(show =>
+        {
+            Cue? cue;
+            if (kind == StageRoute.Ndi)
+            {
+                name = NdiNames.FriendlyName(key);
+                cue = LiveSources.NdiCue(show, key);
+                var rec = LiveSources.NdiRecord(show, name);
+                if (rec is not null) rec.DisplayId = null;
+            }
+            else
+            {
+                name = show.CaptureDevices.FirstOrDefault(d => d.Signal == key)?.Name
+                       ?? show.Assets.FirstOrDefault(a => LiveSources.CaptureDeviceId(a) == key)?.Name
+                       ?? key;
+                cue = LiveSources.CaptureCue(show, key);
+                var rec = show.CaptureDevices.FirstOrDefault(d => d.Signal == key);
+                if (rec is not null) rec.DisplayId = null;
+            }
+            if (cue is null) return;
+            foreach (var tl in show.Timelines)
+                tl.Cues = tl.Cues.Where(c => c.Id != cue.Id).ToList();
+            if (Selection.Kind == SelectionKind.Cue && Selection.Ids.Contains(cue.Id))
+                Selection = new Selection();
+        }, record: false);
+        Log($"{name} off Stage");
     }
 
     public Asset ImportNdi(string sourceName, string? captureDeviceId = null, bool placeOnLayer = false, bool announce = true)
