@@ -244,7 +244,7 @@ public sealed class StageSurface : Canvas
                 ?? (outputLive
                     ? (gpuOn
                         ? $"{display.Width:0}×{display.Height:0}  ·  Output stack"
-                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — Stage video")
+                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — Stage software preview")
                     : string.IsNullOrEmpty(key)
                         ? $"{display.Width:0}×{display.Height:0}"
                         : $"{display.Width:0}×{display.Height:0}  ·  {key}");
@@ -349,8 +349,8 @@ public sealed class StageSurface : Canvas
             var rect = StageGeometry.CueRect(ev, asset);
             var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scaleX, scaleY);
             // Shared GPU textures — Stage draws the same Output stack. No
-            // second H.264 decode. If the compositor is off, MediaElement
-            // still plays so Stage is not a black poster.
+            // second H.264 decode. If the compositor is off, Stage uses a
+            // software RGB32 preview so Output keeps the only DXVA HWND.
             if (gpuOn && asset is not null && GpuLayerMath.StageDrawsSharedGpu(gpuOn, asset))
             {
                 if (_layers.ContainsKey(ev.Cue.Id)) DropMedia(ev.Cue.Id);
@@ -394,6 +394,11 @@ public sealed class StageSurface : Canvas
                     try { video.SpeedRatio = speed; } catch { /* decoder not ready */ }
                 }
                 SyncVideo(ev.Cue.Id, video, ev, tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true, asset?.Duration ?? 0);
+            }
+            else if (syncMedia && media is StageSoftPreview preview)
+            {
+                var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
+                SyncSoftPreview(preview, asset, ev, tl?.Playback ?? PlaybackState.Stop, tl?.Loop == true);
             }
 
             ApplyLooks(el, ev);
@@ -471,7 +476,11 @@ public sealed class StageSurface : Canvas
     void DropMedia(string id)
     {
         if (_layers.Remove(id, out var el))
+        {
+            if (el is CueLookHost host && host.Media is IDisposable inner) inner.Dispose();
+            if (el is IDisposable d) d.Dispose();
             Children.Remove(el);
+        }
         _playing.Remove(id);
         _primed.Remove(id);
         _lastSeek.Remove(id);
@@ -606,6 +615,12 @@ public sealed class StageSurface : Canvas
         if (asset.Kind == AssetKind.Composition)
             return Placeholder(native, asset.Name, asset.Color);
 
+        if (GpuLayerMath.StageUsesSoftPreview(
+                Editing, App.Session.StageYieldsFileDecoder, GpuEngine.Available, asset))
+        {
+            return new StageSoftPreview { Width = native.W, Height = native.H };
+        }
+
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
         if (file is null) return Placeholder(native, asset.Name, asset.Color);
@@ -677,9 +692,24 @@ public sealed class StageSurface : Canvas
         if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
+        if (GpuLayerMath.StageUsesSoftPreview(
+                Editing, App.Session.StageYieldsFileDecoder, GpuEngine.Available, asset))
+            return el is StageSoftPreview;
         if (asset is { Kind: AssetKind.Video })
             return el is MediaElement;
         return el is not CaptureLayer;
+    }
+
+    void SyncSoftPreview(StageSoftPreview preview, Asset? asset, EvaluatedCue ev, PlaybackState playback, bool loop)
+    {
+        if (asset is null) return;
+        var path = Codecs.PlaybackPath(asset);
+        var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
+        if (file is null) return;
+        var local = loop && asset.Duration > 1
+            ? PlaybackClock.LoopFileTime(ev.LocalTime, asset.Duration)
+            : ev.LocalTime;
+        preview.Sync(new Uri(System.IO.Path.GetFullPath(file)).AbsoluteUri, local, playback == PlaybackState.Play, loop);
     }
 
     void SyncVideo(string cueId, MediaElement video, EvaluatedCue ev, PlaybackState playback, bool loop, double fileMs)

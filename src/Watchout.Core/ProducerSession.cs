@@ -234,7 +234,7 @@ public sealed class ProducerSession
             PlaybackClock.SetPlayback(tl, state);
         Log(state switch
         {
-            PlaybackState.Play => "Play — one H.264 decode (DXVA) when the GPU compositor is up. If it is off, Stage still plays the clip so Producer is not a black box.",
+            PlaybackState.Play => "Play — one H.264 decode (DXVA) on Output when the GPU compositor is off. Stage uses a software preview so the wall does not go black.",
             PlaybackState.Pause => "Pause",
             _ => "Stop",
         });

@@ -42,7 +42,7 @@ public sealed class OutputManager
         App.Session.NoteLiveOutputsChanged();
         App.Session.Log(GpuEngine.Available
             ? "Output on a top-level GPU wall — Stage shares the same H.264 decode"
-            : "Output uses Windows Media Foundation. Stage also plays the clip so Producer is not a black box.");
+            : "Output uses Windows Media Foundation (the only DXVA). Stage is a software preview so Intel UHD does not stall both.");
         if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
             App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)

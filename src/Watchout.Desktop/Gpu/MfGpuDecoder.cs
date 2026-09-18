@@ -44,6 +44,9 @@ sealed class MfGpuDecoder : IGpuFileDecoder
     string? _error;
     bool _software;
     bool _fellBackFromNv12;
+    readonly bool _softwareOnly;
+    readonly int _maxEdge;
+    static int _mfStarted;
 
     public string? Error { get { lock (_gate) return _error; } }
     public bool UsedSoftwareFallback { get { lock (_gate) return _software; } }
@@ -81,16 +84,18 @@ sealed class MfGpuDecoder : IGpuFileDecoder
         }
     }
 
-    public MfGpuDecoder(string fileUrl, bool audio, GpuDevice? gpu = null)
+    public MfGpuDecoder(string fileUrl, bool audio, GpuDevice? gpu = null, bool softwareOnly = false, int maxEdge = 0)
     {
         _url = fileUrl;
-        _wantAudio = audio;
+        _wantAudio = audio && !softwareOnly;
         _gpu = gpu;
+        _softwareOnly = softwareOnly;
+        _maxEdge = maxEdge;
         _cts = new CancellationTokenSource();
         _thread = new Thread(Loop)
         {
             IsBackground = true,
-            Name = "WatchMe DXVA " + Path.GetFileName(fileUrl),
+            Name = (softwareOnly ? "WatchMe Stage preview " : "WatchMe DXVA ") + Path.GetFileName(fileUrl),
         };
         _thread.Start();
     }
@@ -168,7 +173,8 @@ sealed class MfGpuDecoder : IGpuFileDecoder
                     loop = _loop;
                 }
                 Pump(target, playing, loop);
-                if (!playing) Thread.Sleep(12);
+                if (_softwareOnly) Thread.Sleep(GpuLayerMath.SoftPreviewSleepMs(playing));
+                else if (!playing) Thread.Sleep(12);
                 else Thread.Sleep(8);
             }
         }
@@ -185,9 +191,31 @@ sealed class MfGpuDecoder : IGpuFileDecoder
         }
     }
 
+    static void EnsureMf()
+    {
+        if (Interlocked.Exchange(ref _mfStarted, 1) == 1) return;
+        try { MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 0), "MFStartup"); }
+        catch
+        {
+            try { MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 1), "MFStartup"); }
+            catch { /* WPF MediaElement may already have started MF */ }
+        }
+    }
+
     void Open()
     {
+        EnsureMf();
         Exception? last = null;
+        if (_softwareOnly)
+        {
+            if (TryOpen(hardware: false, dxgi: false, nv12: false, out last))
+            {
+                lock (_gate) _software = true;
+                return;
+            }
+            throw last ?? new InvalidOperationException(
+                "Media Foundation software preview could not decode this MP4 — use an 8-bit H.264");
+        }
         if (_gpu?.DxgiManager is not null)
         {
             if (TryOpen(hardware: true, dxgi: true, nv12: true, out last)) return;
@@ -224,8 +252,7 @@ sealed class MfGpuDecoder : IGpuFileDecoder
             {
                 attrs.SetUINT32(MfNative.MfSourceReaderEnableVideoProcessing, 1);
             }
-            if (hardware)
-                attrs.SetUINT32(MfNative.MfReadwriteEnableHardwareTransforms, 1);
+            attrs.SetUINT32(MfNative.MfReadwriteEnableHardwareTransforms, hardware ? 1u : 0u);
             MfNative.Check(MfNative.MFCreateSourceReaderFromURL(_url, attrs, out reader), "MFCreateSourceReaderFromURL");
             reader.SetStreamSelection(MfNative.AllStreams, false);
             reader.SetStreamSelection(MfNative.VideoStream, true);
@@ -237,6 +264,27 @@ sealed class MfGpuDecoder : IGpuFileDecoder
             current.GetUINT64(MfNative.MfMtFrameSize, out var packed);
             var width = (int)(packed >> 32);
             var height = (int)(packed & 0xFFFFFFFF);
+            if (_maxEdge >= 64)
+            {
+                var scaled = GpuResidentPath.StagePreviewSize(width, height, _maxEdge);
+                if (scaled.W != width || scaled.H != height)
+                {
+                    try
+                    {
+                        video.SetUINT64(MfNative.MfMtFrameSize, ((ulong)(uint)scaled.W << 32) | (uint)scaled.H);
+                        reader.SetCurrentMediaType(MfNative.VideoStream, IntPtr.Zero, video);
+                        Marshal.ReleaseComObject(current);
+                        reader.GetCurrentMediaType(MfNative.VideoStream, out current);
+                        current.GetUINT64(MfNative.MfMtFrameSize, out packed);
+                        width = (int)(packed >> 32);
+                        height = (int)(packed & 0xFFFFFFFF);
+                    }
+                    catch
+                    {
+                        /* keep native RGB32 if the scaler rejects the size */
+                    }
+                }
+            }
             var duration = 0.0;
             try
             {
@@ -268,7 +316,7 @@ sealed class MfGpuDecoder : IGpuFileDecoder
                 _durationMs = duration;
             }
 
-            TryOpenAudio(_reader);
+            if (_wantAudio) TryOpenAudio(_reader);
             var deadline = DateTime.UtcNow.AddMilliseconds(GpuResidentPath.PrerollBudgetMs);
             for (var i = 0; i < GpuResidentPath.PrerollAttempts && !_ready && DateTime.UtcNow < deadline; i++)
                 ReadOne(_reader, preroll: true);
