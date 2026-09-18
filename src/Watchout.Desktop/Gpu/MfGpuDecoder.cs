@@ -322,6 +322,8 @@ sealed class MfGpuDecoder : IGpuFileDecoder
                 ReadOne(_reader, preroll: true);
             if (!GpuResidentPath.OpenProducedAFrame(_ready))
             {
+                if (GpuResidentPath.SoftPreviewOpenWithoutFrame(_softwareOnly, _ready))
+                    return true;
                 var kind = nv12 ? "NV12 GPU" : dxgi ? "RGB32 GPU" : "RGB32";
                 throw new InvalidOperationException($"DXVA {kind} opened {width}×{height} but produced no picture");
             }
@@ -401,7 +403,8 @@ sealed class MfGpuDecoder : IGpuFileDecoder
                 ReadOne(reader, preroll: true);
             return;
         }
-        if (targetMs + 80 < pos && pos - targetMs > VideoSync.PlayReseekMs)
+        if (VideoSync.SeekCatchUp(pos, targetMs)
+            || (targetMs + 80 < pos && pos - targetMs > VideoSync.PlayReseekMs))
             Seek(reader, targetMs);
         ReadOne(reader, preroll: false);
         if (_ready)

@@ -56,4 +56,11 @@ public static class VideoSync
     /// </summary>
     public static bool RestartAfterWrap(double decoderMs, double targetMs) =>
         decoderMs - targetMs > PlayReseekMs;
+
+    /// <summary>
+    /// Playhead is ahead of the decoder (Play at 22 s, reader still on the
+    /// black first frame). Seek forward; do not walk frame-by-frame.
+    /// </summary>
+    public static bool SeekCatchUp(double decoderMs, double targetMs) =>
+        targetMs - decoderMs > PlayReseekMs;
 }

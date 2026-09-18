@@ -85,6 +85,13 @@ public static class GpuResidentPath
 
     public static bool OpenProducedAFrame(bool ready) => ready;
 
+    /// <summary>
+    /// GPU-off Stage preview: keep the reader even if the first ReadSample
+    /// has not landed yet. Throwing here left the cue as a black box.
+    /// </summary>
+    public static bool SoftPreviewOpenWithoutFrame(bool softwarePreview, bool ready) =>
+        softwarePreview && !ready;
+
     public static bool StillOpening(bool openFinished) => !openFinished;
 
     public static bool StallWithoutPicture(bool playing, bool ready, double sinceOpenMs, double stallMs) =>

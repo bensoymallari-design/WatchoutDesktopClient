@@ -18,6 +18,7 @@ sealed class StageSoftPreview : Image, IDisposable
     WriteableBitmap? _bmp;
     string? _url;
     bool _logged;
+    bool _loggedError;
 
     public StageSoftPreview()
     {
@@ -57,6 +58,11 @@ sealed class StageSoftPreview : Image, IDisposable
             }
         }
         _decoder?.Sync(mediaMs, playing, loop, 0, false);
+        if (!_loggedError && _decoder?.Error is { Length: > 0 } err)
+        {
+            _loggedError = true;
+            App.Session.Log($"Stage software preview failed — {err}", "warn");
+        }
         Blit();
     }
 
