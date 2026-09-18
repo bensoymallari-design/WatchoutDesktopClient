@@ -130,6 +130,13 @@ public class GpuLayerMathTests
         Assert.True(GpuResidentPath.SkipStageCpuReadback(true, true));
         Assert.False(GpuResidentPath.SkipStageCpuReadback(false, true));
         Assert.False(GpuResidentPath.SkipStageCpuReadback(true, false));
+        Assert.False(GpuResidentPath.NeedCpuPixels(true));
+        Assert.True(GpuResidentPath.NeedCpuPixels(false));
+        var preview = GpuResidentPath.StagePreviewSize(3840, 2160);
+        Assert.Equal(1280, preview.W);
+        Assert.Equal(720, preview.H);
+        Assert.Equal((960, 540), GpuResidentPath.StagePreviewSize(960, 540));
+        Assert.Equal(1280, GpuResidentPath.StagePreviewMaxEdge);
         Assert.True(GpuResidentPath.ReuseBuffer(1920 * 1080 * 4, 1920 * 1080 * 4));
         Assert.False(GpuResidentPath.ReuseBuffer(16, 64));
         Assert.False(GpuResidentPath.ReuseBuffer(64, 0));
@@ -282,6 +289,13 @@ public class GpuLayerMathTests
         Assert.False(OutputViewMath.PulseClock(false, false));
         Assert.True(OutputViewMath.D3D11CreateNeedsFeatureLevels(4));
         Assert.False(OutputViewMath.D3D11CreateNeedsFeatureLevels(0));
+        Assert.Equal(112, OutputViewMath.ConstantBufferBytes(112));
+        Assert.Equal(16, OutputViewMath.ConstantBufferBytes(1));
+        Assert.Equal(16, OutputViewMath.ConstantBufferBytes(0));
+        Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x887A0005)));
+        Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x8007000E)));
+        Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x80070057)));
+        Assert.False(OutputViewMath.SurviveUnhandled(0));
     }
 
     [Fact]

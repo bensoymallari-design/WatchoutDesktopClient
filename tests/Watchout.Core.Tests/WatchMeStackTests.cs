@@ -73,6 +73,8 @@ public class WatchMeStackTests
         Assert.Contains("hap", hap);
         Assert.Contains("hap_q", hap);
         Assert.Contains("aac", hap);
+        Assert.Contains("-threads", hap);
+        Assert.Equal("2", hap[Array.IndexOf(hap, "-threads") + 1]);
         Assert.DoesNotContain("-an", hap);
         Assert.DoesNotContain(hap, a => a.Contains("webm", StringComparison.OrdinalIgnoreCase));
     }

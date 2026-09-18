@@ -253,7 +253,14 @@ public static class GpuEngine
                         NoteNv12Fallback(draw.SourceKey);
                     decoder.Sync(draw.MediaTimeMs, draw.Playing, draw.Loop, draw.Volume, playAudio);
                     var gpuReady = decoder.TryBindGpu(out var gpuTex, out var gpuDirty);
-                    var cpuReady = decoder.TryCopyFrame(out var pixels, out var w, out var h, out var stride, out var cpuDirty);
+                    var cpuReady = false;
+                    byte[] pixels = [];
+                    var w = 0;
+                    var h = 0;
+                    var stride = 0;
+                    var cpuDirty = false;
+                    if (GpuResidentPath.NeedCpuPixels(gpuReady && gpuTex is not null))
+                        cpuReady = decoder.TryCopyFrame(out pixels, out w, out h, out stride, out cpuDirty);
                     switch (GpuResidentPath.Choose(gpuReady && gpuTex is not null, cpuReady))
                     {
                         case GpuFrameSource.DxgiTexture:
@@ -529,10 +536,11 @@ public static class GpuEngine
         {
             swap.Chain.Present(1, PresentFlags.None);
         }
-        catch (SharpGenException ex) when (ex.HResult == unchecked((int)0x887A000A))
+        catch (SharpGenException ex) when (ex.HResult == unchecked((int)0x887A000A)
+            || OutputViewMath.SurviveUnhandled(ex.HResult))
         {
             try { swap.Chain.Present(0, PresentFlags.None); }
-            catch { /* keep last flipped frame */ }
+            catch { /* keep last flipped frame — screenshot / GPU full */ }
         }
     }
 
@@ -640,7 +648,7 @@ sealed class OutputSwap : IDisposable
         var chain = gpu.Factory.CreateSwapChainForHwnd(gpu.Device, hwnd, desc);
         try
         {
-            gpu.Factory.MakeWindowAssociation(hwnd, WindowAssociationFlags.IgnoreAltEnter | WindowAssociationFlags.IgnoreAll);
+            gpu.Factory.MakeWindowAssociation(hwnd, WindowAssociationFlags.IgnoreAltEnter);
         }
         catch { /* factory optional */ }
         using var back = chain.GetBuffer<ID3D11Texture2D>(0);

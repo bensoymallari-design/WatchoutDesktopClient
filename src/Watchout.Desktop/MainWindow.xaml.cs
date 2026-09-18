@@ -38,6 +38,11 @@ public partial class MainWindow : Window
 
     void OnSessionChanged()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(OnSessionChanged);
+            return;
+        }
         var s = App.Session;
         Root.Content = s.View == "producer" ? _producer : _welcome;
         Title = s.Show is { } show

@@ -152,4 +152,27 @@ public static class OutputViewMath
     /// </summary>
     public static bool D3D11CreateNeedsFeatureLevels(int featureLevelCount) =>
         featureLevelCount > 0;
+
+    /// <summary>
+    /// D3D11 constant buffers must be a multiple of 16 bytes. A 112-byte
+    /// layer cbuffer is fine; round up anyway so Intel does not E_INVALIDARG.
+    /// </summary>
+    public static int ConstantBufferBytes(int size)
+    {
+        if (size <= 0) return 16;
+        return (size + 15) / 16 * 16;
+    }
+
+    /// <summary>
+    /// Screenshot / snip copies the DXGI wall. When GPU budget is already
+    /// gone that throw must not close WatchMe — Recover and keep Producer.
+    /// </summary>
+    public static bool SurviveUnhandled(int hresult)
+    {
+        if (TearGpuOnPresentError(hresult)) return true;
+        return hresult == unchecked((int)0x887A0001)  // DXGI_ERROR_INVALID_CALL
+            || hresult == unchecked((int)0x887A000A)  // DXGI_ERROR_WAS_STILL_DRAWING
+            || hresult == unchecked((int)0x8007000E)  // E_OUTOFMEMORY
+            || hresult == unchecked((int)0x80070057); // E_INVALIDARG
+    }
 }

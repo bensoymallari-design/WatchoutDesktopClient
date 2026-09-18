@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Watchout.Core;
@@ -76,24 +77,21 @@ public static class MediaLibrary
             {
                 var id = media.Id;
                 var file = dest;
+                var name = Path.GetFileName(src);
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         var proxy = Path.Combine(root, "proxies", $"{id}.hap.mov");
                         Directory.CreateDirectory(Path.GetDirectoryName(proxy)!);
-                        session.Log($"Encoding HAP Q of {Path.GetFileName(src)} — Resolume Alley method (GPU DXT texture, not DXVA). Play uses the original until HAP is ready.");
-                        await FfmpegTools.HapEncodeAsync(file, proxy, alpha: false, new Progress<string>(m => session.Log(m)));
+                        UiLog(session, $"Encoding HAP Q of {name} — Resolume Alley method (GPU DXT texture). Play uses the original until HAP is ready.");
+                        await FfmpegTools.HapEncodeAsync(file, proxy, alpha: false, progress: null);
                         var url = MediaImport.ToFileUrl(proxy);
-                        void Apply() => session.PushAssetRevision(id, url, proxy, "HAP Q · Resolume Alley GPU texture");
-                        if (App.Current?.Dispatcher is { } d && !d.CheckAccess())
-                            d.Invoke(Apply);
-                        else
-                            Apply();
+                        Ui(session, () => session.PushAssetRevision(id, url, proxy, "HAP Q · Resolume Alley GPU texture"));
                     }
                     catch (Exception ex)
                     {
-                        App.Current.Dispatcher.Invoke(() => session.Log($"HAP encode failed: {ex.Message}", "error"));
+                        UiLog(session, $"HAP encode failed: {ex.Message}", "error");
                     }
                 });
             }
@@ -109,27 +107,27 @@ public static class MediaLibrary
                         if (audioOnly)
                         {
                             var proxy = Path.Combine(root, "proxies", $"{id}.stereo.wav");
-                            session.Log($"Downmixing {Path.GetFileName(src)} ({probe.Channels} ch) → stereo WAV for Media Foundation");
+                            UiLog(session, $"Downmixing {Path.GetFileName(src)} ({probe.Channels} ch) → stereo WAV for Media Foundation");
                             if (FfmpegTools.FfmpegPath is null) throw new InvalidOperationException("ffmpeg not found");
                             var result = await FfmpegTools.RunAsync(FfmpegTools.FfmpegPath, Codecs.AudioDownmixArgs(dest, proxy, probe.Channels));
                             if (result.Code != 0) throw new InvalidOperationException(result.Stderr);
                             var updated = MediaImport.WithH264Proxy(media, proxy, probe);
                             updated.Codec = "pcm stereo";
                             updated.Notes = $"{Path.GetFileName(src)} · {probe.Channels} ch downmixed to stereo";
-                            App.Current.Dispatcher.Invoke(() => session.ApplyImported(updated));
+                            Ui(session, () => session.ApplyImported(updated));
                         }
                         else
                         {
                             var proxy = Path.Combine(root, "proxies", $"{id}.v{Codecs.ProxyVersion}.mp4");
-                            session.Log($"Transcoding {Path.GetFileName(src)} → H.264 ({FfmpegTools.H264Encoder}) for DXVA. Not WebM.");
-                            await FfmpegTools.TranscodeH264Async(dest, proxy, probe, null, new Progress<string>(m => session.Log(m)));
+                            UiLog(session, $"Transcoding {Path.GetFileName(src)} → H.264 ({FfmpegTools.H264Encoder}) for DXVA. Not WebM.");
+                            await FfmpegTools.TranscodeH264Async(dest, proxy, probe, null, progress: null);
                             var updated = MediaImport.WithH264Proxy(media, proxy, probe);
-                            App.Current.Dispatcher.Invoke(() => session.ApplyImported(updated));
+                            Ui(session, () => session.ApplyImported(updated));
                         }
                     }
                     catch (Exception ex)
                     {
-                        App.Current.Dispatcher.Invoke(() => session.Log(ex.Message, "error"));
+                        UiLog(session, ex.Message, "error");
                     }
                 });
             }
@@ -169,13 +167,9 @@ public static class MediaLibrary
         session.Log($"Creating H.264 version of {asset.Name} ({FfmpegTools.H264Encoder}) — not WebM");
         try
         {
-            await FfmpegTools.TranscodeH264Async(file, dest, probe, null, new Progress<string>(m => session.Log(m)));
+            await FfmpegTools.TranscodeH264Async(file, dest, probe, null, progress: null);
             var url = MediaImport.ToFileUrl(dest);
-            void Apply() => session.PushAssetRevision(assetId, url, dest, $"H.264 version · {FfmpegTools.H264Encoder} · DXVA");
-            if (App.Current?.Dispatcher is { } d && !d.CheckAccess())
-                d.Invoke(Apply);
-            else
-                Apply();
+            Ui(session, () => session.PushAssetRevision(assetId, url, dest, $"H.264 version · {FfmpegTools.H264Encoder} · DXVA"));
         }
         catch (Exception ex)
         {
@@ -209,19 +203,26 @@ public static class MediaLibrary
         session.Log($"Encoding HAP Q of {asset.Name} — Resolume Alley GPU texture (DXT, no RGB32 RAM copy)");
         try
         {
-            await FfmpegTools.HapEncodeAsync(file, dest, alpha: false, new Progress<string>(m => session.Log(m)));
+            await FfmpegTools.HapEncodeAsync(file, dest, alpha: false, progress: null);
             var url = MediaImport.ToFileUrl(dest);
-            void Apply() => session.PushAssetRevision(assetId, url, dest, "HAP Q · Resolume Alley GPU texture");
-            if (App.Current?.Dispatcher is { } d && !d.CheckAccess())
-                d.Invoke(Apply);
-            else
-                Apply();
+            Ui(session, () => session.PushAssetRevision(assetId, url, dest, "HAP Q · Resolume Alley GPU texture"));
         }
         catch (Exception ex)
         {
             session.Log($"HAP encode failed: {ex.Message}", "error");
         }
     }
+
+    static void Ui(ProducerSession session, Action action)
+    {
+        _ = session;
+        var d = Application.Current?.Dispatcher;
+        if (d is null || d.CheckAccess()) action();
+        else d.Invoke(action);
+    }
+
+    static void UiLog(ProducerSession session, string message, string level = "info") =>
+        Ui(session, () => session.Log(message, level));
 
     static string? FindPreparedH264(string src, string dest)
     {

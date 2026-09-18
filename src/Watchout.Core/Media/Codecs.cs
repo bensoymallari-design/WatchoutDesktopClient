@@ -255,6 +255,7 @@ public static class Codecs
             "-c:v", "hap",
             "-format", alpha ? "hap_alpha" : "hap_q",
             "-chunks", "1",
+            "-threads", "2",
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
             dest,
         ];

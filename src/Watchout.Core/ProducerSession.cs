@@ -234,7 +234,7 @@ public sealed class ProducerSession
             PlaybackClock.SetPlayback(tl, state);
         Log(state switch
         {
-            PlaybackState.Play => "Play — DXVA H.264 outputs follow this clock",
+            PlaybackState.Play => "Play — Resolume Alley GPU path (HAP Q texture if encoded, else DXVA). Frames stay on the GPU.",
             PlaybackState.Pause => "Pause",
             _ => "Stop",
         });
