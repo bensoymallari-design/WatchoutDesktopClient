@@ -69,7 +69,35 @@ public static class MediaLibrary
             session.ApplyImported(media);
             ids.Add(media.Id);
 
-            if (prepared is null && FfmpegTools.Available && MediaPolicy.ShouldBuildFullProxy(bytes, probe.Width, probe.Height)
+            var video = Codecs.MediaKind(src) == AssetKind.Video;
+            if (video && !HapCodec.IsHap(probe.Codec, dest) && FfmpegTools.Available
+                && MediaPolicy.ShouldBuildHap(bytes, probe.Width, probe.Height)
+                && HapCodec.NeedsHapEncode(probe.Codec, dest))
+            {
+                var id = media.Id;
+                var file = dest;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var proxy = Path.Combine(root, "proxies", $"{id}.hap.mov");
+                        Directory.CreateDirectory(Path.GetDirectoryName(proxy)!);
+                        session.Log($"Encoding HAP Q of {Path.GetFileName(src)} — Resolume Alley method (GPU DXT texture, not DXVA). Play uses the original until HAP is ready.");
+                        await FfmpegTools.HapEncodeAsync(file, proxy, alpha: false, new Progress<string>(m => session.Log(m)));
+                        var url = MediaImport.ToFileUrl(proxy);
+                        void Apply() => session.PushAssetRevision(id, url, proxy, "HAP Q · Resolume Alley GPU texture");
+                        if (App.Current?.Dispatcher is { } d && !d.CheckAccess())
+                            d.Invoke(Apply);
+                        else
+                            Apply();
+                    }
+                    catch (Exception ex)
+                    {
+                        App.Current.Dispatcher.Invoke(() => session.Log($"HAP encode failed: {ex.Message}", "error"));
+                    }
+                });
+            }
+            else if (prepared is null && FfmpegTools.Available && MediaPolicy.ShouldBuildFullProxy(bytes, probe.Width, probe.Height)
                 && (Codecs.NeedsH264Transcode(probe.Codec, dest) || WavHeader.NeedsStereoDownmix(probe.Channels)))
             {
                 var id = media.Id;
@@ -178,12 +206,12 @@ public static class MediaLibrary
         }
         var dest = Path.Combine(App.DataDir(), "media", "proxies", $"{asset.Id}.hap.mov");
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-        session.Log($"Encoding HAP of {asset.Name}");
+        session.Log($"Encoding HAP Q of {asset.Name} — Resolume Alley GPU texture (DXT, no RGB32 RAM copy)");
         try
         {
             await FfmpegTools.HapEncodeAsync(file, dest, alpha: false, new Progress<string>(m => session.Log(m)));
             var url = MediaImport.ToFileUrl(dest);
-            void Apply() => session.PushAssetRevision(assetId, url, dest, "HAP encode · WatchMe");
+            void Apply() => session.PushAssetRevision(assetId, url, dest, "HAP Q · Resolume Alley GPU texture");
             if (App.Current?.Dispatcher is { } d && !d.CheckAccess())
                 d.Invoke(Apply);
             else

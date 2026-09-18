@@ -23,6 +23,16 @@ public static class MediaPolicy
         return true;
     }
 
+    /// <summary>
+    /// Resolume Alley converts the imported clip to HAP/DXV even at 4K so
+    /// Play is a GPU texture blit. WatchMe does the same with HAP Q.
+    /// </summary>
+    public static bool ShouldBuildHap(long bytes, double width = 0, double height = 0)
+    {
+        if (bytes >= FullProxyLimitBytes) return false;
+        return width >= 2 && height >= 2;
+    }
+
     public static string VideoPreload(long? bytes) =>
         bytes is >= CopyLimitBytes ? "metadata" : "auto";
 

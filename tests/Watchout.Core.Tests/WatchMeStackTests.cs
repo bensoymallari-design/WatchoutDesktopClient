@@ -72,6 +72,8 @@ public class WatchMeStackTests
         var hap = Codecs.HapEncodeArgs("in.mov", "out.mov");
         Assert.Contains("hap", hap);
         Assert.Contains("hap_q", hap);
+        Assert.Contains("aac", hap);
+        Assert.DoesNotContain("-an", hap);
         Assert.DoesNotContain(hap, a => a.Contains("webm", StringComparison.OrdinalIgnoreCase));
     }
 

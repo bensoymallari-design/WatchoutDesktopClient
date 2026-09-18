@@ -48,7 +48,7 @@ public sealed class UserGuideWindow : Window
                     "ST 2110 and NMOS\n" +
                     "Live → Import ST 2110 SDP, or set an IS-04 query registry and Refresh NMOS. Senders become ST 2110 assets. Essence still needs a 2110-capable NIC or ffmpeg RTP path on the machine.\n\n" +
                     "HAP, Notch LC, WAV, LTC\n" +
-                    "Encode HAP from Assets. Notch LC transcodes to H.264 for DXVA. WAV files can declare up to 65535 channels; WatchMe downmixes wide files to stereo for playback. Export LTC WAV from the timeline playhead; ChaseLtc follows SMPTE time.\n\n" +
+                    "Import of a file video (HandBrake MP4, YouTube yt-dlp, ProRes) encodes HAP Q in the background like Resolume Alley DXV 3 — Play is a GPU DXT blit, not DXVA RGB32. Assets → Encode HAP does the same on a clip that is already in the list. Notch LC still transcodes to H.264 if HAP encode is not available. WAV files can declare up to 65535 channels; WatchMe downmixes wide files to stereo for playback. Export LTC WAV from the timeline playhead; ChaseLtc follows SMPTE time.\n\n" +
                     "Access and playback nodes\n" +
                     "Preferences PIN locks launch. Ping the Runner/WATCHPAX-style node at /watchme/health. Wake-on-LAN uses the MAC on that node.",
             },

@@ -17,6 +17,7 @@ public class MediaPolicyTests
     public void Huge4kFilesSkipAFullResProxy()
     {
         Assert.False(MediaPolicy.ShouldBuildFullProxy(100L * 1024 * 1024 * 1024, 3840, 2160));
+        Assert.True(MediaPolicy.ShouldBuildHap(200L * 1024 * 1024, 3840, 2160));
         Assert.False(MediaPolicy.ShouldBuildFullProxy(200L * 1024 * 1024, 3840, 2160));
         Assert.True(MediaPolicy.ShouldBuildFullProxy(200L * 1024 * 1024, 1920, 1080));
     }

@@ -102,7 +102,7 @@ public static class OutputPictureCause
             OutputPictureKind.Opening =>
                 $"Output black — DXVA is still opening this MP4 ({src}). Not NDI/capture. If it stays black, use 8-bit H.264.",
             OutputPictureKind.WaitingFirstFrame =>
-                $"Output black — DXVA opened {src} but has no picture yet. Prefer 8-bit H.264 (not Dolby Vision).",
+                $"Output black — DXVA opened {src} but has no picture yet. Prefer HAP Q (Assets → Encode HAP) or 8-bit H.264. A YouTube title is not Dolby Vision.",
             OutputPictureKind.DecodeFailed =>
                 $"Output black — DXVA could not decode this MP4 ({src})"
                 + (string.IsNullOrWhiteSpace(error) ? "" : $": {error}")

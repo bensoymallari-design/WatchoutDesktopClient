@@ -7,7 +7,7 @@ using Watchout.Core.Playback;
 
 namespace Watchout.Desktop.Gpu;
 
-sealed class MfGpuDecoder : IDisposable
+sealed class MfGpuDecoder : IGpuFileDecoder
 {
     readonly object _gate = new();
     readonly string _url;
@@ -49,6 +49,7 @@ sealed class MfGpuDecoder : IDisposable
     public bool UsedSoftwareFallback { get { lock (_gate) return _software; } }
     public bool UsedGpuSurfaces { get { lock (_gate) return _gpuSurfaces; } }
     public bool FellBackFromNv12 { get { lock (_gate) return _fellBackFromNv12; } }
+    public bool HapYCoCg => false;
     public bool Ready { get { lock (_gate) return _ready; } }
     public bool Opening { get { lock (_gate) return !_openFinished && _error is null; } }
     public double DurationMs { get { lock (_gate) return _durationMs; } }
