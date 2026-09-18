@@ -1,3 +1,4 @@
+using Watchout.Core.Machine;
 using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Core.Playback;
@@ -101,6 +102,10 @@ public static class GpuLayerMath
 
     public static int SoftPreviewSleepMs(bool playing) => playing ? 66 : 40;
 
+    public const double SoftPreviewPlayGrabMs = 2000;
+    public const double SoftPreviewPauseGrabMs = 400;
+    public const int SoftPreviewMaxEdge = 640;
+
     public static string SoftPreviewSeekArg(double timeMs)
     {
         var sec = Math.Max(0, timeMs) / 1000.0;
@@ -108,17 +113,26 @@ public static class GpuLayerMath
     }
 
     /// <summary>
-    /// Grab a new ffmpeg still. Retry quickly until the first picture lands;
-    /// then follow the playhead without spawning ffmpeg every clock tick.
+    /// 4K ffmpeg stills every 250 ms maxed Intel UHD (99% CPU, laggy wall).
+    /// Hold the last picture while CPU is Full.
+    /// </summary>
+    public static bool SoftPreviewHoldWhenCpuFull(double cpuPercent, bool hasPicture) =>
+        hasPicture && cpuPercent >= MachineLoad.CpuFull;
+
+    /// <summary>
+    /// Grab a new ffmpeg still. First picture quickly; then ~2 s while PLAY,
+    /// and only on Pause/scrub — not every clock tick.
     /// </summary>
     public static bool SoftPreviewShouldGrab(
-        double shownMs, double timeMs, double sinceGrabMs, bool playing, bool hasPicture)
+        double shownMs, double timeMs, double sinceGrabMs, bool playing, bool hasPicture,
+        double cpuPercent = 0)
     {
+        if (SoftPreviewHoldWhenCpuFull(cpuPercent, hasPicture)) return false;
         if (sinceGrabMs < 0) sinceGrabMs = 0;
         if (!hasPicture) return sinceGrabMs >= 80;
         if (playing)
-            return sinceGrabMs >= 250 && Math.Abs(timeMs - shownMs) >= 80;
-        return sinceGrabMs >= 80 && Math.Abs(timeMs - shownMs) > 120;
+            return sinceGrabMs >= SoftPreviewPlayGrabMs && Math.Abs(timeMs - shownMs) >= 400;
+        return sinceGrabMs >= SoftPreviewPauseGrabMs && Math.Abs(timeMs - shownMs) > 250;
     }
 
     /// <summary>

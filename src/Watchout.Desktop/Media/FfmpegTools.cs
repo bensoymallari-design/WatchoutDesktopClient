@@ -179,8 +179,13 @@ public static class FfmpegTools
             var dir = Path.GetDirectoryName(dest);
             if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
             var ss = GpuLayerMath.SoftPreviewSeekArg(timeMs);
-            var scale = $"{GpuResidentPath.StagePreviewMaxEdge}:-2";
-            var result = await RunAsync(FfmpegPath, ["-y", "-ss", ss, "-i", src, "-frames:v", "1", "-vf", "scale=" + scale, "-q:v", "3", dest]);
+            var scale = $"{GpuLayerMath.SoftPreviewMaxEdge}:-2";
+            var result = await RunAsync(FfmpegPath, [
+                "-hide_banner", "-loglevel", "error", "-nostdin",
+                "-threads", "1", "-skip_frame", "nokey", "-an", "-sn",
+                "-y", "-ss", ss, "-i", src,
+                "-frames:v", "1", "-vf", "scale=" + scale, "-q:v", "6", dest
+            ]);
             if (result.Code != 0 || !File.Exists(dest)) return null;
             return new FileInfo(dest).Length > 32 ? dest : null;
         }
