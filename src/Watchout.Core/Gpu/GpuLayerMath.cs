@@ -66,11 +66,15 @@ public static class GpuLayerMath
 
     /// <summary>
     /// Producer Stage does not run a second H.264 MediaElement while Output is
-    /// live (that dual DXVA path froze 4K PCs). The GPU compositor still draws
-    /// the same textures Output uses — the layer stack image, Resolume-style.
+    /// live AND the GPU compositor is drawing (that dual DXVA path froze 4K).
+    /// If the compositor is off, Stage must keep MediaElement so Play is not
+    /// a gold name box over a black wall.
     /// </summary>
     public static bool StageYieldsFilePreview(bool editing, bool outputLive, Asset? asset) =>
-        editing && outputLive && asset is not null && SourceKind(asset) == GpuSourceKind.File;
+        StageYieldsFilePreview(editing, outputLive, gpuOn: true, asset);
+
+    public static bool StageYieldsFilePreview(bool editing, bool outputLive, bool gpuOn, Asset? asset) =>
+        editing && outputLive && gpuOn && asset is not null && SourceKind(asset) == GpuSourceKind.File;
 
     /// <summary>
     /// Shared D3D11 textures. Stage and Output both draw this asset. Skip the

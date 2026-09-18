@@ -535,7 +535,7 @@ public sealed class StageSurface : Canvas
         if (asset.Kind == AssetKind.Composition)
             return Placeholder(native, asset.Name, asset.Color);
 
-        if (Editing && App.Session.StageYieldsFileDecoder)
+        if (Editing && App.Session.StageYieldsFileDecoder && GpuEngine.Available)
             return new StagePreviewBox { Width = native.W, Height = native.H, CueName = asset.Name };
 
         var path = Codecs.PlaybackPath(asset);
@@ -609,7 +609,7 @@ public sealed class StageSurface : Canvas
         if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
-        if (Editing && App.Session.StageYieldsFileDecoder)
+        if (Editing && App.Session.StageYieldsFileDecoder && GpuEngine.Available)
             return el is StagePreviewBox;
         if (asset is { Kind: AssetKind.Video })
             return el is MediaElement;

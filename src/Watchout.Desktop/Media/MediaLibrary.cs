@@ -75,6 +75,12 @@ public static class MediaLibrary
                 && MediaPolicy.ShouldBuildHap(bytes, probe.Width, probe.Height)
                 && HapCodec.NeedsHapEncode(probe.Codec, dest))
             {
+                if (!FfmpegTools.HasHapEncoder)
+                {
+                    session.Log("ffmpeg has no hap encoder — Play stays DXVA. Install a full ffmpeg with hap (not essentials-only).", "warn");
+                }
+                else
+                {
                 var id = media.Id;
                 var file = dest;
                 var name = Path.GetFileName(src);
@@ -94,6 +100,7 @@ public static class MediaLibrary
                         UiLog(session, $"HAP encode failed: {ex.Message}", "error");
                     }
                 });
+                }
             }
             else if (prepared is null && FfmpegTools.Available && MediaPolicy.ShouldBuildFullProxy(bytes, probe.Width, probe.Height)
                 && (Codecs.NeedsH264Transcode(probe.Codec, dest) || WavHeader.NeedsStereoDownmix(probe.Channels)))

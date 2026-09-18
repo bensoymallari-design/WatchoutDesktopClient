@@ -74,11 +74,22 @@ public static class GpuEngine
             var startedMf = false;
             try
             {
-                MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 0), "MFStartup");
+                try { MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 0), "MFStartup"); }
+                catch
+                {
+                    MfNative.Check(MfNative.MFStartup(MfNative.MfVersion, 1), "MFStartup");
+                }
                 startedMf = true;
                 _mfUsers++;
                 _gpu = GpuDevice.Create();
-                _comp = new GpuCompositor(_gpu);
+                try
+                {
+                    _comp = new GpuCompositor(_gpu);
+                }
+                catch (Exception compEx)
+                {
+                    throw new InvalidOperationException("D3D11 compositor shaders/buffers: " + compEx.Message, compEx);
+                }
                 _failed = false;
                 _error = null;
                 return true;

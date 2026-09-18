@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using SharpGen.Runtime;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -141,15 +142,17 @@ sealed class GpuDevice : IDisposable
         {
             using (adapter)
             {
+                var ptr = adapter.NativePointer;
                 foreach (var flags in new[]
                 {
-                    DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
                     DeviceCreationFlags.BgraSupport,
+                    DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
+                    DeviceCreationFlags.None,
                 })
                 {
-                    try { return CreateOn(adapter, DriverType.Unknown, flags, Levels); }
+                    try { return NativeCreate(ptr, DriverType.Unknown, flags, Levels); }
                     catch (Exception ex) { last = ex; }
-                    try { return CreateOn(adapter, DriverType.Unknown, flags, Levels11Only); }
+                    try { return NativeCreate(ptr, DriverType.Unknown, flags, Levels11Only); }
                     catch (Exception ex) { last = ex; }
                 }
             }
@@ -157,30 +160,61 @@ sealed class GpuDevice : IDisposable
 
         foreach (var flags in new[]
         {
-            DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
             DeviceCreationFlags.BgraSupport,
+            DeviceCreationFlags.None,
+            DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
         })
         {
-            try { return D3D11.D3D11CreateDevice(DriverType.Hardware, flags, Levels); }
+            try { return NativeCreate(IntPtr.Zero, DriverType.Hardware, flags, Levels); }
             catch (Exception ex) { last = ex; }
-            try { return D3D11.D3D11CreateDevice(DriverType.Hardware, flags, Levels11Only); }
+            try { return NativeCreate(IntPtr.Zero, DriverType.Hardware, flags, Levels11Only); }
             catch (Exception ex) { last = ex; }
         }
 
-        try { return D3D11.D3D11CreateDevice(DriverType.Warp, DeviceCreationFlags.BgraSupport, Levels); }
+        try { return NativeCreate(IntPtr.Zero, DriverType.Warp, DeviceCreationFlags.BgraSupport, Levels); }
         catch (Exception ex)
         {
             throw last ?? ex;
         }
     }
 
-    static ID3D11Device CreateOn(IDXGIAdapter adapter, DriverType type, DeviceCreationFlags flags, FeatureLevel[] levels)
+    /// <summary>
+    /// Call d3d11.dll D3D11CreateDevice with an explicit feature-level count.
+    /// Vortice's params FeatureLevel[] overloads bind the wrong signature and
+    /// Intel UHD returns E_INVALIDARG (compositor off, gold Stage, black wall).
+    /// </summary>
+    static ID3D11Device NativeCreate(IntPtr adapter, DriverType type, DeviceCreationFlags flags, FeatureLevel[] levels)
     {
-        var hr = D3D11.D3D11CreateDevice(adapter, type, flags, levels, out ID3D11Device? device);
-        if (hr.Failure || device is null)
-            throw new InvalidOperationException(hr.ToString());
-        return device;
+        var hr = D3D11CreateDeviceNative(
+            adapter,
+            (int)type,
+            IntPtr.Zero,
+            (uint)flags,
+            levels,
+            (uint)levels.Length,
+            D3D11.SdkVersion,
+            out var devicePtr,
+            out _,
+            out var contextPtr);
+        if (hr < 0 || devicePtr == IntPtr.Zero)
+            throw new InvalidOperationException($"D3D11CreateDevice 0x{hr:X8}");
+        if (contextPtr != IntPtr.Zero)
+            Marshal.Release(contextPtr);
+        return new ID3D11Device(devicePtr);
     }
+
+    [DllImport("d3d11.dll", EntryPoint = "D3D11CreateDevice", ExactSpelling = true)]
+    static extern int D3D11CreateDeviceNative(
+        IntPtr adapter,
+        int driverType,
+        IntPtr software,
+        uint flags,
+        [In] FeatureLevel[] featureLevels,
+        uint featureLevelCount,
+        uint sdkVersion,
+        out IntPtr device,
+        out FeatureLevel featureLevel,
+        out IntPtr context);
 
     static IEnumerable<IDXGIAdapter> HardwareAdapters(IDXGIFactory2 factory)
     {

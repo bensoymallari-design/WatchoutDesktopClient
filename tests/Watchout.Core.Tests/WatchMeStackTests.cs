@@ -75,7 +75,12 @@ public class WatchMeStackTests
         Assert.Contains("aac", hap);
         Assert.Contains("-threads", hap);
         Assert.Equal("2", hap[Array.IndexOf(hap, "-threads") + 1]);
+        Assert.DoesNotContain("-chunks", hap);
+        Assert.DoesNotContain("chunks", hap);
         Assert.DoesNotContain("-an", hap);
+        var banner = "ffmpeg version 7.1 Copyright\n  configuration: --enable-librubberband\nlibavutil      59.\nUnrecognized option 'chunks'\nError splitting the argument list: Option not found\n";
+        Assert.Contains("chunks", Codecs.FfmpegUsefulError(banner));
+        Assert.DoesNotContain("librubberband", Codecs.FfmpegUsefulError(banner));
         Assert.DoesNotContain(hap, a => a.Contains("webm", StringComparison.OrdinalIgnoreCase));
     }
 
