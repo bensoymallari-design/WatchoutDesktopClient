@@ -35,6 +35,7 @@ public sealed class MachineStatusBar : UserControl
     };
     readonly Border _root;
     LoadLevel _logged = LoadLevel.Ok;
+    LoadLevel _ramSticky = LoadLevel.Ok;
     bool _warned;
 
     public MachineStatusBar()
@@ -72,11 +73,13 @@ public sealed class MachineStatusBar : UserControl
             _headline.Text = "Machine status unavailable on this PC";
             return;
         }
+        var ram = MachineLoad.RamLevel(sample, _ramSticky);
+        _ramSticky = ram;
         _cpu.Paint(MachineLoad.CpuValue(sample), sample.CpuPercent, MachineLoad.CpuLevel(sample));
-        _ram.Paint(MachineLoad.RamValue(sample), MachineLoad.Percent(sample.RamUsedBytes, sample.RamTotalBytes), MachineLoad.RamLevel(sample));
+        _ram.Paint(MachineLoad.RamValue(sample), MachineLoad.Percent(sample.RamUsedBytes, sample.RamTotalBytes), ram);
         _gpu.Paint(MachineLoad.GpuValue(sample), MachineLoad.Percent(sample.GpuUsedBytes, sample.GpuTotalBytes), MachineLoad.GpuLevel(sample));
-        var grade = MachineLoad.Grade(sample);
-        _headline.Text = MachineLoad.Headline(sample);
+        var grade = MachineLoad.Grade(sample, ram);
+        _headline.Text = MachineLoad.Headline(sample, ram);
         _headline.Foreground = new SolidColorBrush(Ink(grade));
         _caption.Text = MachineLoad.CaptionLine(sample);
         _root.Background = new SolidColorBrush(grade switch
@@ -85,17 +88,18 @@ public sealed class MachineStatusBar : UserControl
             LoadLevel.Tight => Color.FromRgb(42, 36, 22),
             _ => Color.FromRgb(28, 28, 28),
         });
-        _root.ToolTip = MachineLoad.Advice(sample) + "\n" + MachineLoad.DetailLine(sample);
+        _root.ToolTip = MachineLoad.Advice(sample, ram) + "\n" + MachineLoad.DetailLine(sample);
         if (grade == _logged) return;
         _logged = grade;
-        if (grade is LoadLevel.Tight or LoadLevel.Full)
+        if (MachineLoad.LogAsMachineWarn(sample, ram))
         {
             _warned = true;
             App.Session.Log(MachineLoad.WarnLine(sample), "warn");
         }
-        else if (_warned)
+        else if (grade == LoadLevel.Ok && _warned)
         {
             App.Session.Log("CPU / GPU / memory recovered — room to load more video");
+            _warned = false;
         }
     }
 

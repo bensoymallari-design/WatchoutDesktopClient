@@ -45,6 +45,17 @@ public class MachineLoadTests
         Assert.True(MachineLoad.CanLoadAnother4K(ramTight));
         Assert.Contains("RAM is high", MachineLoad.Headline(ramTight), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("1080p", MachineLoad.Headline(ramTight));
+        Assert.False(MachineLoad.LogAsMachineWarn(ramTight));
+        Assert.Equal(LoadLevel.Tight, MachineLoad.RamLevel(ramTight, LoadLevel.Tight));
+        var dip = Sample(cpu: 2, ramUsed: 6.5, ramTotal: 7.7, gpuUsed: 0.3, gpuTotal: 3.5);
+        Assert.Equal(LoadLevel.Tight, MachineLoad.RamLevel(dip, LoadLevel.Tight));
+        var recovered = Sample(cpu: 2, ramUsed: 6.0, ramTotal: 7.7, gpuUsed: 0.3, gpuTotal: 3.5);
+        Assert.Equal(LoadLevel.Ok, MachineLoad.RamLevel(recovered, LoadLevel.Tight));
+        Assert.Equal(80, MachineLoad.RamRelease);
+        var gpuTight = Sample(cpu: 20, ramUsed: 4, ramTotal: 16, gpuUsed: 6.2, gpuTotal: 8);
+        Assert.True(MachineLoad.LogAsMachineWarn(gpuTight));
+        var fullRam = Sample(cpu: 10, ramUsed: 15.5, ramTotal: 16, gpuUsed: 1, gpuTotal: 8);
+        Assert.True(MachineLoad.LogAsMachineWarn(fullRam));
     }
 
     [Fact]
