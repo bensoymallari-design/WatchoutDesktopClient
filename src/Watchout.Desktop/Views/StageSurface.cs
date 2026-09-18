@@ -278,14 +278,19 @@ public sealed class StageSurface : Canvas
         }
 
         var live = PlaybackClock.VisibleMedia(show);
-        foreach (var ev in live)
+        var labelIds = live.Select(e => e.Cue.Id).ToList();
+        if (session.Selection.Kind == SelectionKind.Cue)
+            labelIds.AddRange(session.Selection.Ids);
+        var labelRects = StageGeometry.EditCueRects(
+            live, show.Assets, show.Timelines.SelectMany(t => t.Cues),
+            new Selection { Kind = SelectionKind.Cue, Ids = labelIds.Distinct().ToList() });
+        foreach (var item in labelRects)
         {
-            var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
-            var name = GpuLayerMath.CueStageLabel(ev.Cue.Name, asset?.Name);
+            var asset = show.Assets.FirstOrDefault(a => a.Id == item.Cue.AssetId);
+            var name = GpuLayerMath.CueStageLabel(item.Cue.Name, asset?.Name);
             if (!GpuLayerMath.ShowCueStageLabel(true) || string.IsNullOrEmpty(name)) continue;
-            var rect = StageGeometry.CueRect(ev, asset);
-            var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
-            DrawCueNamePlate(mapped, name, ev.Cue.Color);
+            var mapped = Map(item.Rect.X, item.Rect.Y, item.Rect.W, item.Rect.H, originX, originY, scale);
+            DrawCueNamePlate(mapped, name, item.Cue.Color);
         }
 
         if (session.Selection.Kind != SelectionKind.Cue) return;
@@ -520,7 +525,7 @@ public sealed class StageSurface : Canvas
             Text = name,
             FontSize = barH >= 34 ? 16 : 14,
             FontWeight = FontWeights.Bold,
-            Foreground = Brushes.White,
+            Foreground = Brushes.Black,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(10, 0, 10, 0),
@@ -530,7 +535,7 @@ public sealed class StageSurface : Canvas
         {
             Width = Math.Max(1, mapped.Width),
             Height = barH,
-            Background = new SolidColorBrush(Color.FromArgb(235, 8, 8, 8)),
+            Background = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
             IsHitTestVisible = false,
             Child = row,
         };
@@ -914,10 +919,11 @@ public sealed class StageSurface : Canvas
             return;
         if (el is MediaElement)
         {
-            if (VideoSync.VideoLayoutChanged(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
-            if (VideoSync.VideoLayoutChanged(GetTop(el), mapped.Y)) SetTop(el, mapped.Y);
-            if (VideoSync.VideoLayoutChanged(el.Width, w)) el.Width = w;
-            if (VideoSync.VideoLayoutChanged(el.Height, h)) el.Height = h;
+            var inset = GpuLayerMath.CueVideoInset(mapped.X, mapped.Y, w, h, Editing, hwndLayer: true);
+            if (VideoSync.VideoLayoutChanged(GetLeft(el), inset.X)) SetLeft(el, inset.X);
+            if (VideoSync.VideoLayoutChanged(GetTop(el), inset.Y)) SetTop(el, inset.Y);
+            if (VideoSync.VideoLayoutChanged(el.Width, inset.W)) el.Width = inset.W;
+            if (VideoSync.VideoLayoutChanged(el.Height, inset.H)) el.Height = inset.H;
             return;
         }
         if (LayoutDiffers(GetLeft(el), mapped.X)) SetLeft(el, mapped.X);
