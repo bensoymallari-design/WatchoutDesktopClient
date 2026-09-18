@@ -20,7 +20,10 @@ public class StageRouteTests
         Assert.Equal(2, columns.Count);
         Assert.Equal(left.Id, columns[0].Id);
         Assert.Equal(right.Id, columns[1].Id);
-        Assert.Equal(left.Name, StageRoute.ColumnLabel(left, 0));
+        Assert.Equal("Stage 1", StageRoute.ColumnLabel(left, 0));
+        Assert.Equal("Stage 2", StageRoute.ColumnLabel(right, 1));
+        Assert.Equal("Card 1", StageRoute.CaptureRowLabel(1));
+        Assert.Equal("NDI 1", StageRoute.NdiRowLabel(1));
         Assert.Equal($"{right.Width:0}×{right.Height:0}", StageRoute.ColumnHint(right));
     }
 

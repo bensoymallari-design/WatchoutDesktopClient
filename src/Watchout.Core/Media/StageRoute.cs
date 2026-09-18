@@ -20,7 +20,11 @@ public static class StageRoute
         show.Displays.Where(d => d.Enabled).OrderBy(d => d.X).ThenBy(d => d.Channel).ThenBy(d => d.Name).ToList();
 
     public static string ColumnLabel(Display display, int index) =>
-        string.IsNullOrWhiteSpace(display.Name) ? $"Display {index + 1}" : display.Name;
+        $"Stage {index + 1}";
+
+    public static string CaptureRowLabel(int index) => $"Card {index}";
+
+    public static string NdiRowLabel(int index) => $"NDI {index}";
 
     public static string ColumnHint(Display display) =>
         $"{display.Width:0}×{display.Height:0}";

@@ -113,7 +113,6 @@
 
     <DockPanel Grid.Row="2" Grid.Column="4" Background="#1C1C1C">
       <views:MachineStatusBar x:Name="MachineStatus" DockPanel.Dock="Top"/>
-      <views:StageRouteBar x:Name="StageRoute" DockPanel.Dock="Top"/>
       <TabControl x:Name="StudioBottom" Background="#1C1C1C" BorderBrush="#111" Foreground="#E8E6E3" SelectedIndex="0">
         <TabItem Header="Devices">
           <views:DevicesPanel x:Name="Devices"/>
@@ -123,6 +122,9 @@
         </TabItem>
         <TabItem Header="Log">
           <views:LogPanel x:Name="Log"/>
+        </TabItem>
+        <TabItem Header="Switches">
+          <views:StageRouteBar x:Name="StageRoute"/>
         </TabItem>
       </TabControl>
     </DockPanel>
