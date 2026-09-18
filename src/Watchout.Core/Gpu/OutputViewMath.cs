@@ -166,13 +166,42 @@ public static class OutputViewMath
     /// <summary>
     /// Screenshot / snip copies the DXGI wall. When GPU budget is already
     /// gone that throw must not close WatchMe — Recover and keep Producer.
+    /// Any DXGI facility code (0x887A…) plus OOM / E_INVALIDARG / E_FAIL.
     /// </summary>
     public static bool SurviveUnhandled(int hresult)
     {
-        if (TearGpuOnPresentError(hresult)) return true;
-        return hresult == unchecked((int)0x887A0001)  // DXGI_ERROR_INVALID_CALL
-            || hresult == unchecked((int)0x887A000A)  // DXGI_ERROR_WAS_STILL_DRAWING
-            || hresult == unchecked((int)0x8007000E)  // E_OUTOFMEMORY
-            || hresult == unchecked((int)0x80070057); // E_INVALIDARG
+        if (hresult == 0) return false;
+        if (((uint)hresult & 0xFFFF0000) == 0x887A0000) return true;
+        return hresult == unchecked((int)0x8007000E)  // E_OUTOFMEMORY
+            || hresult == unchecked((int)0x80070057)  // E_INVALIDARG
+            || hresult == unchecked((int)0x80004005); // E_FAIL (Media Foundation / D3D)
     }
+
+    /// <summary>
+    /// Dispatcher / background-task filter so a GPU glitch does not close
+    /// WatchMe on a client PC.
+    /// </summary>
+    public static bool SurviveException(int hresult, string? typeName, string? message)
+    {
+        if (SurviveUnhandled(hresult)) return true;
+        if (typeName is not null
+            && typeName.Contains("OutOfMemory", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var blob = $"{typeName} {message}";
+        return blob.Contains("DXGI", StringComparison.OrdinalIgnoreCase)
+            || blob.Contains("D3D11", StringComparison.OrdinalIgnoreCase)
+            || blob.Contains("Direct3D", StringComparison.OrdinalIgnoreCase)
+            || blob.Contains("Media Foundation", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// While Play is running, do not retry D3D11CreateDevice. Intel UHD
+    /// E_INVALIDARG every 2 s covers the WPF picture and can crash the show.
+    /// Retry after Stop.
+    /// </summary>
+    public static bool HoldSoftwareOutput(bool playing, bool compositorFailed) =>
+        playing && compositorFailed;
+
+    public static bool RetryCompositor(bool playing, bool compositorFailed) =>
+        !HoldSoftwareOutput(playing, compositorFailed);
 }

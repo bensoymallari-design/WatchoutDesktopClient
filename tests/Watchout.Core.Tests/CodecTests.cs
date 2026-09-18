@@ -78,6 +78,10 @@ public class CodecTests
         Assert.True(Codecs.PrefersPreparedH264("hevc", "clip.mp4"));
         Assert.False(Codecs.PrefersPreparedH264("h264", "Ultimate 4K Dolby Vision.mp4"));
         Assert.False(Codecs.PrefersPreparedH264("h264", "clip.mp4"));
+        Assert.Contains("8-bit H.264", Codecs.ClientPlayWarning("hevc", "clip.mp4"));
+        Assert.Null(Codecs.ClientPlayWarning("h264", "clip.mp4"));
+        Assert.Null(Codecs.ClientPlayWarning("hap_q", "clip.hap.mov"));
+        Assert.Null(Codecs.ClientPlayWarning("prores", "clip.mov"));
     }
 
     [Fact]

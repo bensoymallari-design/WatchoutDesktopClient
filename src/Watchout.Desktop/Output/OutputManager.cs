@@ -1,5 +1,6 @@
 using Watchout.Core.Models;
 using Watchout.Core.Stage;
+using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Interop;
 
 namespace Watchout.Desktop.Output;
@@ -39,7 +40,9 @@ public sealed class OutputManager
         win.Show();
         if (fullscreen) win.PlaceOnScreen();
         App.Session.NoteLiveOutputsChanged();
-        App.Session.Log("Output on a top-level GPU wall — Stage shares the same H.264 decode");
+        App.Session.Log(GpuEngine.Available
+            ? "Output on a top-level GPU wall — Stage shares the same H.264 decode"
+            : "Output uses Windows Media Foundation (one decode on the wall). Stage is a poster.");
         if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
             App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)

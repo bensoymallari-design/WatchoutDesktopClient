@@ -32,6 +32,7 @@ public static class GpuEngine
     static int _mfUsers;
     static DateTime _retryUtc;
     static bool _loggedStartFail;
+    static bool _playing;
 
     static readonly Dictionary<string, Action> LiveHolds = new(StringComparer.OrdinalIgnoreCase);
 
@@ -65,6 +66,7 @@ public static class GpuEngine
             if (_gpu is not null && !_failed) return true;
             if (_failed)
             {
+                if (OutputViewMath.HoldSoftwareOutput(_playing, true)) return false;
                 if ((DateTime.UtcNow - _retryUtc).TotalSeconds < 2) return false;
                 _started = false;
                 _failed = false;
@@ -206,6 +208,7 @@ public static class GpuEngine
 
     public static void KickForPlay(bool playing)
     {
+        lock (Gate) _playing = playing;
         if (!playing) return;
         lock (Gate)
         {
@@ -229,8 +232,10 @@ public static class GpuEngine
     {
         lock (Gate)
         {
+            _playing = playing;
             if (_pictureLogged) return;
             var gpuOn = _gpu is not null && !_failed;
+            if (OutputViewMath.HoldSoftwareOutput(playing, !gpuOn)) return;
             var hwndOk = Swaps.Count > 0;
             var kind = OutputPictureCause.WhenPresentSkipped(playing, liveOutputs, gpuOn, hwndOk);
             if (kind == OutputPictureKind.Idle) return;
@@ -557,13 +562,19 @@ public static class GpuEngine
 
     static void Recover(Exception ex)
     {
-        App.Session.Log($"Output GPU recovered after {ex.Message} — Play again if the wall stays black", "warn");
+        App.Session.Log($"Output GPU recovered after {ex.Message} — Play stays on one decode. Play again if the wall stays black", "warn");
+        var playing = false;
+        var holdSoftware = false;
         lock (Gate)
         {
+            playing = _playing;
             _error = ex.Message;
-            TearDown(failed: false);
+            holdSoftware = OutputViewMath.HoldSoftwareOutput(playing, true)
+                && !OutputViewMath.TearGpuOnPresentError(ex.HResult);
+            TearDown(failed: holdSoftware);
+            if (holdSoftware) _retryUtc = DateTime.UtcNow;
         }
-        TryStart();
+        if (!holdSoftware) TryStart();
     }
 
     static void TearDown(bool failed)

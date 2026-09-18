@@ -277,8 +277,18 @@ public sealed class StageSurface : Canvas
                 DrawHandles(r, 30);
         }
 
-        if (session.Selection.Kind != SelectionKind.Cue) return;
         var live = PlaybackClock.VisibleMedia(show);
+        foreach (var ev in live)
+        {
+            var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
+            var name = GpuLayerMath.CueStageLabel(ev.Cue.Name, asset?.Name);
+            if (!GpuLayerMath.ShowCueStageLabel(true) || string.IsNullOrEmpty(name)) continue;
+            var rect = StageGeometry.CueRect(ev, asset);
+            var mapped = Map(rect.X, rect.Y, rect.W, rect.H, originX, originY, scale);
+            DrawCueNamePlate(mapped, name);
+        }
+
+        if (session.Selection.Kind != SelectionKind.Cue) return;
         var selectedRects = StageGeometry.EditCueRects(
             live, show.Assets, show.Timelines.SelectMany(t => t.Cues), session.Selection);
         foreach (var item in selectedRects.Where(r => session.Selection.Ids.Contains(r.Cue.Id)))
@@ -474,6 +484,34 @@ public sealed class StageSurface : Canvas
         foreach (var el in _layers.Values)
             if (el is MediaElement)
                 yield return GetZIndex(el);
+    }
+
+    void DrawCueNamePlate(Rect mapped, string name)
+    {
+        if (mapped.Width < 24 || mapped.Height < 16) return;
+        var plate = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(200, 12, 12, 12)),
+            Padding = new Thickness(8, 3, 8, 3),
+            CornerRadius = new CornerRadius(2),
+            IsHitTestVisible = false,
+            MaxWidth = Math.Max(40, mapped.Width - 12),
+            Child = new TextBlock
+            {
+                Text = name,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 35)),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            },
+        };
+        plate.Measure(new Size(Math.Max(40, mapped.Width - 12), 40));
+        var h = Math.Max(18, plate.DesiredSize.Height);
+        SetLeft(plate, mapped.X + 6);
+        SetTop(plate, mapped.Y + Math.Max(4, mapped.Height - h - 6));
+        SetZIndex(plate, 24);
+        Children.Add(plate);
+        _chrome.Add(plate);
     }
 
     void DrawHandles(Rect mapped, int z)

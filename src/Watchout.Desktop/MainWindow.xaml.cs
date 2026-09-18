@@ -497,6 +497,11 @@ public partial class MainWindow : Window
             };
             _watch.Created += OnWatchFile;
             _watch.Renamed += (_, e) => OnWatchFile(_watch, new FileSystemEventArgs(WatcherChangeTypes.Created, Path.GetDirectoryName(e.FullPath) ?? "", e.Name ?? ""));
+            _watch.Error += (_, e) =>
+            {
+                var msg = e.GetException().Message;
+                Dispatcher.BeginInvoke(() => App.Session.Log($"Watch folder error — {msg}. Play is unaffected.", "warn"));
+            };
             App.Session.Log($"Watching {App.Settings.WatchFolder} for new media");
         }
         catch (Exception ex)
