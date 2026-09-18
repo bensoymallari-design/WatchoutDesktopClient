@@ -298,9 +298,20 @@ public class GpuLayerMathTests
         Assert.Equal(16, OutputViewMath.ConstantBufferBytes(1));
         Assert.Equal(16, OutputViewMath.ConstantBufferBytes(0));
         Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x887A0005)));
+        Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x887A0006)));
         Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x8007000E)));
         Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x80070057)));
+        Assert.True(OutputViewMath.SurviveUnhandled(unchecked((int)0x80004005)));
+        Assert.True(OutputViewMath.SurviveException(unchecked((int)0x887A0005), "COMException", "DXGI"));
+        Assert.True(OutputViewMath.SurviveException(0, "OutOfMemoryException", "alloc"));
+        Assert.True(OutputViewMath.SurviveException(0, "Exception", "D3D11 compositor"));
         Assert.False(OutputViewMath.SurviveUnhandled(0));
+        Assert.False(OutputViewMath.SurviveException(0, "NullReferenceException", "object"));
+        Assert.True(OutputViewMath.HoldSoftwareOutput(true, true));
+        Assert.False(OutputViewMath.HoldSoftwareOutput(false, true));
+        Assert.False(OutputViewMath.HoldSoftwareOutput(true, false));
+        Assert.False(OutputViewMath.RetryCompositor(true, true));
+        Assert.True(OutputViewMath.RetryCompositor(false, true));
     }
 
     [Fact]

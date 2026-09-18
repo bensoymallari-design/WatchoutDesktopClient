@@ -122,6 +122,18 @@ public static class Codecs
         return GpuGpuCodec.IsMatch(blob);
     }
 
+    /// <summary>
+    /// HEVC / HDR “plays natively” then often stays black. Warn at import so
+    /// a client does not discover that on the wall.
+    /// </summary>
+    public static string? ClientPlayWarning(string codec, string? filePath)
+    {
+        if (HapCodec.IsHap(codec, filePath)) return null;
+        if (!PrefersPreparedH264(codec, filePath)) return null;
+        if (NeedsH264Transcode(codec, filePath ?? "")) return null;
+        return "This file is not 8-bit H.264 — Play can stay black. Use HandBrake Rec.709 H.264, or Assets → Create H.264 version.";
+    }
+
     public static string SiblingH264Path(string filePath)
     {
         var ext = ExtOf(filePath);

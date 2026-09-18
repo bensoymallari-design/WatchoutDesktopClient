@@ -1,9 +1,7 @@
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using SharpGen.Runtime;
 using Watchout.Core;
 using Watchout.Core.Gpu;
 using Watchout.Core.Models;
@@ -36,7 +34,7 @@ public partial class App : Application
                 Session.Log(
                     "WatchMe kept running after a GPU/screenshot error — "
                     + args.Exception.Message
-                    + ". Not RAM. Play again if the wall went black.",
+                    + ". Output stays on one decode. Play again if the wall went black.",
                     "warn");
                 try { GpuEngine.TryStart(); } catch { /* retry next clock */ }
                 args.Handled = true;
@@ -46,6 +44,12 @@ public partial class App : Application
             args.Handled = false;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, _) => ReleaseHardware();
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            if (!SurviveGpuGlitch(args.Exception) && args.Exception.InnerExceptions.All(x => !SurviveGpuGlitch(x)))
+                Session.Log("Background task failed — " + args.Exception.GetBaseException().Message, "warn");
+            args.SetObserved();
+        };
         Session.PlaybackChanged += () =>
             GpuEngine.KickForPlay(Session.Show?.Timelines.Any(t => t.Playback == PlaybackState.Play) == true);
         if (e.Args.Any(a => a.Equals("--release-displays", StringComparison.OrdinalIgnoreCase)))
@@ -88,10 +92,10 @@ public partial class App : Application
 
     static bool SurviveGpuGlitch(Exception ex)
     {
+        if (ex is AggregateException agg)
+            return agg.InnerExceptions.Count > 0 && agg.InnerExceptions.All(SurviveGpuGlitch);
         if (ex is OutOfMemoryException) return true;
-        if (ex is COMException com) return OutputViewMath.SurviveUnhandled(com.HResult);
-        if (ex is SharpGenException sg) return OutputViewMath.SurviveUnhandled(sg.HResult);
-        return OutputViewMath.SurviveUnhandled(ex.HResult);
+        return OutputViewMath.SurviveException(ex.HResult, ex.GetType().Name, ex.Message);
     }
 
     void StartClock()

@@ -70,6 +70,9 @@ public static class MediaLibrary
             session.ApplyImported(media);
             ids.Add(media.Id);
 
+            if (Codecs.ClientPlayWarning(probe.Codec, dest) is { } warn)
+                session.Log($"{Path.GetFileName(src)} — {warn}", "warn");
+
             if (prepared is null && FfmpegTools.Available && MediaPolicy.ShouldBuildFullProxy(bytes, probe.Width, probe.Height)
                 && (Codecs.NeedsH264Transcode(probe.Codec, dest) || WavHeader.NeedsStereoDownmix(probe.Channels)))
             {
