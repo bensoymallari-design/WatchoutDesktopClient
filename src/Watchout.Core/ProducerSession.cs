@@ -234,7 +234,7 @@ public sealed class ProducerSession
             PlaybackClock.SetPlayback(tl, state);
         Log(state switch
         {
-            PlaybackState.Play => "Play — Resolume Alley GPU path (HAP Q texture if encoded, else DXVA). Frames stay on the GPU.",
+            PlaybackState.Play => "Play — one H.264 decode (DXVA). Output is the wall; Stage is a preview, not a second 4K decoder.",
             PlaybackState.Pause => "Pause",
             _ => "Stop",
         });

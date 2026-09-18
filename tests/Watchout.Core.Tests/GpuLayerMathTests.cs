@@ -112,8 +112,11 @@ public class GpuLayerMathTests
         Assert.True(GpuLayerMath.StageYieldsFilePreview(true, true, clip));
         Assert.False(GpuLayerMath.StageYieldsFilePreview(false, true, clip));
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, false, clip));
-        Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, gpuOn: false, clip));
+        Assert.True(GpuLayerMath.StageYieldsFilePreview(true, true, gpuOn: false, clip));
         Assert.True(GpuLayerMath.StageYieldsFilePreview(true, true, gpuOn: true, clip));
+        Assert.True(GpuLayerMath.StageShowsPoster(true, true, gpuOn: false, clip));
+        Assert.False(GpuLayerMath.StageShowsPoster(true, true, gpuOn: true, clip));
+        Assert.False(GpuLayerMath.StageShowsPoster(true, false, gpuOn: false, clip));
         var ndi = new Asset { Id = "n", Kind = AssetKind.Ndi, Url = "ndi://cam" };
         Assert.False(GpuLayerMath.StageYieldsFilePreview(true, true, ndi));
         Assert.True(GpuLayerMath.StageDrawsSharedGpu(true, clip));
@@ -123,7 +126,7 @@ public class GpuLayerMathTests
     }
 
     [Fact]
-    public void ResolumePathPrefersDxgiTexturesOverRgb32RamCopies()
+    public void GpuPathPrefersDxgiTexturesOverRgb32RamCopies()
     {
         Assert.Equal(GpuFrameSource.DxgiTexture, GpuResidentPath.Choose(true, true));
         Assert.Equal(GpuFrameSource.DxgiTexture, GpuResidentPath.Choose(true, false));

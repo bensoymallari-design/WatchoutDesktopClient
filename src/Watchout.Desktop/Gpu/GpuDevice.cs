@@ -10,8 +10,8 @@ namespace Watchout.Desktop.Gpu;
 sealed class GpuDevice : IDisposable
 {
     /// <summary>
-    /// Intel UHD has returned E_INVALIDARG when 11.1 is first. Try 11.0 first
-    /// (Resolume's D3D11 path), then 11.1, then 10.x.
+    /// Intel UHD has returned E_INVALIDARG when 11.1 is first. Try 11.0 first,
+    /// then 11.1, then 10.x.
     /// </summary>
     static readonly FeatureLevel[] Levels =
     [

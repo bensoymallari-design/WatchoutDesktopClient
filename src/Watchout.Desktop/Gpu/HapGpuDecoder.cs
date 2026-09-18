@@ -8,8 +8,8 @@ using Watchout.Core.Playback;
 namespace Watchout.Desktop.Gpu;
 
 /// <summary>
-/// Resolume Alley method: HAP Q is Snappy → DXT uploaded as a BC texture.
-/// No Media Foundation, no RGB32 RAM copy.
+/// HAP Q is Snappy → DXT uploaded as a BC texture. No Media Foundation,
+/// no RGB32 RAM copy. Only used when the clip is already HAP.
 /// </summary>
 sealed class HapGpuDecoder : IGpuFileDecoder
 {

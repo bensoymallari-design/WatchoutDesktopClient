@@ -6,7 +6,7 @@ public static class MediaPolicy
     public const long FullProxyLimitBytes = 8L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// Never copy masters into %AppData%. Play from the original path (Resolume-style).
+    /// Never copy masters into %AppData%. Play from the original disk path.
     /// Copying 4K on import is what filled the drive.
     /// </summary>
     public static bool ShouldCopyOnImport(long bytes)
@@ -24,13 +24,14 @@ public static class MediaPolicy
     }
 
     /// <summary>
-    /// Resolume Alley converts the imported clip to HAP/DXV even at 4K so
-    /// Play is a GPU texture blit. WatchMe does the same with HAP Q.
+    /// HAP encode is opt-in (Assets → Encode HAP). Auto-encoding 4K HAP on
+    /// import fights Play on 8 GB machines and aborted ffmpeg on this PC.
+    /// Play the linked H.264 file instead.
     /// </summary>
     public static bool ShouldBuildHap(long bytes, double width = 0, double height = 0)
     {
-        if (bytes >= FullProxyLimitBytes) return false;
-        return width >= 2 && height >= 2;
+        _ = (bytes, width, height);
+        return false;
     }
 
     public static string VideoPreload(long? bytes) =>

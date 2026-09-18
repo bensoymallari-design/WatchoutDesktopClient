@@ -1,9 +1,9 @@
 namespace Watchout.Core.Gpu;
 
 /// <summary>
-/// Resolume keeps decoded frames on the GPU (DXVA/DXGI surfaces, HAP, DXV).
-/// WatchMe used to copy every H.264 frame to RGB32 in system RAM and upload
-/// it again. Prefer the GPU texture; CPU pixels are the fallback only.
+/// Keep decoded frames on the GPU (DXVA/DXGI surfaces). WatchMe used to copy
+/// every H.264 frame to RGB32 in system RAM and upload it again. Prefer the
+/// GPU texture; CPU pixels are the fallback only.
 /// </summary>
 public enum GpuFrameSource
 {
@@ -34,9 +34,9 @@ public static class GpuResidentPath
         stageHasNoDraws && keepLastFrame;
 
     /// <summary>
-    /// Resolume's composition preview is a scaled GPU view, not a 4K BGRA
-    /// staging texture. Cap Stage's CPU bitmap so Intel UHD is not filled
-    /// with a second 3840×2160 Map while the wall already Presents.
+    /// Stage preview is a scaled GPU view, not a 4K BGRA staging texture.
+    /// Cap Stage's CPU bitmap so Intel UHD is not filled with a second
+    /// 3840×2160 Map while the wall already Presents.
     /// </summary>
     public const int StagePreviewMaxEdge = 1280;
 
@@ -55,7 +55,7 @@ public static class GpuResidentPath
 
     /// <summary>
     /// When a DXGI/HAP texture is bound, do not also copy RGB32. That second
-    /// path is the RAM fill Resolume avoids.
+    /// path is the RAM fill a long PLAY used to hit.
     /// </summary>
     public static bool NeedCpuPixels(bool gpuTextureReady) => !gpuTextureReady;
 

@@ -106,6 +106,7 @@ public class SessionAndShowTests
         tl.Duration = 1000;
         tl.Loop = true;
         session.SetPlayback(tl.Id, PlaybackState.Play);
+        Assert.Contains(session.Logs, l => l.Message.Contains("one H.264 decode"));
         session.Tick(2500);
         Assert.Equal(PlaybackState.Play, tl.Playback);
         Assert.True(tl.Playhead < 1000);

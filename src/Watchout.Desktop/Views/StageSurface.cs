@@ -244,7 +244,7 @@ public sealed class StageSurface : Canvas
                 ?? (outputLive
                     ? (gpuOn
                         ? $"{display.Width:0}×{display.Height:0}  ·  Output stack"
-                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — GPU compositor off (see Log)")
+                        : $"{display.Width:0}×{display.Height:0}  ·  Output live — Stage poster (one decode on the wall)")
                     : string.IsNullOrEmpty(key)
                         ? $"{display.Width:0}×{display.Height:0}"
                         : $"{display.Width:0}×{display.Height:0}  ·  {key}");
@@ -535,8 +535,15 @@ public sealed class StageSurface : Canvas
         if (asset.Kind == AssetKind.Composition)
             return Placeholder(native, asset.Name, asset.Color);
 
-        if (Editing && App.Session.StageYieldsFileDecoder && GpuEngine.Available)
-            return new StagePreviewBox { Width = native.W, Height = native.H, CueName = asset.Name };
+        if (Editing && App.Session.StageYieldsFileDecoder)
+        {
+            if (GpuEngine.Available)
+                return new StagePreviewBox { Width = native.W, Height = native.H, CueName = asset.Name };
+            var poster = MediaLibrary.LoadStill(asset);
+            if (poster is not null)
+                return new Image { Source = poster, Stretch = Stretch.Fill, Width = native.W, Height = native.H, IsHitTestVisible = false };
+            return Placeholder(native, asset.Name, asset.Color);
+        }
 
         var path = Codecs.PlaybackPath(asset);
         var file = Codecs.TryFileUrl(path) ?? (System.IO.File.Exists(path) ? path : null);
@@ -609,8 +616,11 @@ public sealed class StageSurface : Canvas
         if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 }) return el is CaptureLayer;
         if (asset?.Url.StartsWith("procedural:", StringComparison.Ordinal) == true) return el is ProceduralLayer;
         if (LiveSources.IsNdi(asset)) return el is not CaptureLayer && el is not MediaElement;
-        if (Editing && App.Session.StageYieldsFileDecoder && GpuEngine.Available)
-            return el is StagePreviewBox;
+        if (Editing && App.Session.StageYieldsFileDecoder)
+        {
+            if (GpuEngine.Available) return el is StagePreviewBox;
+            return el is not MediaElement && el is not CaptureLayer;
+        }
         if (asset is { Kind: AssetKind.Video })
             return el is MediaElement;
         return el is not CaptureLayer;

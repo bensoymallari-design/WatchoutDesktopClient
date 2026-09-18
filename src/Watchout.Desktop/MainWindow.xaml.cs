@@ -441,8 +441,8 @@ public partial class MainWindow : Window
     {
         MessageBox.Show(this,
             $"{Brand.Title} {Brand.Version} — native .NET / WPF desktop.\n\n" +
-            "Video: D3D11 compositor + Media Foundation DXVA GPU surfaces (Resolume path — H.264 stays on the GPU).\n" +
-            "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy.\n" +
+            "Video: D3D11 compositor + Media Foundation DXVA (H.264 stays on the GPU; one decode).\n" +
+            "Play H.264, H.265, MPEG-2, WMV, AAC, WAV, MP3 as-is. No WebM/VP9 proxy. Import does not encode HAP.\n" +
             "Looks: blend Normal/Add/Multiply/Screen, crop, wipe, chroma, brightness/contrast/sat/hue on the GPU.\n" +
             $"Startup: {Engine.AppBoot.Summary}\n\n" +
             "Show outputs: extra Windows screens — Colorlight / NovaStar / any LED processor, TVs, projectors. Win+P Extend, Find screens, pick the wall/TV (not Producer), then Output.\n" +

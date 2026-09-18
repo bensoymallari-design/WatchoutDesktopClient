@@ -341,16 +341,23 @@ public static class Codecs
     }
 
     /// <summary>
-    /// Prefer the original H.264/MOV/MP4 for DXVA. Fall back to an H.264 sidecar, then a leftover Electron WebM.
+    /// Prefer the original H.264/MOV/MP4 for DXVA. A leftover .hap.mov from a
+    /// failed encode must not steal Play. HAP only when the original is HAP or
+    /// the file is not Media-Foundation-native. Then an H.264 sidecar, then a
+    /// leftover Electron WebM.
     /// </summary>
     public static string PlaybackPath(Asset asset)
     {
-        if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
-            && HapCodec.IsHap(asset.Codec, asset.ProxyPath))
-            return asset.ProxyPath;
         if (!string.IsNullOrWhiteSpace(asset.OriginalPath) && File.Exists(asset.OriginalPath)
             && HapCodec.IsHap(asset.Codec, asset.OriginalPath))
             return asset.OriginalPath;
+        if (!string.IsNullOrWhiteSpace(asset.OriginalPath) && File.Exists(asset.OriginalPath)
+            && PlaysNatively(asset.Codec, asset.OriginalPath)
+            && !PrefersPreparedH264(asset.Codec, asset.OriginalPath))
+            return asset.OriginalPath;
+        if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
+            && HapCodec.IsHap(asset.Codec, asset.ProxyPath))
+            return asset.ProxyPath;
         if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
             && IsPreparedH264Sidecar(asset.OriginalPath ?? "", asset.ProxyPath)
             && (asset.Optimized || PrefersPreparedH264(asset.Codec, asset.OriginalPath)))

@@ -69,6 +69,7 @@ public class WatchMeStackTests
     {
         Assert.True(Codecs.NeedsH264Transcode("notchlc", "clip.mov"));
         Assert.False(Codecs.PlaysNatively("notchlc", "clip.mov"));
+        Assert.False(MediaPolicy.ShouldBuildHap(200L * 1024 * 1024, 3840, 2160));
         var hap = Codecs.HapEncodeArgs("in.mov", "out.mov");
         Assert.Contains("hap", hap);
         Assert.Contains("hap_q", hap);
