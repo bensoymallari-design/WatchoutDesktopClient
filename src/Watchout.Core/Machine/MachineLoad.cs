@@ -49,6 +49,12 @@ public static class MachineLoad
     public const double CpuFull = 90;
     public const double RamTight = 88;
     public const double RamFull = 95;
+    /// <summary>
+    /// Once RAM is Tight, stay Tight until usage falls here. Sitting on 88%
+    /// (6.8–7.0 / 7.7 GB) used to flip Tight/Ok every second and flood the Log
+    /// so it looked like the laptop could not play 4K.
+    /// </summary>
+    public const double RamRelease = 80;
     public const double GpuTight = 75;
     public const double GpuFull = 90;
     public const long FourKHeadroomBytes = 512L * 1024 * 1024;
@@ -99,20 +105,59 @@ public static class MachineLoad
     public static LoadLevel CpuLevel(MachineSample s) =>
         FromPercent(s.CpuPercent, CpuTight, CpuFull);
 
-    public static LoadLevel RamLevel(MachineSample s) =>
-        s.RamTotalBytes <= 0 ? LoadLevel.Ok : FromPercent(Percent(s.RamUsedBytes, s.RamTotalBytes), RamTight, RamFull);
+    public static LoadLevel RamLevel(MachineSample s) => RamLevel(s, LoadLevel.Ok);
+
+    public static LoadLevel RamLevel(MachineSample s, LoadLevel previous)
+    {
+        if (s.RamTotalBytes <= 0) return LoadLevel.Ok;
+        return StickyPercent(Percent(s.RamUsedBytes, s.RamTotalBytes), previous, RamTight, RamFull, RamRelease);
+    }
+
+    /// <summary>
+    /// Enter Tight at <paramref name="tight"/>, leave only below
+    /// <paramref name="release"/> so a meter sitting on the line does not flap.
+    /// </summary>
+    public static LoadLevel StickyPercent(
+        double percent, LoadLevel previous, double tight, double full, double release)
+    {
+        if (previous == LoadLevel.Full)
+            return percent >= full ? LoadLevel.Full : percent >= tight ? LoadLevel.Tight : LoadLevel.Ok;
+        if (previous == LoadLevel.Tight)
+        {
+            if (percent >= full) return LoadLevel.Full;
+            if (percent >= release) return LoadLevel.Tight;
+            return LoadLevel.Ok;
+        }
+        return FromPercent(percent, tight, full);
+    }
 
     public static LoadLevel GpuLevel(MachineSample s) =>
         s.GpuTotalBytes <= 0 ? LoadLevel.Ok : FromPercent(Percent(s.GpuUsedBytes, s.GpuTotalBytes), GpuTight, GpuFull);
 
-    public static LoadLevel Grade(MachineSample s)
+    public static LoadLevel Grade(MachineSample s) => Grade(s, RamLevel(s));
+
+    public static LoadLevel Grade(MachineSample s, LoadLevel ram)
     {
         var cpu = CpuLevel(s);
-        var ram = RamLevel(s);
         var gpu = GpuLevel(s);
         if (cpu == LoadLevel.Full || ram == LoadLevel.Full || gpu == LoadLevel.Full) return LoadLevel.Full;
         if (cpu == LoadLevel.Tight || ram == LoadLevel.Tight || gpu == LoadLevel.Tight) return LoadLevel.Tight;
         return LoadLevel.Ok;
+    }
+
+    /// <summary>
+    /// RAM-only Tight is "close a browser" — not why Output goes black.
+    /// Keep it on the meter; do not spam the Log as a machine failure.
+    /// </summary>
+    public static bool LogAsMachineWarn(MachineSample s) => LogAsMachineWarn(s, RamLevel(s));
+
+    public static bool LogAsMachineWarn(MachineSample s, LoadLevel ram)
+    {
+        var cpu = CpuLevel(s);
+        var gpu = GpuLevel(s);
+        if (cpu == LoadLevel.Full || ram == LoadLevel.Full || gpu == LoadLevel.Full) return true;
+        if (cpu == LoadLevel.Tight || gpu == LoadLevel.Tight) return true;
+        return false;
     }
 
     public static bool CanLoadMore(MachineSample s) => Grade(s) != LoadLevel.Full;
@@ -125,10 +170,11 @@ public static class MachineLoad
         return true;
     }
 
-    public static string Headline(MachineSample s)
+    public static string Headline(MachineSample s) => Headline(s, RamLevel(s));
+
+    public static string Headline(MachineSample s, LoadLevel ram)
     {
         var gpu = GpuLevel(s);
-        var ram = RamLevel(s);
         var cpu = CpuLevel(s);
         if (gpu == LoadLevel.Full) return "Full — GPU memory is gone; stop Output or drop a layer";
         if (ram == LoadLevel.Full) return "Full — RAM is gone; close other apps";
@@ -142,10 +188,11 @@ public static class MachineLoad
         return "OK — room to load more Stage / video";
     }
 
-    public static string Advice(MachineSample s)
+    public static string Advice(MachineSample s) => Advice(s, RamLevel(s));
+
+    public static string Advice(MachineSample s, LoadLevel ram)
     {
         var gpu = GpuLevel(s);
-        var ram = RamLevel(s);
         var cpu = CpuLevel(s);
         if (gpu == LoadLevel.Full)
             return "GPU memory is full. Stop Output or drop a layer before adding video.";
