@@ -198,6 +198,16 @@ public class TimelineMathTests
     }
 
     [Fact]
+    public void CueBarHitSplitsStartAndEnd()
+    {
+        Assert.Equal(TimelineMath.CueBarPart.Start, TimelineMath.HitCueBar(4, 120));
+        Assert.Equal(TimelineMath.CueBarPart.Body, TimelineMath.HitCueBar(60, 120));
+        Assert.Equal(TimelineMath.CueBarPart.End, TimelineMath.HitCueBar(110, 120));
+        Assert.Equal(TimelineMath.CueBarPart.Start, TimelineMath.HitCueBar(4, 20));
+        Assert.Equal(TimelineMath.CueBarPart.End, TimelineMath.HitCueBar(16, 20));
+    }
+
+    [Fact]
     public void LayerHeaderHitsEyeAndLockIcons()
     {
         Assert.Equal(TimelineMath.LayerHeaderPart.Eye, TimelineMath.HitLayerHeader(TimelineMath.HeaderWidth - 2));

@@ -34,7 +34,9 @@ public static class Tweens
         var raw = cue.FreeRunning ? playhead : playhead - cue.Start;
         var local = CueLooks.MediaTime(raw, cue.Speed);
         var map = cue.Tweens.GroupBy(t => t.Type).ToDictionary(g => g.Key, g => g.First());
-        var opacity = Pick(map, TweenType.Opacity, local, cue.Opacity) * TimelineMath.FadeMultiplier(cue, local, others);
+        var tx = CueTransitions.Evaluate(cue, local, others);
+        var opacity = Pick(map, TweenType.Opacity, local, cue.Opacity) * tx.OpacityMul;
+        var scaleMul = tx.ScaleMul;
         return new EvaluatedCue
         {
             Cue = cue,
@@ -43,8 +45,8 @@ public static class Tweens
             X = Pick(map, TweenType.PositionX, local, cue.Position.X),
             Y = Pick(map, TweenType.PositionY, local, cue.Position.Y),
             Z = Pick(map, TweenType.PositionZ, local, cue.Position.Z),
-            ScaleX = Pick(map, TweenType.ScaleX, local, cue.Scale.X),
-            ScaleY = Pick(map, TweenType.ScaleY, local, cue.Scale.Y),
+            ScaleX = Pick(map, TweenType.ScaleX, local, cue.Scale.X) * scaleMul,
+            ScaleY = Pick(map, TweenType.ScaleY, local, cue.Scale.Y) * scaleMul,
             RotX = Pick(map, TweenType.RotationX, local, cue.Rotation.X),
             RotY = Pick(map, TweenType.RotationY, local, cue.Rotation.Y),
             RotZ = Pick(map, TweenType.RotationZ, local, cue.Rotation.Z),
@@ -61,7 +63,7 @@ public static class Tweens
                 Left = Pick(map, TweenType.CropLeft, local, cue.Crop.Left),
                 Right = Pick(map, TweenType.CropRight, local, cue.Crop.Right),
             },
-            Wipe = Pick(map, TweenType.WipeCompletion, local, cue.WipeCompletion),
+            Wipe = Pick(map, TweenType.WipeCompletion, local, cue.WipeCompletion) * tx.WipeMul,
             WipeAngle = cue.WipeAngle,
             WipeFeather = cue.WipeFeather,
             Temperature = cue.Temperature,

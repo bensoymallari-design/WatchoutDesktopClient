@@ -143,6 +143,8 @@ public static class ShowFactory
             FadeInDuration = partial.FadeInDuration > 0 ? partial.FadeInDuration : 500,
             FadeOutDuration = partial.FadeOutDuration > 0 ? partial.FadeOutDuration : 500,
             FadeCurve = partial.FadeCurve,
+            FadeInFilter = partial.FadeInFilter,
+            FadeOutFilter = partial.FadeOutFilter,
             Tweens = partial.Tweens ?? [],
             Speed = partial.Speed > 0 ? partial.Speed : 100,
             WipeCompletion = partial.WipeCompletion,

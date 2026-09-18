@@ -106,6 +106,8 @@ public sealed class TimelinePanel : FrameworkElement
                         var fill = BrushFrom(cue.Color);
                         dc.DrawRectangle(fill, new Pen(selected ? new SolidColorBrush(Color.FromRgb(245, 166, 35)) : Brushes.Transparent, 2),
                             new Rect(bar.X, y + 3, bar.W, LaneH - 6));
+                        DrawTransitionWedge(dc, x, cw, y, start: true, cue.FadeInDuration * zoom, CueTransitions.ResolvedIn(cue));
+                        DrawTransitionWedge(dc, x, cw, y, start: false, cue.FadeOutDuration * zoom, CueTransitions.ResolvedOut(cue));
                         var titleX = bar.X + 4;
                         var titleW = bar.W - 8;
                         if (titleW > 8)
@@ -366,8 +368,15 @@ public sealed class TimelinePanel : FrameworkElement
         if (cue is not null)
         {
             App.Session.Select(SelectionKind.Cue, cue.Id);
-            menu.Items.Add(Menu("Fade in", () => App.Session.ToggleFade("in")));
-            menu.Items.Add(Menu("Fade out", () => App.Session.ToggleFade("out")));
+            var x = HeadW + (cue.Start - scroll) * zoom;
+            var w = Math.Max(4, cue.Duration * zoom);
+            var part = TimelineMath.HitCueBar(p.X - x, w);
+            var startFilter = CueTransitions.ResolvedIn(cue);
+            var endFilter = CueTransitions.ResolvedOut(cue);
+            if (part is TimelineMath.CueBarPart.Start or TimelineMath.CueBarPart.Body)
+                menu.Items.Add(TransitionMenu("Start effect", "in", startFilter));
+            if (part is TimelineMath.CueBarPart.End or TimelineMath.CueBarPart.Body)
+                menu.Items.Add(TransitionMenu("End effect", "out", endFilter));
             menu.Items.Add(Menu("Crossfade", () => App.Session.ApplyCrossfade()));
             menu.Items.Add(new Separator());
             menu.Items.Add(Menu("Duplicate", () => App.Session.DuplicateSelected()));
@@ -402,6 +411,66 @@ public sealed class TimelinePanel : FrameworkElement
         var item = new MenuItem { Header = header };
         item.Click += (_, _) => click();
         return item;
+    }
+
+    static MenuItem CheckMenu(string header, bool on, Action click)
+    {
+        var item = new MenuItem { Header = header, IsCheckable = true, IsChecked = on };
+        item.Click += (_, _) => click();
+        return item;
+    }
+
+    static MenuItem TransitionMenu(string title, string which, TransitionFilter current)
+    {
+        var sub = new MenuItem { Header = title };
+        foreach (var (filter, name) in CueTransitions.Filters)
+        {
+            var f = filter;
+            var label = f == TransitionFilter.None
+                ? "None"
+                : which == "in" ? $"{name} in" : $"{name} out";
+            sub.Items.Add(CheckMenu(label, current == f, () => App.Session.SetCueTransition(which, f, toggleSame: true)));
+        }
+        var dur = new MenuItem { Header = "Duration" };
+        foreach (var ms in new[] { 250d, 500, 1000, 2000, 4000 })
+        {
+            var d = ms;
+            dur.Items.Add(Menu($"{ms / 1000:0.##} s", () => App.Session.SetCueTransitionDuration(which, d)));
+        }
+        sub.Items.Add(new Separator());
+        sub.Items.Add(dur);
+        return sub;
+    }
+
+    static void DrawTransitionWedge(DrawingContext dc, double x, double cw, double y, bool start, double durPx, TransitionFilter filter)
+    {
+        if (filter == TransitionFilter.None) return;
+        var w = Math.Min(cw, Math.Max(6, durPx));
+        if (w < 2) return;
+        var geo = new StreamGeometry();
+        using (var ctx = geo.Open())
+        {
+            if (start)
+            {
+                ctx.BeginFigure(new Point(x, y + 3), true, true);
+                ctx.LineTo(new Point(x + w, y + 3), true, false);
+                ctx.LineTo(new Point(x, y + LaneH - 3), true, false);
+            }
+            else
+            {
+                ctx.BeginFigure(new Point(x + cw, y + 3), true, true);
+                ctx.LineTo(new Point(x + cw, y + LaneH - 3), true, false);
+                ctx.LineTo(new Point(x + cw - w, y + LaneH - 3), true, false);
+            }
+        }
+        geo.Freeze();
+        dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(120, 0, 0, 0)), null, geo);
+        var mark = CueTransitions.Mark(filter);
+        if (string.IsNullOrEmpty(mark) || cw < 18) return;
+        var text = new FormattedText(mark, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"), 9, new SolidColorBrush(Color.FromRgb(245, 166, 35)), 1.25);
+        var tx = start ? x + 3 : x + cw - text.Width - 3;
+        dc.DrawText(text, new Point(tx, y + 4));
     }
 
     async void OnDrop(object sender, DragEventArgs e)

@@ -146,6 +146,7 @@ Visual Studio: open `Watchout.sln`, set **Watchout.Desktop** as startup project,
 4. **Devices → Find screens** / **Assign screens**. Pick the LED wall, TV, or processor (Colorlight, NovaStar, any extra HDMI) — not the Producer laptop. Then **Output**.
 5. Click the Stage, press **Space**. Esc stops (or closes outputs).
 6. For Resolume NDI: **Assets → NDI**. For cards: **Live → Connect All Capture Cards**.
+7. **Cue transitions** — right-click the **start** of a clip on the timeline (Fade in, Dissolve, Wipe, Scale). Right-click the **end** for the matching out. Properties → **Start transition** / **End transition** picks the same filters and durations.
 
 Shows save as `.watchme.json`. Old `.watch.json` files still open.
 
@@ -163,6 +164,7 @@ Settings live in `%AppData%\WatchMe`.
 | Mouse wheel on Stage | Zoom |
 | Right-drag on Stage | Pan |
 | Click the timeline ruler | Seek |
+| Right-click cue start / end | Add fade, dissolve, wipe, or scale |
 
 ## Project layout
 
