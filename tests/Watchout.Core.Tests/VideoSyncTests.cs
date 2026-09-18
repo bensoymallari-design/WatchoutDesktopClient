@@ -37,6 +37,14 @@ public class VideoSyncTests
     }
 
     [Fact]
+    public void PlayingSeeksForwardWhenTheDecoderIsStillOnTheFirstFrame()
+    {
+        Assert.False(VideoSync.SeekCatchUp(22_000, 22_100));
+        Assert.True(VideoSync.SeekCatchUp(0, 22_203));
+        Assert.False(VideoSync.SeekCatchUp(22_203, 0));
+    }
+
+    [Fact]
     public void DecoderStalledAfterTheClockStopsAdvancing()
     {
         Assert.False(VideoSync.DecoderStalled(false, 10_000, 10_000));
