@@ -28,9 +28,10 @@ public class CodecTests
     public void HapDxvProresNeedH264NotWebm()
     {
         Assert.True(Codecs.NeedsH264Transcode("prores", "clip.mov"));
-        Assert.True(Codecs.NeedsH264Transcode("hap", "clip.mov"));
+        Assert.False(Codecs.NeedsH264Transcode("hap", "clip.mov"));
         Assert.True(Codecs.NeedsH264Transcode("dxv", "clip.dxv"));
         Assert.False(Codecs.PlaysNatively("hap", "clip.mov"));
+        Assert.True(HapCodec.IsHap("hap", "clip.mov"));
     }
 
     [Fact]
@@ -75,7 +76,7 @@ public class CodecTests
         Assert.False(Codecs.IsPreparedH264Sidecar("/shows/hdr.mp4", "/shows/hdr.mp4"));
         Assert.True(Codecs.IsPreparedH264Sidecar("/shows/clip.mov", "/shows/clip.mp4"));
         Assert.True(Codecs.PrefersPreparedH264("hevc", "clip.mp4"));
-        Assert.True(Codecs.PrefersPreparedH264("h264", "Ultimate 4K Dolby Vision.mp4"));
+        Assert.False(Codecs.PrefersPreparedH264("h264", "Ultimate 4K Dolby Vision.mp4"));
         Assert.False(Codecs.PrefersPreparedH264("h264", "clip.mp4"));
     }
 
@@ -109,7 +110,7 @@ public class CodecTests
             OriginalPath = "clip.mp4",
             ProxyVersion = 3,
         }));
-        Assert.True(Codecs.NeedsHqRebuild(new Asset
+        Assert.False(Codecs.NeedsHqRebuild(new Asset
         {
             Kind = AssetKind.Video,
             Codec = "hap",

@@ -86,6 +86,7 @@ public static class Codecs
     /// <summary>HAP, Resolume DXV, ProRes, DNx, Notch LC — GPU-show codecs that MF will not play. Transcode to H.264 MP4, never WebM.</summary>
     public static bool NeedsH264Transcode(string codec, string filePath, string mime = "")
     {
+        if (HapCodec.IsHap(codec, filePath)) return false;
         var kind = MediaKind(filePath, mime);
         if (kind == AssetKind.Image) return false;
         if (PlaysNatively(codec, filePath, mime)) return false;
@@ -118,9 +119,7 @@ public static class Codecs
     public static bool PrefersPreparedH264(string codec, string? filePath)
     {
         var blob = $"{codec} {filePath}";
-        return GpuGpuCodec.IsMatch(blob)
-            || blob.Contains("dolby", StringComparison.OrdinalIgnoreCase)
-            || blob.Contains("hdr", StringComparison.OrdinalIgnoreCase);
+        return GpuGpuCodec.IsMatch(blob);
     }
 
     public static string SiblingH264Path(string filePath)
@@ -252,10 +251,11 @@ public static class Codecs
         return
         [
             "-y", "-i", src,
+            "-map", "0:v:0", "-map", "0:a:0?",
             "-c:v", "hap",
             "-format", alpha ? "hap_alpha" : "hap_q",
-            "-chunks", "4",
-            "-an",
+            "-chunks", "1",
+            "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
             dest,
         ];
     }
@@ -293,6 +293,12 @@ public static class Codecs
     /// </summary>
     public static string PlaybackPath(Asset asset)
     {
+        if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
+            && HapCodec.IsHap(asset.Codec, asset.ProxyPath))
+            return asset.ProxyPath;
+        if (!string.IsNullOrWhiteSpace(asset.OriginalPath) && File.Exists(asset.OriginalPath)
+            && HapCodec.IsHap(asset.Codec, asset.OriginalPath))
+            return asset.OriginalPath;
         if (!string.IsNullOrWhiteSpace(asset.ProxyPath) && File.Exists(asset.ProxyPath)
             && IsPreparedH264Sidecar(asset.OriginalPath ?? "", asset.ProxyPath)
             && (asset.Optimized || PrefersPreparedH264(asset.Codec, asset.OriginalPath)))

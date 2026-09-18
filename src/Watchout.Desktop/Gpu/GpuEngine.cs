@@ -5,6 +5,7 @@ using SharpGen.Runtime;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Watchout.Core.Gpu;
+using Watchout.Core.Media;
 using Watchout.Core.Models;
 using Watchout.Desktop.Interop;
 using Watchout.Desktop.Media;
@@ -21,7 +22,7 @@ public static class GpuEngine
     static readonly object Gate = new();
     static GpuDevice? _gpu;
     static GpuCompositor? _comp;
-    static readonly Dictionary<string, MfGpuDecoder> Files = new(StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string, IGpuFileDecoder> Files = new(StringComparer.OrdinalIgnoreCase);
     static readonly Dictionary<string, StillCache> Stills = new(StringComparer.OrdinalIgnoreCase);
     static readonly Dictionary<nint, OutputSwap> Swaps = [];
     static readonly Dictionary<string, int> Idle = new(StringComparer.OrdinalIgnoreCase);
@@ -257,9 +258,9 @@ public static class GpuEngine
                     {
                         case GpuFrameSource.DxgiTexture:
                             if (gpuDirty || _comp is null || !_comp.Has(draw.SourceKey))
-                                _comp!.BindGpu(draw.SourceKey, gpuTex!);
+                                _comp!.BindGpu(draw.SourceKey, gpuTex!, decoder.HapYCoCg);
                             if (decoder.UsedGpuSurfaces)
-                                NoteGpuSurface(draw.SourceKey);
+                                NoteGpuSurface(draw.SourceKey, decoder.HapYCoCg);
                             break;
                         case GpuFrameSource.CpuPixels:
                             if (cpuDirty || _comp is null || !_comp.Has(draw.SourceKey))
@@ -284,7 +285,7 @@ public static class GpuEngine
 
     static readonly Dictionary<string, DateTime> Rebuilt = new(StringComparer.OrdinalIgnoreCase);
 
-    static MfGpuDecoder? FileDecoder(GpuDraw draw, bool playAudio)
+    static IGpuFileDecoder? FileDecoder(GpuDraw draw, bool playAudio)
     {
         if (Files.TryGetValue(draw.SourceKey, out var decoder)
             && (decoder.Dead || (draw.Playing && decoder.Stalled)))
@@ -307,10 +308,12 @@ public static class GpuEngine
             NoteMissing(path);
             return null;
         }
-        decoder = new MfGpuDecoder(new Uri(Path.GetFullPath(path)).AbsoluteUri, playAudio, _gpu);
-        Files[draw.SourceKey] = decoder;
+        IGpuFileDecoder created = HapCodec.IsHap("", path)
+            ? new HapGpuDecoder(path, playAudio, _gpu)
+            : new MfGpuDecoder(new Uri(Path.GetFullPath(path)).AbsoluteUri, playAudio, _gpu);
+        Files[draw.SourceKey] = created;
         Idle[draw.SourceKey] = 0;
-        return decoder;
+        return created;
     }
 
     static OutputPictureKind _wallKind;
@@ -410,10 +413,12 @@ public static class GpuEngine
         App.Session.Log($"DXVA NV12 GPU path failed for this MP4 — using RGB32 so Output is not stuck black after delete-and-reload.");
     }
 
-    static void NoteGpuSurface(string key)
+    static void NoteGpuSurface(string key, bool hapQ = false)
     {
         if (!GpuSurfaceLogged.Add(key)) return;
-        App.Session.Log($"DXVA GPU texture — {key} stays on the GPU (Resolume path, no RGB32 RAM copy)");
+        App.Session.Log(hapQ || HapCodec.IsHap("", key)
+            ? $"HAP GPU texture — {key} stays on the GPU (Resolume Alley / HAP Q, DXT, no RGB32 RAM copy)"
+            : $"DXVA GPU texture — {key} stays on the GPU (Resolume path, no RGB32 RAM copy)");
     }
 
     static void NoteSwap(nint hwnd, int w, int h, bool flip, bool child)

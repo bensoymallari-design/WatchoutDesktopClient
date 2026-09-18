@@ -24,7 +24,7 @@ sealed class GpuCompositor : IDisposable
             float Opacity;
             float ChromaOn;
             float Edge;
-            float _pad;
+            float HapQ;
         };
         struct VSIn { float2 pos : POSITION; float2 uv : TEXCOORD0; };
         struct VSOut { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -40,6 +40,13 @@ sealed class GpuCompositor : IDisposable
         float4 PS(VSOut i) : SV_Target
         {
             float4 c = tex.Sample(samp, i.uv);
+            if (HapQ > 0.5)
+            {
+                float Co = (c.r - 0.5) * (c.b * (255.0 / 8.0) + 1.0);
+                float Cg = (c.g - 0.5) * (c.b * (255.0 / 8.0) + 1.0);
+                float Y = c.a;
+                c = float4(saturate(Y + Co - Cg), saturate(Y + Cg), saturate(Y - Co - Cg), 1);
+            }
             if (ChromaOn > 0.5)
             {
                 float d = distance(c.rgb, ChromaKey.rgb);
@@ -69,7 +76,7 @@ sealed class GpuCompositor : IDisposable
         public float Opacity;
         public float ChromaOn;
         public float Edge;
-        public float Pad;
+        public float HapQ;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -91,6 +98,7 @@ sealed class GpuCompositor : IDisposable
     readonly ID3D11BlendState[] _blend;
     readonly Dictionary<string, ID3D11Texture2D> _textures = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, ID3D11ShaderResourceView> _srvs = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, bool> _hapQ = new(StringComparer.OrdinalIgnoreCase);
     ID3D11Texture2D? _stageTex;
     ID3D11Texture2D? _stageStaging;
     ID3D11RenderTargetView? _stageRtv;
@@ -178,24 +186,37 @@ sealed class GpuCompositor : IDisposable
     /// <summary>
     /// GPU→GPU copy of a DXVA/BGRA surface. No RGB32 trip through system RAM.
     /// </summary>
-    public void BindGpu(string key, ID3D11Texture2D source)
+    public void BindGpu(string key, ID3D11Texture2D source, bool hapQ = false)
     {
         var desc = source.Description;
         var w = (int)desc.Width;
         var h = (int)desc.Height;
         if (w < 2 || h < 2) return;
-        var tex = EnsureBgra(key, w, h);
+        if (IsBc(desc.Format))
+        {
+            var tex = Ensure(key, w, h, desc.Format);
+            _hapQ[key] = hapQ;
+            _gpu.Enter();
+            try { _gpu.Context.CopyResource(tex, source); }
+            finally { _gpu.Leave(); }
+            return;
+        }
+        _hapQ.Remove(key);
+        var bgra = EnsureBgra(key, w, h);
         _gpu.Enter();
-        try { _gpu.Context.CopyResource(tex, source); }
+        try { _gpu.Context.CopyResource(bgra, source); }
         finally { _gpu.Leave(); }
     }
 
-    ID3D11Texture2D EnsureBgra(string key, int width, int height)
+    static bool IsBc(Format format) =>
+        format is Format.BC1_UNorm or Format.BC3_UNorm or Format.BC4_UNorm;
+
+    ID3D11Texture2D Ensure(string key, int width, int height, Format format)
     {
         if (_textures.TryGetValue(key, out var tex)
             && tex.Description.Width == (uint)width
             && tex.Description.Height == (uint)height
-            && tex.Description.Format == Format.B8G8R8A8_UNorm)
+            && tex.Description.Format == format)
             return tex;
         tex?.Dispose();
         if (_srvs.Remove(key, out var oldSrv)) oldSrv.Dispose();
@@ -205,15 +226,20 @@ sealed class GpuCompositor : IDisposable
             Height = (uint)height,
             MipLevels = 1,
             ArraySize = 1,
-            Format = Format.B8G8R8A8_UNorm,
+            Format = format,
             SampleDescription = new SampleDescription(1, 0),
             Usage = ResourceUsage.Default,
-            BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget,
+            BindFlags = format is Format.B8G8R8A8_UNorm
+                ? BindFlags.ShaderResource | BindFlags.RenderTarget
+                : BindFlags.ShaderResource,
         });
         _textures[key] = tex;
         _srvs[key] = _gpu.Device.CreateShaderResourceView(tex);
         return tex;
     }
+
+    ID3D11Texture2D EnsureBgra(string key, int width, int height) =>
+        Ensure(key, width, height, Format.B8G8R8A8_UNorm);
 
     public bool Has(string key) => _srvs.ContainsKey(key);
 
@@ -221,6 +247,7 @@ sealed class GpuCompositor : IDisposable
     {
         if (_textures.Remove(key, out var tex)) tex.Dispose();
         if (_srvs.Remove(key, out var srv)) srv.Dispose();
+        _hapQ.Remove(key);
     }
 
     public void Render(ID3D11RenderTargetView rtv, int width, int height, IReadOnlyList<GpuDraw> draws, Display? outputDisplay)
@@ -389,6 +416,7 @@ sealed class GpuCompositor : IDisposable
             Opacity = draw.Opacity,
             ChromaOn = draw.Chroma ? 1 : 0,
             Edge = edge,
+            HapQ = _hapQ.TryGetValue(draw.SourceKey, out var hapQ) && hapQ ? 1 : 0,
         };
         var mapped = _gpu.Context.Map(_cb, 0, MapMode.WriteDiscard);
         try { Marshal.StructureToPtr(cb, mapped.DataPointer, false); }

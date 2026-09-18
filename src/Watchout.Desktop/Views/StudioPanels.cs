@@ -840,7 +840,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "A D3D11 compositor decodes H.264 once (Media Foundation / DXVA DXGI textures) and keeps those frames on the GPU like Resolume. If NV12 GPU open produces no picture (common with Dolby Vision MP4), WatchMe falls back to RGB32 instead of staying black after delete-and-reload. Blend Add/Multiply/Screen, crop, wipe, and chroma run on the GPU. HAP, DXV, and ProRes transcode to H.264 MP4 when ffmpeg is installed — never to WebM. Live capture and NDI still upload pixels into the same scene.",
+            Text = "A D3D11 compositor plays HAP Q as GPU DXT textures (Resolume Alley) and H.264 as DXVA DXGI surfaces. Import encodes HAP Q in the background so Play does not copy RGB32 through RAM. A YouTube title like Dolby Vision is not HDR. Blend Add/Multiply/Screen, crop, wipe, and chroma run on the GPU. Live capture and NDI still upload pixels into the same scene.",
         });
         }
         finally
