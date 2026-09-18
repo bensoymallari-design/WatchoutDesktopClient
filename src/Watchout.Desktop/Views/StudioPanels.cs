@@ -750,7 +750,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Each NDI source is a row in STAGE COLUMNS (above Devices / Layers / Log). Click Display 1, Display 2, … to assign it and auto-fit that canvas. Browse still imports into Assets if you want to drag later.",
+            Text = "Each NDI source is a row on the Switches tab (next to Devices / Layers / Log). Click the Stage 1 / Stage 2 circle to assign it and auto-fit that canvas. Browse still imports into Assets if you want to drag later.",
         });
         _root.Children.Add(Btn("Browse NDI sources", () =>
         {
@@ -815,7 +815,7 @@ public class DevicesPanel : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 4),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. STAGE COLUMNS above this tab is the switcher: row 1 = capture 1, row 2 = capture 2. Click a Stage column to assign and auto-fit. Connect all still maps card 1 → Display 1, card 2 → Display 2.",
+            Text = "Play Resolume (or any HDMI/SDI program) into one or many cards. The Switches tab is the radio matrix: Card 1 / Card 2 rows, Stage 1 / Stage 2 columns. Click a circle to assign and auto-fit. Connect all still maps card 1 → Display 1, card 2 → Display 2.",
         });
         _root.Children.Add(new TextBlock
         {
@@ -945,7 +945,7 @@ public class DevicesPanel : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var assigned = show is null ? null : StageRoute.AssignedDisplayId(show, StageRoute.Capture, device.Id);
-        var dest = assigned is null ? "Stage column above" : show?.Displays.FirstOrDefault(d => d.Id == assigned)?.Name ?? "Stage";
+        var dest = assigned is null ? "Switches tab" : show?.Displays.FirstOrDefault(d => d.Id == assigned)?.Name ?? "Stage";
         var name = new TextBlock
         {
             Text = $"{device.Name}  ·  {device.Kind}{(live ? "  ·  live" : "")}  →  {dest}",

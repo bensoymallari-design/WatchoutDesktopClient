@@ -9,33 +9,25 @@ using Watchout.Desktop.Media;
 namespace Watchout.Desktop.Views;
 
 /// <summary>
-/// Radio switches above Devices / Layers / Log. Each row is a capture card
-/// or NDI source; each column is a Stage display. Clicking a column assigns
-/// that input and auto-fits the cue to the canvas.
+/// Switches tab: circular radios. Columns are Stage 1 / Stage 2; rows are
+/// Card 1, Card 2, NDI 1. Clicking a circle assigns that input and auto-fits
+/// the cue to that Stage canvas.
 /// </summary>
 public sealed class StageRouteBar : UserControl
 {
-    readonly StackPanel _root = new();
+    readonly StackPanel _root = new() { Margin = new Thickness(16, 12, 16, 12) };
     string _fp = "";
     bool _building;
 
     public StageRouteBar()
     {
-        var chrome = new Border
+        Content = new ScrollViewer
         {
-            Background = new SolidColorBrush(Color.FromRgb(28, 28, 28)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(17, 17, 17)),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(10, 8, 10, 8),
-            Child = new ScrollViewer
-            {
-                Content = _root,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                MaxHeight = 220,
-            },
+            Content = _root,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Background = Brushes.Transparent,
         };
-        Content = chrome;
         App.Session.Changed += () => Dispatcher.BeginInvoke(Reload);
         CaptureHub.Changed += () => Dispatcher.BeginInvoke(Reload);
         NdiHub.Changed += () => Dispatcher.BeginInvoke(Reload);
@@ -58,25 +50,17 @@ public sealed class StageRouteBar : UserControl
         _root.Children.Clear();
         try
         {
-            _root.Children.Add(new TextBlock
-            {
-                Text = "STAGE COLUMNS",
-                Foreground = (Brush)FindResource("Wo.Amber"),
-                FontSize = 11,
-                Margin = new Thickness(0, 0, 0, 4),
-            });
             var columns = show is null ? [] : StageRoute.Columns(show);
             if (columns.Count == 0)
             {
-                _root.Children.Add(Hint("Add a display on Stage first. Each column is one canvas; capture and NDI rows switch which column they fill."));
+                _root.Children.Add(Hint("Add a display on Stage first. Each column is Stage 1, Stage 2, …"));
                 return;
             }
 
             var rows = StageRoute.Rows(show, incoming);
-            _root.Children.Add(Hint("Radio switches — one Stage column per incoming row. Click Display 1 / 2 / … to assign that capture card or NDI and auto-fit it to that canvas."));
             _root.Children.Add(Matrix(columns, rows));
             if (rows.Count == 0)
-                _root.Children.Add(Hint("No live inputs yet. Plug in a capture card or start Resolume NDI, then Refresh in Devices. Each source becomes a row."));
+                _root.Children.Add(Hint("No live inputs yet. Plug in a capture card or start Resolume NDI, then Refresh in Devices. Each source becomes a row: Card 1, Card 2, NDI 1."));
         }
         finally
         {
@@ -86,52 +70,45 @@ public sealed class StageRouteBar : UserControl
 
     UIElement Matrix(IReadOnlyList<Display> columns, IReadOnlyList<StageRoute.Row> rows)
     {
-        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 88 });
+        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
         foreach (var _ in columns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(108) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         for (var i = 0; i < rows.Count; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(64) });
 
-        grid.Children.Add(Cell(0, 0, new TextBlock
-        {
-            Text = "Incoming",
-            Foreground = (Brush)FindResource("Wo.Muted"),
-            FontSize = 11,
-            VerticalAlignment = VerticalAlignment.Center,
-        }));
         for (var c = 0; c < columns.Count; c++)
         {
             var display = columns[c];
             var displayId = display.Id;
             var header = new Button
             {
-                Content = $"{StageRoute.ColumnLabel(display, c)}\n{StageRoute.ColumnHint(display)}",
-                Style = (Style)FindResource("Wo.Button"),
-                Padding = new Thickness(8, 4, 8, 4),
-                Margin = new Thickness(0, 0, 6, 4),
-                MinWidth = 88,
-                FontSize = 11,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                ToolTip = $"Select {display.Name} on Stage",
+                Content = StageRoute.ColumnLabel(display, c),
+                Style = (Style)FindResource("Wo.StageHeader"),
+                Margin = new Thickness(8, 0, 8, 8),
+                ToolTip = $"{display.Name}  {StageRoute.ColumnHint(display)}",
             };
             header.Click += (_, _) => App.Session.Select(SelectionKind.Display, displayId);
             grid.Children.Add(Cell(c + 1, 0, header));
         }
 
+        var cardN = 0;
+        var ndiN = 0;
         for (var r = 0; r < rows.Count; r++)
         {
             var row = rows[r];
-            var kindTag = row.Kind == StageRoute.Ndi ? "NDI" : "Capture";
+            var ndi = row.Kind == StageRoute.Ndi;
+            var title = ndi ? StageRoute.NdiRowLabel(++ndiN) : StageRoute.CaptureRowLabel(++cardN);
             grid.Children.Add(Cell(0, r + 1, new TextBlock
             {
-                Text = $"{kindTag}  {row.Label}",
-                Foreground = (Brush)FindResource("Wo.Text"),
+                Text = title,
+                Foreground = new SolidColorBrush(Color.FromRgb(242, 139, 130)),
                 VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 8, 4),
-                FontSize = 11,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 0, 12, 0),
+                FontSize = 13,
+                ToolTip = row.Label,
             }));
             var group = $"stage-route:{row.Kind}:{row.Key}";
             for (var c = 0; c < columns.Count; c++)
@@ -140,11 +117,10 @@ public sealed class StageRouteBar : UserControl
                 var on = row.DisplayId == display.Id;
                 var radio = new RadioButton
                 {
-                    Content = StageRoute.ColumnLabel(display, c),
                     GroupName = group,
                     IsChecked = on,
                     Style = (Style)FindResource("Wo.StageSwitch"),
-                    ToolTip = $"Assign {row.Label} to {display.Name} and auto-fit {display.Width:0}×{display.Height:0}",
+                    ToolTip = $"Assign {title} ({row.Label}) to {StageRoute.ColumnLabel(display, c)} and auto-fit {display.Width:0}×{display.Height:0}",
                 };
                 var kind = row.Kind;
                 var key = row.Key;
@@ -200,7 +176,7 @@ public sealed class StageRouteBar : UserControl
         Text = text,
         TextWrapping = TextWrapping.Wrap,
         Foreground = (Brush)Application.Current.FindResource("Wo.Muted"),
-        FontSize = 11,
-        Margin = new Thickness(0, 0, 0, 6),
+        FontSize = 12,
+        Margin = new Thickness(0, 12, 0, 0),
     };
 }
