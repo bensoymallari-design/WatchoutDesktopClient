@@ -39,7 +39,7 @@ Loop a file with **Loop** checked. The decoder restarts when the clip hits the e
 
 1. Install [NDI Runtime / NDI Tools](https://ndi.video/tools/) on the WatchMe PC.
 2. Enable NDI output at the composition size (for example 3840×2160, High / full NDI).
-3. WatchMe → **Assets → NDI** (or **Live**) → pick the source. Drag it onto a timeline layer **in front of** the video.
+3. WatchMe → STAGE COLUMNS (above Devices / Layers / Log) → click the Display column for that NDI. It auto-fits the canvas. Or **Assets → NDI** and drag it onto a timeline layer **in front of** the video.
 4. **Devices** → assign the wall screen (not the laptop) → **Output**.
 5. Check the log for `NDI … 3840×2160 60p`. If it says 1920×1080, the sender is sending HD.
 

@@ -31,6 +31,7 @@ public partial class ProducerView : UserControl
         {
             StudioBottom.SelectedIndex = 0;
             Devices.Reload();
+            StageRoute.Reload();
             SyncChrome();
             SyncTimelineScroll();
         };
@@ -44,6 +45,7 @@ public partial class ProducerView : UserControl
         Timelines.Reload();
         Timeline.Reload();
         Devices.Reload();
+        StageRoute.Reload();
         Layers.Reload();
         Log.Reload();
         Stage.Refresh();

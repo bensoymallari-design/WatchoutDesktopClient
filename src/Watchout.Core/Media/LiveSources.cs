@@ -180,6 +180,55 @@ public static class LiveSources
                ?? id;
     }
 
+    public const string NdiKind = "NDI";
+
+    public static bool IsNdiRecord(CaptureDevice rec) =>
+        rec.Kind.Equals(NdiKind, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsPlaceholderCapture(CaptureDevice rec) =>
+        !IsNdiRecord(rec) && string.Equals(rec.Signal, "WatchMe-CAPTURE", StringComparison.OrdinalIgnoreCase);
+
+    public static Cue? NdiCue(Show show, string sourceName)
+    {
+        var asset = NdiAssetOnShow(show, sourceName);
+        if (asset is null) return null;
+        return show.Timelines.SelectMany(t => t.Cues).FirstOrDefault(c => c.AssetId == asset.Id);
+    }
+
+    public static Asset? NdiAssetOnShow(Show show, string sourceName)
+    {
+        var name = NdiNames.FriendlyName(sourceName);
+        return show.Assets.FirstOrDefault(a =>
+        {
+            var ndi = NdiSourceName(a);
+            if (ndi is not null &&
+                (string.Equals(ndi, sourceName, StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(ndi, name, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            return IsNdi(a) && string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    public static CaptureDevice? NdiRecord(Show show, string sourceName)
+    {
+        var name = NdiNames.FriendlyName(sourceName);
+        return show.CaptureDevices.FirstOrDefault(d =>
+            IsNdiRecord(d) &&
+            (string.Equals(d.Signal, sourceName, StringComparison.OrdinalIgnoreCase)
+             || string.Equals(d.Signal, name, StringComparison.OrdinalIgnoreCase)
+             || string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static string NdiDisplayKey(Show show, string sourceName)
+    {
+        var rec = NdiRecord(show, sourceName);
+        if (rec?.DisplayId is { Length: > 0 } id && show.Displays.Any(d => d.Id == id))
+            return id;
+        var cue = NdiCue(show, sourceName);
+        if (cue is null) return AutoDisplayKey;
+        return StageGeometry.DisplayForCue(show.Displays, cue).Id;
+    }
+
     public static void FitCueToDisplay(Cue cue, Asset asset, Display display)
     {
         var fit = StageGeometry.FitTransform(asset, display);

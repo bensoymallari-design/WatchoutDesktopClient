@@ -1630,7 +1630,67 @@ public sealed class ProducerSession
                     DisplayId = display.Id,
                 });
         }, record: false);
-        Log($"{name} → {display.Name} on Stage");
+        Log($"{name} → {display.Name} on Stage · auto-fit {display.Width:0}×{display.Height:0}");
+    }
+
+    public void AssignNdiToDisplay(string sourceName, string? displayKey, string? captureDeviceId = null)
+    {
+        if (Show is null) NewShow();
+        var name = NdiNames.FriendlyName(sourceName);
+        if (LiveSources.IsAutoDisplay(displayKey))
+        {
+            Mutate(show =>
+            {
+                var rec = LiveSources.NdiRecord(show, name);
+                if (rec is not null) rec.DisplayId = null;
+            }, record: false);
+            return;
+        }
+        var display = Show!.Displays.FirstOrDefault(d => d.Id == displayKey);
+        if (display is null)
+        {
+            Log("Pick a Stage column for that NDI source", "warn");
+            return;
+        }
+        ImportNdi(sourceName, captureDeviceId, placeOnLayer: false, announce: false);
+        var asset = LiveSources.NdiAssetOnShow(Show, name)
+                    ?? Show.Assets.FirstOrDefault(a => a.Kind == AssetKind.Ndi && string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (asset is null)
+        {
+            Log($"NDI {name} did not import", "warn");
+            return;
+        }
+        var cue = LiveSources.NdiCue(Show, name);
+        if (cue is null)
+        {
+            var layerId = LiveSources.NextLiveLayerId(Show);
+            AddCueFromAsset(asset.Id, layerId, 0, display.Id);
+        }
+        else
+        {
+            UpdateCue(cue.Id, c => LiveSources.FitCueToDisplay(c, asset, display));
+        }
+        Mutate(show =>
+        {
+            var rec = LiveSources.NdiRecord(show, name);
+            if (rec is not null)
+            {
+                rec.DisplayId = display.Id;
+                rec.Name = name;
+                if (captureDeviceId is not null) rec.Signal = captureDeviceId;
+            }
+            else
+                show.CaptureDevices.Add(new CaptureDevice
+                {
+                    Id = Ids.New("cap"),
+                    Name = name,
+                    NodeId = "local-runner",
+                    Kind = LiveSources.NdiKind,
+                    Signal = captureDeviceId ?? name,
+                    DisplayId = display.Id,
+                });
+        }, record: false);
+        Log($"NDI {name} → {display.Name} on Stage · auto-fit {display.Width:0}×{display.Height:0}");
     }
 
     public Asset ImportNdi(string sourceName, string? captureDeviceId = null, bool placeOnLayer = false, bool announce = true)
