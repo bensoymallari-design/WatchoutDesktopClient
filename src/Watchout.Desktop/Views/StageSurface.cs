@@ -161,6 +161,46 @@ public sealed class StageSurface : Canvas
         ApplyOutputMask();
     }
 
+    /// <summary>
+    /// HDMI/TV woke. Producer clock did not stop. Jump Output onto the cue
+    /// and flush EVR even if Position already looks on-time (queued frames).
+    /// </summary>
+    public void SnapToPlayhead()
+    {
+        var show = SurfaceShow;
+        if (show is null || Editing) return;
+        var live = PlaybackClock.VisibleMedia(show);
+        var playingAny = show.Timelines.Any(t => t.Enabled && t.Playback == PlaybackState.Play);
+        foreach (var ev in live)
+        {
+            if (!_videos.TryGetValue(ev.Cue.Id, out var video)) continue;
+            var tl = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
+            var playing = tl?.Playback == PlaybackState.Play;
+            var loop = tl?.Loop == true;
+            var fileMs = video.NaturalDuration.HasTimeSpan
+                ? video.NaturalDuration.TimeSpan.TotalMilliseconds
+                : 0;
+            var local = loop && fileMs > 1
+                ? PlaybackClock.LoopFileTime(ev.LocalTime, fileMs)
+                : ev.LocalTime;
+            var target = TimeSpan.FromMilliseconds(Math.Max(0, local));
+            try
+            {
+                if (playing) video.Pause();
+                video.Position = target;
+                if (playing) video.Play();
+                var now = DateTime.UtcNow;
+                _lastSeek[ev.Cue.Id] = now;
+                _lastAdvance[ev.Cue.Id] = now;
+                _lastPos[ev.Cue.Id] = target.TotalMilliseconds;
+                _dead.Remove(ev.Cue.Id);
+            }
+            catch { /* decoder not ready */ }
+        }
+        GpuEngine.KickForPlay(playingAny);
+        TickPlayback(syncMedia: true);
+    }
+
     void DrawChrome()
     {
         var session = App.Session;
@@ -736,6 +776,14 @@ public sealed class StageSurface : Canvas
                 _lastPos[cueId] = pos;
                 sinceSeek = (now - _lastSeek[cueId]).TotalMilliseconds;
                 var sinceAdvance = (now - _lastAdvance[cueId]).TotalMilliseconds;
+                if (VideoSync.SeekCatchUp(pos, target.TotalMilliseconds) && sinceSeek >= VideoSync.StartSeekMs)
+                {
+                    video.Position = target;
+                    _lastSeek[cueId] = now;
+                    _lastAdvance[cueId] = now;
+                    video.Play();
+                    return;
+                }
                 if (VideoSync.DecoderStalled(true, sinceAdvance, sinceSeek))
                 {
                     App.Session.Log($"{ev.Cue.Name} · DXVA stalled — restarting the decoder", "warn");

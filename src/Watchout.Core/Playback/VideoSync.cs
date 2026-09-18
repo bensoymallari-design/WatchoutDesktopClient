@@ -63,4 +63,13 @@ public static class VideoSync
     /// </summary>
     public static bool SeekCatchUp(double decoderMs, double targetMs) =>
         targetMs - decoderMs > PlayReseekMs;
+
+    /// <summary>
+    /// TV/HDMI was off; Producer clock kept running. Snap Output onto the
+    /// playhead when the sink wakes (HDMI handshake can be several seconds).
+    /// </summary>
+    public const int DisplayWakeResnapMs = 2000;
+
+    public static bool SnapOutputAfterDisplayWake(bool outputLive, double driftMs) =>
+        outputLive && driftMs > StartSeekMs;
 }

@@ -14,7 +14,7 @@ namespace Watchout.Desktop.Output;
 public sealed class OutputWindow : Window
 {
     public string DisplayId { get; }
-    readonly OutputScreen _screen;
+    OutputScreen _screen;
     readonly StageSurface _surface;
     GpuOutputWall? _wall;
     bool _loggedOwnerFail;
@@ -131,4 +131,18 @@ public sealed class OutputWindow : Window
         _surface.UpdateLayout();
         _surface.Refresh();
     }
+
+    public void ReviveAfterSinkChange()
+    {
+        var screens = Monitors.List();
+        if (ViewDisplay is { } display)
+        {
+            var target = ScreenAssign.ResolveOutputScreen(display, screens, null, out _);
+            if (target is not null) _screen = target;
+        }
+        PlaceOnScreen(refresh: true);
+        _surface.SnapToPlayhead();
+    }
+
+    Display? ViewDisplay => _surface.ViewDisplay;
 }
