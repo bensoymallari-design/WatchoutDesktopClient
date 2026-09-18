@@ -123,6 +123,11 @@ public class GpuLayerMathTests
         Assert.True(GpuLayerMath.StageDrawsSharedGpu(true, ndi));
         Assert.False(GpuLayerMath.StageDrawsSharedGpu(false, clip));
         Assert.False(GpuLayerMath.StageDrawsSharedGpu(true, null));
+        Assert.True(GpuLayerMath.ShowCueStageLabel(true));
+        Assert.False(GpuLayerMath.ShowCueStageLabel(false));
+        Assert.Equal("majdoul3", GpuLayerMath.CueStageLabel("majdoul3", "clip.mp4"));
+        Assert.Equal("wall", GpuLayerMath.CueStageLabel("  ", "wall"));
+        Assert.Equal("", GpuLayerMath.CueStageLabel(null, null));
     }
 
     [Fact]

@@ -93,6 +93,19 @@ public static class GpuLayerMath
     public static bool StageDrawsSharedGpu(bool gpuOn, Asset? asset) =>
         gpuOn && UsesGpu(asset);
 
+    /// <summary>
+    /// Producer Stage name plate. Output walls stay unlabeled. Cue name wins;
+    /// fall back to the asset so a clip is still identifiable.
+    /// </summary>
+    public static bool ShowCueStageLabel(bool editing) => editing;
+
+    public static string CueStageLabel(string? cueName, string? assetName)
+    {
+        if (!string.IsNullOrWhiteSpace(cueName)) return cueName.Trim();
+        if (!string.IsNullOrWhiteSpace(assetName)) return assetName.Trim();
+        return "";
+    }
+
     public static GpuSourceKind SourceKind(Asset asset)
     {
         if (LiveSources.IsCapture(asset)) return GpuSourceKind.Capture;
