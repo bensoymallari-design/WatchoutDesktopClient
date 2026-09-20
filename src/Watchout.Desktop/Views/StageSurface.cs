@@ -28,6 +28,8 @@ public sealed class StageSurface : Canvas
     readonly Dictionary<string, DateTime> _lastSeek = [];
     readonly Dictionary<string, double> _lastPos = [];
     readonly Dictionary<string, DateTime> _lastAdvance = [];
+    readonly Dictionary<string, DateTime> _opened = [];
+    readonly Dictionary<string, int> _catchUps = [];
     readonly List<UIElement> _chrome = [];
     bool _clockQueued;
     bool _visualQueued;
@@ -526,6 +528,8 @@ public sealed class StageSurface : Canvas
         _lastSeek.Remove(id);
         _lastPos.Remove(id);
         _lastAdvance.Remove(id);
+        _opened.Remove(id);
+        _catchUps.Remove(id);
         _dead.Remove(id);
         _ended.Remove(id);
         if (_videos.Remove(id, out var dead))
@@ -708,6 +712,7 @@ public sealed class StageSurface : Canvas
         video.MediaOpened += (_, _) =>
         {
             App.Session.Log($"{asset.Name} · Media Foundation / DXVA opened {System.IO.Path.GetFileName(file)}");
+            _opened[ev.Cue.Id] = DateTime.UtcNow;
             var tlNow = show.Timelines.FirstOrDefault(t => t.Cues.Any(c => c.Id == PlaybackClock.RootCueId(ev.Cue.Id)));
             SyncVideo(ev.Cue.Id, video, ev, tlNow?.Playback ?? PlaybackState.Stop, tlNow?.Loop == true, asset.Duration);
         };
@@ -771,22 +776,30 @@ public sealed class StageSurface : Canvas
             if (playback == PlaybackState.Play)
             {
                 _lastSeek.TryAdd(cueId, now);
+                _opened.TryAdd(cueId, now);
                 if (!_lastAdvance.ContainsKey(cueId) || Math.Abs(pos - _lastPos.GetValueOrDefault(cueId)) >= 5)
                     _lastAdvance[cueId] = now;
                 _lastPos[cueId] = pos;
                 sinceSeek = (now - _lastSeek[cueId]).TotalMilliseconds;
                 var sinceAdvance = (now - _lastAdvance[cueId]).TotalMilliseconds;
-                if (VideoSync.SeekCatchUp(pos, target.TotalMilliseconds) && sinceSeek >= VideoSync.StartSeekMs)
+                var sinceOpen = (now - _opened[cueId]).TotalMilliseconds;
+                var behind = VideoSync.SeekCatchUp(pos, target.TotalMilliseconds);
+                if (behind && sinceSeek >= VideoSync.StartSeekMs)
                 {
-                    video.Position = target;
+                    _catchUps[cueId] = VideoSync.NoteCatchUp(_catchUps.GetValueOrDefault(cueId), true);
+                    KickEvr(video, target, playing: true);
                     _lastSeek[cueId] = now;
-                    _lastAdvance[cueId] = now;
-                    video.Play();
+                    if (VideoSync.SoftwareOutputStuck(true, sinceAdvance, sinceSeek, sinceOpen, _catchUps[cueId]))
+                    {
+                        LogSoftwareStuck(ev.Cue.Name);
+                        _dead.Add(cueId);
+                        _playing.Remove(cueId);
+                    }
                     return;
                 }
-                if (VideoSync.DecoderStalled(true, sinceAdvance, sinceSeek))
+                if (VideoSync.SoftwareOutputStuck(true, sinceAdvance, sinceSeek, sinceOpen, _catchUps.GetValueOrDefault(cueId)))
                 {
-                    App.Session.Log($"{ev.Cue.Name} · DXVA stalled — restarting the decoder", "warn");
+                    LogSoftwareStuck(ev.Cue.Name);
                     _dead.Add(cueId);
                     _playing.Remove(cueId);
                     return;
@@ -797,11 +810,11 @@ public sealed class StageSurface : Canvas
                         || VideoSync.SeekOnPlayStart(drift)
                         || VideoSync.RestartAfterWrap(video.Position.TotalMilliseconds, target.TotalMilliseconds))
                     {
-                        video.Position = target;
+                        KickEvr(video, target, playing: true);
                         _lastSeek[cueId] = now;
-                        _lastAdvance[cueId] = now;
                     }
-                    video.Play();
+                    else
+                        video.Play();
                     _primed.Add(cueId);
                     _lastAdvance.TryAdd(cueId, now);
                     return;
@@ -809,11 +822,18 @@ public sealed class StageSurface : Canvas
                 if (VideoSync.RestartAfterWrap(video.Position.TotalMilliseconds, target.TotalMilliseconds)
                     || VideoSync.ReseekWhilePlaying(drift, sinceSeek))
                 {
-                    video.Position = target;
+                    _catchUps[cueId] = VideoSync.NoteCatchUp(_catchUps.GetValueOrDefault(cueId), true);
+                    KickEvr(video, target, playing: true);
                     _lastSeek[cueId] = now;
-                    _lastAdvance[cueId] = now;
-                    video.Play();
+                    if (VideoSync.SoftwareOutputStuck(true, sinceAdvance, sinceSeek, sinceOpen, _catchUps[cueId]))
+                    {
+                        LogSoftwareStuck(ev.Cue.Name);
+                        _dead.Add(cueId);
+                        _playing.Remove(cueId);
+                    }
+                    return;
                 }
+                _catchUps[cueId] = 0;
                 return;
             }
             if (_playing.Remove(cueId))
@@ -822,6 +842,7 @@ public sealed class StageSurface : Canvas
                 _lastSeek.Remove(cueId);
                 _lastPos.Remove(cueId);
                 _lastAdvance.Remove(cueId);
+                _catchUps.Remove(cueId);
                 _ended.Remove(cueId);
             }
             if (_primed.Add(cueId))
@@ -834,6 +855,16 @@ public sealed class StageSurface : Canvas
         }
         catch { /* decoder not ready */ }
     }
+
+    static void KickEvr(MediaElement video, TimeSpan target, bool playing)
+    {
+        if (playing) video.Pause();
+        video.Position = target;
+        if (playing) video.Play();
+    }
+
+    static void LogSoftwareStuck(string cueName) =>
+        App.Session.Log(OutputPictureCause.Message(OutputPictureKind.Stalled, cueName, null), "warn");
 
     static FrameworkElement Placeholder((double W, double H) native, string name, string color)
     {

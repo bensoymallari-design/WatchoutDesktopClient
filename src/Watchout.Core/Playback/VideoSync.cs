@@ -45,10 +45,41 @@ public static class VideoSync
     /// <summary>
     /// DXVA can freeze after a long 4K run (around an hour of dual Stage+Output
     /// decode). Position stops advancing and new Play() on the same MediaElement
-    /// stays black — rebuild the decoder.
+    /// stays on the last picture — rebuild the decoder.
+    /// Seeking a frozen EVR does not count as progress: MediaElement.Position
+    /// can jump while the wall still shows the same frame.
     /// </summary>
     public static bool DecoderStalled(bool playing, double msSinceAdvance, double msSinceSeek) =>
-        playing && msSinceSeek >= StallMs && msSinceAdvance >= StallMs;
+        playing && msSinceAdvance >= StallMs && msSinceSeek >= SeekCooldownMs;
+
+    /// <summary>
+    /// Software Output (compositor off): catch-up seeks every 250 ms reset the
+    /// seek clock, so <see cref="DecoderStalled"/> never fires and the last
+    /// picture stays frozen. Count those seeks and rebuild after a few.
+    /// </summary>
+    public const int StallCatchUps = 8;
+    public const double OpenGraceMs = StallMs;
+
+    public static int NoteCatchUp(int consecutive, bool stillBehind) =>
+        stillBehind ? consecutive + 1 : 0;
+
+    public static bool RepeatedSeekIsStall(int consecutiveSeeks, double msSinceOpen) =>
+        msSinceOpen >= OpenGraceMs && consecutiveSeeks >= StallCatchUps;
+
+    public static bool SoftwareOutputStuck(
+        bool playing,
+        double msSinceAdvance,
+        double msSinceSeek,
+        double msSinceOpen,
+        int consecutiveSeeks)
+    {
+        if (!playing) return false;
+        if (msSinceOpen < OpenGraceMs) return false;
+        if (DecoderStalled(true, msSinceAdvance, msSinceSeek)) return true;
+        // Position never moved, even though we keep seeking (seek clock is fresh).
+        if (msSinceAdvance >= StallMs) return true;
+        return RepeatedSeekIsStall(consecutiveSeeks, msSinceOpen);
+    }
 
     /// <summary>
     /// Timeline loop jumped the clock backward. The file decoder is still at EOF
