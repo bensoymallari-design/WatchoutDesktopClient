@@ -37,4 +37,12 @@ public static class LiveComposite
         if (prev > 0 && Math.Abs(next - prev) <= slop) return prev;
         return next;
     }
+
+    /// <summary>
+    /// Capture/NDI on Output is a top-level layered HWND. EVR exclusive overlay
+    /// (MediaElement with ScrubbingEnabled=false) then freezes the MP4 while
+    /// the card keeps blitting. Scrubbing forces a non-overlay file renderer.
+    /// </summary>
+    public static bool FileRendererScrubs(bool outputSurface, bool liveHwndOnOutput) =>
+        outputSurface && liveHwndOnOutput;
 }

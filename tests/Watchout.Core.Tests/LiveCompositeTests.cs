@@ -36,4 +36,12 @@ public class LiveCompositeTests
         Assert.Equal(1280, LiveComposite.Stick(1280, 1920));
         Assert.Equal(100, LiveComposite.Stick(100, 0));
     }
+
+    [Fact]
+    public void OutputMp4ScrubsWhenCaptureHwndIsOnTheWall()
+    {
+        Assert.False(LiveComposite.FileRendererScrubs(outputSurface: false, liveHwndOnOutput: true));
+        Assert.False(LiveComposite.FileRendererScrubs(outputSurface: true, liveHwndOnOutput: false));
+        Assert.True(LiveComposite.FileRendererScrubs(outputSurface: true, liveHwndOnOutput: true));
+    }
 }

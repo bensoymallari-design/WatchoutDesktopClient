@@ -52,6 +52,7 @@ public sealed class StageSurface : Canvas
     Point _panStart;
     (double X, double Y, double Zoom) _panCam;
     GpuPresentLayer? _gpu;
+    bool _loggedScrubRenderer;
 
     public bool Editing { get; set; }
     public Display? ViewDisplay { get => _viewDisplay; set => _viewDisplay = value; }
@@ -674,13 +675,18 @@ public sealed class StageSurface : Canvas
             LoadedBehavior = MediaState.Manual,
             UnloadedBehavior = MediaState.Manual,
             Stretch = Stretch.Fill,
-            ScrubbingEnabled = false,
+            ScrubbingEnabled = LiveComposite.FileRendererScrubs(!Editing, LiveHwndOnOutput()),
             Focusable = false,
             IsHitTestVisible = false,
             IsMuted = !PlayAudio || ev.Volume <= 0,
             Width = native.W,
             Height = native.H,
         };
+        if (video.ScrubbingEnabled && !_loggedScrubRenderer)
+        {
+            _loggedScrubRenderer = true;
+            App.Session.Log("Output MP4 uses a non-overlay renderer so USB/NDI capture does not freeze the file");
+        }
         video.MediaFailed += (_, e) =>
         {
             App.Session.Log($"Media Foundation could not play {asset.Name} ({file}): {e.ErrorException.Message}", "error");
@@ -741,8 +747,26 @@ public sealed class StageSurface : Canvas
                 Editing, App.Session.StageYieldsFileDecoder, GpuEngine.Available, asset))
             return el is StageSoftPreview;
         if (asset is { Kind: AssetKind.Video })
-            return el is MediaElement;
+        {
+            if (el is not MediaElement video) return false;
+            return video.ScrubbingEnabled == LiveComposite.FileRendererScrubs(!Editing, LiveHwndOnOutput());
+        }
         return el is not CaptureLayer;
+    }
+
+    bool LiveHwndOnOutput()
+    {
+        if (Editing) return false;
+        if (_layers.Values.Any(el => el is CaptureLayer)) return true;
+        var show = SurfaceShow;
+        if (show is null) return false;
+        foreach (var ev in PlaybackClock.VisibleMedia(show))
+        {
+            var asset = show.Assets.FirstOrDefault(a => a.Id == ev.Cue.AssetId);
+            if (LiveSources.IsCapture(asset) || LiveSources.NdiSourceName(asset) is { Length: > 0 })
+                return true;
+        }
+        return false;
     }
 
     void SyncSoftPreview(StageSoftPreview preview, Asset? asset, EvaluatedCue ev, PlaybackState playback, bool loop)
