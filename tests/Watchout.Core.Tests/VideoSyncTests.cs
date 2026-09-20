@@ -73,6 +73,16 @@ public class VideoSyncTests
     }
 
     [Fact]
+    public void FileDecoderRebuildsAfterALongRunBeforeTheTwoHourFreeze()
+    {
+        Assert.False(VideoSync.RebuildAfterLongRun(false, VideoSync.LongRunRebuildMs));
+        Assert.False(VideoSync.RebuildAfterLongRun(true, 10 * 60 * 1000));
+        Assert.True(VideoSync.RebuildAfterLongRun(true, VideoSync.LongRunRebuildMs));
+        Assert.True(VideoSync.LongRunRebuildMs < 2 * 60 * 60 * 1000);
+        Assert.True(VideoSync.LongRunRebuildMs >= 40 * 60 * 1000);
+    }
+
+    [Fact]
     public void OutputVideoLayoutHoldsWhileStageIsBusy()
     {
         Assert.False(VideoSync.HoldOutputVideoLayout(false, true));

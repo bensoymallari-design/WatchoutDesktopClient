@@ -96,6 +96,16 @@ public static class VideoSync
         targetMs - decoderMs > PlayReseekMs;
 
     /// <summary>
+    /// Intel UHD EVR survives the first hour, then the MP4 freezes while USB
+    /// capture keeps running. Rebuild the file decoder before that (capture is
+    /// not this HWND).
+    /// </summary>
+    public const double LongRunRebuildMs = 50 * 60 * 1000;
+
+    public static bool RebuildAfterLongRun(bool playing, double msSinceOpen) =>
+        playing && msSinceOpen >= LongRunRebuildMs;
+
+    /// <summary>
     /// TV/HDMI was off; Producer clock kept running. Snap Output onto the
     /// playhead when the sink wakes (HDMI handshake can be several seconds).
     /// </summary>

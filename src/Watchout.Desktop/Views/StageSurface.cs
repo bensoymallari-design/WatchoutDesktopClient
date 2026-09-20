@@ -807,6 +807,16 @@ public sealed class StageSurface : Canvas
                 sinceSeek = (now - _lastSeek[cueId]).TotalMilliseconds;
                 var sinceAdvance = (now - _lastAdvance[cueId]).TotalMilliseconds;
                 var sinceOpen = (now - _opened[cueId]).TotalMilliseconds;
+                if (VideoSync.RebuildAfterLongRun(true, sinceOpen))
+                {
+                    var min = (int)Math.Round(VideoSync.LongRunRebuildMs / 60_000.0);
+                    App.Session.Log(
+                        $"Output MP4 DXVA rebuilt after {min} min so a long Play does not freeze the last frame. Capture is unchanged.",
+                        "warn");
+                    _dead.Add(cueId);
+                    _playing.Remove(cueId);
+                    return;
+                }
                 var behind = VideoSync.SeekCatchUp(pos, target.TotalMilliseconds);
                 if (behind && sinceSeek >= VideoSync.StartSeekMs)
                 {
