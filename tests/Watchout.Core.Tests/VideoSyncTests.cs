@@ -58,6 +58,31 @@ public class VideoSyncTests
     }
 
     [Fact]
+    public void SoftwareOutputStuckWhenCatchUpSeeksHideAFrozenFrame()
+    {
+        Assert.Equal(1, VideoSync.NoteCatchUp(0, true));
+        Assert.Equal(0, VideoSync.NoteCatchUp(4, false));
+        Assert.False(VideoSync.RepeatedSeekIsStall(8, 500));
+        Assert.True(VideoSync.RepeatedSeekIsStall(8, VideoSync.StallMs));
+        Assert.False(VideoSync.SoftwareOutputStuck(false, 8_000, 200, 8_000, 8));
+        Assert.False(VideoSync.SoftwareOutputStuck(true, 200, 200, 500, 8));
+        // Catch-up seeks every 250 ms used to reset lastAdvance so DecoderStalled never fired.
+        Assert.True(VideoSync.SoftwareOutputStuck(true, 5_000, 200, 5_000, 2));
+        Assert.True(VideoSync.SoftwareOutputStuck(true, 200, 200, 5_000, 8));
+        Assert.False(VideoSync.SoftwareOutputStuck(true, 200, 200, 5_000, 3));
+    }
+
+    [Fact]
+    public void FileDecoderRebuildsAfterALongRunBeforeTheTwoHourFreeze()
+    {
+        Assert.False(VideoSync.RebuildAfterLongRun(false, VideoSync.LongRunRebuildMs));
+        Assert.False(VideoSync.RebuildAfterLongRun(true, 10 * 60 * 1000));
+        Assert.True(VideoSync.RebuildAfterLongRun(true, VideoSync.LongRunRebuildMs));
+        Assert.True(VideoSync.LongRunRebuildMs < 2 * 60 * 60 * 1000);
+        Assert.True(VideoSync.LongRunRebuildMs >= 40 * 60 * 1000);
+    }
+
+    [Fact]
     public void OutputVideoLayoutHoldsWhileStageIsBusy()
     {
         Assert.False(VideoSync.HoldOutputVideoLayout(false, true));

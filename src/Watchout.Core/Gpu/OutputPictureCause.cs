@@ -108,7 +108,7 @@ public static class OutputPictureCause
                 + (string.IsNullOrWhiteSpace(error) ? "" : $": {error}")
                 + ". Prefer 8-bit H.264, or Assets → Create H.264 version.",
             OutputPictureKind.Stalled =>
-                $"Output stuck — this MP4 ({src}) stopped delivering frames. Rebuilding DXVA.",
+                $"Output stuck — this MP4 ({src}) stopped delivering frames (last picture frozen). Rebuilding DXVA. Prefer 8-bit H.264 if this is HEVC / HDR.",
             OutputPictureKind.MissingFile =>
                 $"Output black — the MP4 file is missing ({src}).",
             OutputPictureKind.NoCue =>

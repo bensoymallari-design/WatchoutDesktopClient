@@ -217,6 +217,7 @@ public class GpuLayerMathTests
         var stalled = play with { DecoderStalled = true };
         Assert.Equal(OutputPictureKind.Stalled, OutputPictureCause.Classify(stalled));
         Assert.Contains("stuck", OutputPictureCause.Message(OutputPictureKind.Stalled, "file:wall.mp4", null));
+        Assert.Contains("frozen", OutputPictureCause.Message(OutputPictureKind.Stalled, "file:wall.mp4", null));
         var missing = play with { ReadyTextures = 0, FileMissing = true };
         Assert.Equal(OutputPictureKind.MissingFile, OutputPictureCause.Classify(missing));
         var noCue = play with { DrawCount = 0, ReadyTextures = 0 };
