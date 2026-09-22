@@ -143,8 +143,12 @@ public static class TimelineMath
 
     public enum CueBarPart { Start, Body, End }
 
+    public enum TimelineGrab { None, Playhead, CueStart, CueEnd, CueBody }
+
     public const double CueEdgeMinPx = 16;
     public const double CueEdgeMaxPx = 72;
+    public const double PlayheadHitPx = 10;
+    public const double CueTrimHitPx = 10;
 
     /// <summary>
     /// Right-click the left third of a cue bar for start effects, the right third for end effects.
@@ -162,6 +166,47 @@ public static class TimelineMath
         if (localX >= widthPx - edge) return CueBarPart.End;
         return CueBarPart.Body;
     }
+
+    public static bool HitPlayhead(double x, double playheadX, double hitPx = PlayheadHitPx) =>
+        Math.Abs(x - playheadX) <= Math.Max(1, hitPx);
+
+    /// <summary>
+    /// Trim handles are a ~10px strip at each end (and a few pixels outside the bar)
+    /// so a SizeWE cursor is easy to hit. Thin bars split in half.
+    /// </summary>
+    public static CueBarPart? HitCueTrim(double localX, double widthPx, double hitPx = CueTrimHitPx)
+    {
+        widthPx = Math.Max(1, widthPx);
+        hitPx = Math.Max(1, hitPx);
+        if (localX < -hitPx || localX > widthPx + hitPx) return null;
+        if (widthPx < hitPx * 2)
+            return localX < widthPx * 0.5 ? CueBarPart.Start : CueBarPart.End;
+        if (localX <= hitPx) return CueBarPart.Start;
+        if (localX >= widthPx - hitPx) return CueBarPart.End;
+        return CueBarPart.Body;
+    }
+
+    public static bool CueContainsTime(Cue cue, double msAt, double padMs = 0, double minWidthMs = 0)
+    {
+        var start = cue.Start - Math.Max(0, padMs);
+        var end = Math.Max(CueEnd(cue) + Math.Max(0, padMs), cue.Start + Math.Max(0, minWidthMs));
+        return msAt >= start && msAt <= end;
+    }
+
+    /// <summary>Cue start/end wins over the playhead so trim stays reachable; playhead wins over the clip body.</summary>
+    public static TimelineGrab HoverGrab(CueBarPart? trim, bool onPlayhead)
+    {
+        if (trim is CueBarPart.Start) return TimelineGrab.CueStart;
+        if (trim is CueBarPart.End) return TimelineGrab.CueEnd;
+        if (onPlayhead) return TimelineGrab.Playhead;
+        if (trim is CueBarPart.Body) return TimelineGrab.CueBody;
+        return TimelineGrab.None;
+    }
+
+    public static bool UsesSizeWE(TimelineGrab grab) =>
+        grab is TimelineGrab.Playhead or TimelineGrab.CueStart or TimelineGrab.CueEnd;
+
+    public static bool UsesSizeAll(TimelineGrab grab) => grab == TimelineGrab.CueBody;
 
     public static bool IsMedia(Cue cue) => cue.Type == CueType.Media;
 
