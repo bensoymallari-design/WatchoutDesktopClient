@@ -163,7 +163,8 @@ Settings live in `%AppData%\WatchMe`.
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 | Mouse wheel on Stage | Zoom |
 | Right-drag on Stage | Pan |
-| Click the timeline ruler | Seek |
+| Drag the playhead or ruler | Seek (left-right cursor) |
+| Drag a cue start / end | Trim (left-right cursor) |
 | Right-click cue start / end | Add fade, dissolve, wipe, or scale |
 
 ## Project layout

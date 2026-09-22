@@ -22,6 +22,7 @@ public sealed class TimelinePanel : FrameworkElement
     int _dragLayerIndex;
     Point _mouseDown;
     bool _panning;
+    bool _dragPlayhead;
     double _panScroll;
     double _panLayer;
 
@@ -106,6 +107,8 @@ public sealed class TimelinePanel : FrameworkElement
                         var fill = BrushFrom(cue.Color);
                         dc.DrawRectangle(fill, new Pen(selected ? new SolidColorBrush(Color.FromRgb(245, 166, 35)) : Brushes.Transparent, 2),
                             new Rect(bar.X, y + 3, bar.W, LaneH - 6));
+                        if (cue.Type != CueType.Marker)
+                            DrawCueTrimHandles(dc, x, cw, y, HeadW, w, selected);
                         DrawTransitionWedge(dc, x, cw, y, start: true, cue.FadeInDuration * zoom, CueTransitions.ResolvedIn(cue));
                         DrawTransitionWedge(dc, x, cw, y, start: false, cue.FadeOutDuration * zoom, CueTransitions.ResolvedOut(cue));
                         var titleX = bar.X + 4;
@@ -151,9 +154,38 @@ public sealed class TimelinePanel : FrameworkElement
         }
         dc.Pop();
 
-        var px = xOf(tl.Playhead);
-        if (px >= HeadW && px <= w)
-            dc.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(245, 166, 35)), 1.5), new Point(px, 0), new Point(px, h));
+        DrawPlayhead(dc, xOf(tl.Playhead), w, h);
+    }
+
+    static void DrawPlayhead(DrawingContext dc, double px, double w, double h)
+    {
+        if (px < HeadW - 8 || px > w + 8) return;
+        var amber = new SolidColorBrush(Color.FromRgb(245, 166, 35));
+        dc.DrawLine(new Pen(amber, 2.5), new Point(px, 0), new Point(px, h));
+        var tri = new StreamGeometry();
+        using (var g = tri.Open())
+        {
+            g.BeginFigure(new Point(px, RulerH - 1), true, true);
+            g.LineTo(new Point(px - 7, 2), true, false);
+            g.LineTo(new Point(px + 7, 2), true, false);
+        }
+        tri.Freeze();
+        dc.DrawGeometry(amber, null, tri);
+    }
+
+    static void DrawCueTrimHandles(DrawingContext dc, double x, double cw, double y, double left, double right, bool selected)
+    {
+        if (cw < 2) return;
+        var amber = new SolidColorBrush(Color.FromRgb(245, 166, 35));
+        var w = selected ? 4 : 3;
+        var top = y + 3;
+        var h = LaneH - 6;
+        var start = x;
+        var end = x + cw;
+        if (start >= left - 2 && start <= right + 2)
+            dc.DrawRectangle(amber, null, new Rect(start - w / 2.0, top, w, h));
+        if (end >= left - 2 && end <= right + 2)
+            dc.DrawRectangle(amber, null, new Rect(end - w / 2.0, top, w, h));
     }
 
     static double NiceStep(double raw)
@@ -288,7 +320,16 @@ public sealed class TimelinePanel : FrameworkElement
     void OnUp(object sender, MouseButtonEventArgs e)
     {
         _dragId = null;
+        _dragPlayhead = false;
         if (!_panning) ReleaseMouseCapture();
+        ApplyHoverCursor(e.GetPosition(this));
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        if (_dragId is null && !_dragPlayhead && !_panning)
+            Cursor = Cursors.Arrow;
+        base.OnMouseLeave(e);
     }
 
     void OnDown(object sender, MouseButtonEventArgs e)
@@ -303,8 +344,8 @@ public sealed class TimelinePanel : FrameworkElement
             return;
         if (p.Y < RulerH)
         {
-            var ms = Math.Max(0, (p.X - HeadW) / zoom + scroll);
-            App.Session.SetPlayhead(tl.Id, ms);
+            if (p.X < HeadW) return;
+            BeginPlayheadDrag(tl, p, zoom, scroll);
             return;
         }
         var layerIndex = LayerIndexAt(p);
@@ -327,30 +368,121 @@ public sealed class TimelinePanel : FrameworkElement
             return;
         }
         var msAt = (p.X - HeadW) / zoom + scroll;
-        var cue = layer.Enabled
-            ? tl.Cues.LastOrDefault(c => c.LayerId == layer.Id && msAt >= c.Start && msAt <= c.Start + Math.Max(40 / zoom, c.Duration))
-            : null;
+        var cue = FindCueAt(tl, layer, msAt, zoom);
+        var grab = GrabAt(p, tl, cue, zoom, scroll);
+        if (grab is TimelineMath.TimelineGrab.CueStart or TimelineMath.TimelineGrab.CueEnd)
+        {
+            if (cue is null) return;
+            App.Session.Select(SelectionKind.Cue, cue.Id);
+            if (layer.Locked) return;
+            BeginCueDrag(cue, grab == TimelineMath.TimelineGrab.CueStart ? "l" : "r", layerIndex, p);
+            return;
+        }
+        if (grab == TimelineMath.TimelineGrab.Playhead)
+        {
+            BeginPlayheadDrag(tl, p, zoom, scroll);
+            return;
+        }
         if (cue is not null)
         {
             App.Session.Select(SelectionKind.Cue, cue.Id);
             if (layer.Locked) return;
+            BeginCueDrag(cue, "m", layerIndex, p);
+            return;
+        }
+        App.Session.Select(SelectionKind.Layer, layer.Id);
+        if (App.Session.ClickJumpsToTime)
+            App.Session.SetPlayhead(tl.Id, Math.Max(0, msAt));
+    }
+
+    void BeginPlayheadDrag(Timeline tl, Point p, double zoom, double scroll)
+    {
+        _dragId = null;
+        _dragPlayhead = true;
+        _mouseDown = p;
+        CaptureMouse();
+        Cursor = Cursors.SizeWE;
+        App.Session.SetPlayhead(tl.Id, Math.Max(0, (p.X - HeadW) / zoom + scroll));
+    }
+
+    void BeginCueDrag(Cue cue, string edge, int layerIndex, Point p)
+    {
+        _dragPlayhead = false;
+        _dragEdge = cue.Type == CueType.Marker ? "m" : edge;
+        _dragId = cue.Id;
+        _dragStartMs = cue.Start;
+        _dragDuration = cue.Duration;
+        _dragLayerIndex = layerIndex;
+        _mouseDown = p;
+        CaptureMouse();
+        Cursor = _dragEdge is "l" or "r" ? Cursors.SizeWE : Cursors.SizeAll;
+    }
+
+    static Cue? FindCueAt(Timeline tl, Layer layer, double msAt, double zoom)
+    {
+        if (!layer.Enabled) return null;
+        var padMs = TimelineMath.CueTrimHitPx / Math.Max(0.0001, zoom);
+        var minWidthMs = 40 / Math.Max(0.0001, zoom);
+        return tl.Cues.LastOrDefault(c => c.LayerId == layer.Id && TimelineMath.CueContainsTime(c, msAt, padMs, minWidthMs));
+    }
+
+    static TimelineMath.TimelineGrab GrabAt(Point p, Timeline tl, Cue? cue, double zoom, double scroll)
+    {
+        var playX = HeadW + (tl.Playhead - scroll) * zoom;
+        var onPlay = p.X >= HeadW && TimelineMath.HitPlayhead(p.X, playX);
+        TimelineMath.CueBarPart? trim = null;
+        if (cue is not null && cue.Type != CueType.Marker)
+        {
             var x = HeadW + (cue.Start - scroll) * zoom;
             var w = Math.Max(4, cue.Duration * zoom);
-            var local = p.X - x;
-            _dragEdge = cue.Type == CueType.Marker ? "m" : local < 8 ? "l" : local > w - 8 ? "r" : "m";
-            _dragId = cue.Id;
-            _dragStartMs = cue.Start;
-            _dragDuration = cue.Duration;
-            _dragLayerIndex = layerIndex;
-            _mouseDown = p;
-            CaptureMouse();
+            trim = TimelineMath.HitCueTrim(p.X - x, w);
         }
-        else
+        else if (cue is not null)
+            trim = TimelineMath.CueBarPart.Body;
+        return TimelineMath.HoverGrab(trim, onPlay);
+    }
+
+    void ApplyHoverCursor(Point p)
+    {
+        if (_panning)
         {
-            App.Session.Select(SelectionKind.Layer, layer.Id);
-            if (App.Session.ClickJumpsToTime)
-                App.Session.SetPlayhead(tl.Id, Math.Max(0, msAt));
+            Cursor = Cursors.SizeAll;
+            return;
         }
+        if (_dragPlayhead || (_dragId is not null && _dragEdge is "l" or "r"))
+        {
+            Cursor = Cursors.SizeWE;
+            return;
+        }
+        if (_dragId is not null)
+        {
+            Cursor = Cursors.SizeAll;
+            return;
+        }
+        var tl = App.Session.ActiveTimeline;
+        if (tl is null || p.X < HeadW)
+        {
+            Cursor = Cursors.Arrow;
+            return;
+        }
+        var zoom = App.Session.TimelineZoom;
+        var scroll = App.Session.TimelineScroll;
+        Cue? cue = null;
+        if (p.Y >= RulerH)
+        {
+            var layerIndex = LayerIndexAt(p);
+            if (layerIndex >= 0 && layerIndex < tl.Layers.Count)
+            {
+                var msAt = (p.X - HeadW) / zoom + scroll;
+                cue = FindCueAt(tl, tl.Layers[layerIndex], msAt, zoom);
+            }
+        }
+        var grab = p.Y < RulerH
+            ? TimelineMath.HoverGrab(null, TimelineMath.HitPlayhead(p.X, HeadW + (tl.Playhead - scroll) * zoom))
+            : GrabAt(p, tl, cue, zoom, scroll);
+        if (TimelineMath.UsesSizeWE(grab)) Cursor = Cursors.SizeWE;
+        else if (TimelineMath.UsesSizeAll(grab)) Cursor = Cursors.SizeAll;
+        else Cursor = Cursors.Arrow;
     }
 
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
@@ -363,7 +495,7 @@ public sealed class TimelinePanel : FrameworkElement
         var layerIndex = LayerIndexAt(p);
         Layer? layer = layerIndex >= 0 && layerIndex < tl.Layers.Count ? tl.Layers[layerIndex] : null;
         var msAt = (p.X - HeadW) / zoom + scroll;
-        Cue? cue = layer is null ? null : tl.Cues.LastOrDefault(c => c.LayerId == layer.Id && msAt >= c.Start && msAt <= c.Start + Math.Max(40 / zoom, c.Duration));
+        Cue? cue = layer is null ? null : FindCueAt(tl, layer, msAt, zoom);
         var menu = new ContextMenu();
         if (cue is not null)
         {
@@ -505,15 +637,29 @@ public sealed class TimelinePanel : FrameworkElement
 
     void OnMove(object sender, MouseEventArgs e)
     {
+        var p = e.GetPosition(this);
         if (_panning)
         {
-            var p = e.GetPosition(this);
-            var zoom = Math.Max(0.0001, App.Session.TimelineZoom);
-            App.Session.SetTimelineScroll(_panScroll - (p.X - _mouseDown.X) / zoom);
+            var zoomPan = Math.Max(0.0001, App.Session.TimelineZoom);
+            App.Session.SetTimelineScroll(_panScroll - (p.X - _mouseDown.X) / zoomPan);
             App.Session.SetTimelineLayerScroll(_panLayer - (p.Y - _mouseDown.Y));
+            Cursor = Cursors.SizeAll;
             return;
         }
-        if (_dragId is null || e.LeftButton != MouseButtonState.Pressed) return;
+        if (_dragPlayhead && e.LeftButton == MouseButtonState.Pressed)
+        {
+            var tlPlay = App.Session.ActiveTimeline;
+            if (tlPlay is null) return;
+            var zoomPlay = Math.Max(0.0001, App.Session.TimelineZoom);
+            App.Session.SetPlayhead(tlPlay.Id, Math.Max(0, (p.X - HeadW) / zoomPlay + App.Session.TimelineScroll));
+            Cursor = Cursors.SizeWE;
+            return;
+        }
+        if (_dragId is null || e.LeftButton != MouseButtonState.Pressed)
+        {
+            ApplyHoverCursor(p);
+            return;
+        }
         var tl = App.Session.ActiveTimeline;
         if (tl is null || App.Session.CueLayerLocked(_dragId)) return;
         var zoomDrag = App.Session.TimelineZoom;
@@ -555,5 +701,6 @@ public sealed class TimelinePanel : FrameworkElement
                 c.Duration = Math.Max(40, _dragDuration - (start - _dragStartMs));
             }, record: false);
         }
+        Cursor = _dragEdge is "l" or "r" ? Cursors.SizeWE : Cursors.SizeAll;
     }
 }

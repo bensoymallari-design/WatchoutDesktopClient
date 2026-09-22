@@ -208,6 +208,36 @@ public class TimelineMathTests
     }
 
     [Fact]
+    public void PlayheadAndCueTrimHitsAreEasyToGrab()
+    {
+        Assert.True(TimelineMath.HitPlayhead(100, 100));
+        Assert.True(TimelineMath.HitPlayhead(110, 100));
+        Assert.False(TimelineMath.HitPlayhead(111, 100));
+
+        Assert.Equal(TimelineMath.CueBarPart.Start, TimelineMath.HitCueTrim(5, 200));
+        Assert.Equal(TimelineMath.CueBarPart.Start, TimelineMath.HitCueTrim(-5, 200));
+        Assert.Equal(TimelineMath.CueBarPart.Body, TimelineMath.HitCueTrim(100, 200));
+        Assert.Equal(TimelineMath.CueBarPart.End, TimelineMath.HitCueTrim(195, 200));
+        Assert.Equal(TimelineMath.CueBarPart.End, TimelineMath.HitCueTrim(205, 200));
+        Assert.Null(TimelineMath.HitCueTrim(-15, 200));
+        Assert.Equal(TimelineMath.CueBarPart.Start, TimelineMath.HitCueTrim(2, 8));
+        Assert.Equal(TimelineMath.CueBarPart.End, TimelineMath.HitCueTrim(6, 8));
+
+        var clip = Cue("a", "l1", 1000, 5000);
+        Assert.True(TimelineMath.CueContainsTime(clip, 995, padMs: 10));
+        Assert.True(TimelineMath.CueContainsTime(clip, 6005, padMs: 10));
+        Assert.False(TimelineMath.CueContainsTime(clip, 980, padMs: 10));
+
+        Assert.Equal(TimelineMath.TimelineGrab.CueStart, TimelineMath.HoverGrab(TimelineMath.CueBarPart.Start, onPlayhead: true));
+        Assert.Equal(TimelineMath.TimelineGrab.Playhead, TimelineMath.HoverGrab(TimelineMath.CueBarPart.Body, onPlayhead: true));
+        Assert.Equal(TimelineMath.TimelineGrab.CueBody, TimelineMath.HoverGrab(TimelineMath.CueBarPart.Body, onPlayhead: false));
+        Assert.True(TimelineMath.UsesSizeWE(TimelineMath.TimelineGrab.Playhead));
+        Assert.True(TimelineMath.UsesSizeWE(TimelineMath.TimelineGrab.CueEnd));
+        Assert.True(TimelineMath.UsesSizeAll(TimelineMath.TimelineGrab.CueBody));
+        Assert.False(TimelineMath.UsesSizeWE(TimelineMath.TimelineGrab.CueBody));
+    }
+
+    [Fact]
     public void LayerHeaderHitsEyeAndLockIcons()
     {
         Assert.Equal(TimelineMath.LayerHeaderPart.Eye, TimelineMath.HitLayerHeader(TimelineMath.HeaderWidth - 2));
