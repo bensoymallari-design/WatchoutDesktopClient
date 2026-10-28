@@ -59,10 +59,10 @@ public sealed class OutputManager
         App.Session.Log(GpuEngine.Available
             ? "Output on a top-level GPU wall — Stage shares the same H.264 decode"
             : "Output uses Windows Media Foundation (the only DXVA). Stage is a software preview so Intel UHD does not stall both.");
-        if (target.IsPrimary && screens.Any(s => !s.IsPrimary))
-            App.Session.Log($"{display.Name} is on the Producer laptop — the LED wall / TV stays black. On the Display row pick the extra HDMI/DP screen (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
+        if (ScreenAssign.IsProducerScreen(target, screens) && screens.Any(s => !ScreenAssign.IsProducerScreen(s, screens)))
+            App.Session.Log($"{display.Name} is on the Producer screen — the LED wall / TV stays black. On the Display row pick the HDMI, DisplayPort, or USB-C output (Colorlight, NovaStar, processor, or TV), then Output.", "warn");
         else if (skippedProducer)
-            App.Session.Log($"{display.Name} was aimed at the laptop — Output went to {target.Label} so the wall gets picture.");
+            App.Session.Log($"{display.Name} was aimed at the producer screen — Output went to {target.Label} so the wall gets picture.");
         App.Session.Log($"Output {display.Name} → {target.Label} ({ScreenAssign.ScreenSizeText(target)} at {target.Left},{target.Top}) · DXVA H.264 · audio {(playAudio ? "on" : "muted")}");
     }
 
@@ -129,7 +129,7 @@ public sealed class OutputManager
 
     static bool OutputShouldPlayAudio(OutputScreen target, IReadOnlyList<OutputScreen> screens)
     {
-        var hasTv = screens.Any(s => !s.IsPrimary);
-        return !hasTv || !target.IsPrimary;
+        var hasTv = screens.Any(s => !ScreenAssign.IsProducerScreen(s, screens));
+        return !hasTv || !ScreenAssign.IsProducerScreen(target, screens);
     }
 }

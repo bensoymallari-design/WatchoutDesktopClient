@@ -223,4 +223,162 @@ public class ScreenAssignTests
         Assert.False(skipped);
         Assert.Equal("tv", toTv!.Id);
     }
+
+    [Fact]
+    public void VirtualModeIndexUsesTheHighWord()
+    {
+        var packed = (7u << 16) | 1u;
+        Assert.Equal(7, DisplayConnectors.ModeIndex(packed, 12, virtualMode: true));
+        Assert.Equal(-1, DisplayConnectors.ModeIndex(packed, 12, virtualMode: false));
+        Assert.Equal(3, DisplayConnectors.ModeIndex(3, 12, virtualMode: false));
+        Assert.Equal(0, DisplayConnectors.ModeIndex(0, 12, virtualMode: false));
+        Assert.Equal(-1, DisplayConnectors.ModeIndex(DisplayConnectors.InvalidModeIndex, 12, false));
+        Assert.Equal(-1, DisplayConnectors.ModeIndex(DisplayConnectors.InvalidVirtualIndex << 16, 12, true));
+    }
+
+    [Fact]
+    public void ConnectorNamesCoverLaptopAndDesktopPorts()
+    {
+        Assert.Equal("HDMI", DisplayConnectors.Name(DisplayConnectors.Hdmi));
+        Assert.Equal("DisplayPort", DisplayConnectors.Name(DisplayConnectors.DisplayPort));
+        Assert.Equal("USB-C", DisplayConnectors.Name(DisplayConnectors.UsbTunnel));
+        Assert.Equal("USB-C", DisplayConnectors.Name(DisplayConnectors.DisplayPort, @"\\?\USB#VID_1234", "Thunderbolt Dock"));
+        Assert.Equal("DVI", DisplayConnectors.Name(DisplayConnectors.Dvi));
+        Assert.Equal("VGA", DisplayConnectors.Name(DisplayConnectors.Vga));
+        Assert.Equal("SDI", DisplayConnectors.Name(DisplayConnectors.Sdi));
+        Assert.Equal("USB", DisplayConnectors.Name(DisplayConnectors.IndirectWired));
+        Assert.Equal("Internal", DisplayConnectors.Name(DisplayConnectors.Internal));
+        Assert.Equal("Internal", DisplayConnectors.Name(DisplayConnectors.Lvds));
+        Assert.Equal("Internal", DisplayConnectors.Name(DisplayConnectors.DisplayPortEmbedded));
+        Assert.True(DisplayConnectors.IsInternalTechnology(DisplayConnectors.Internal));
+        Assert.False(DisplayConnectors.IsInternalTechnology(DisplayConnectors.Hdmi));
+        Assert.False(DisplayConnectors.IsInternalTechnology(DisplayConnectors.DisplayPort));
+        Assert.False(DisplayConnectors.IsInternalTechnology(DisplayConnectors.UsbTunnel));
+        Assert.True(DisplayConnectors.IsExternalName("HDMI"));
+        Assert.True(DisplayConnectors.IsExternalName("USB-C"));
+        Assert.False(DisplayConnectors.IsExternalName("Internal"));
+    }
+
+    [Fact]
+    public void ExternalPortsStayWallsWhenWindowsMakesThemPrimary()
+    {
+        var panel = new OutputScreen
+        {
+            Id = "panel",
+            Label = "Built-in",
+            IsPrimary = false,
+            IsInternal = true,
+            Connector = "Internal",
+            Width = 1920,
+            Height = 1200,
+            Left = 0,
+        };
+        var usbc = new OutputScreen
+        {
+            Id = "usbc",
+            Label = "LG · USB-C",
+            IsPrimary = true,
+            Connector = "USB-C",
+            Width = 3840,
+            Height = 2160,
+            Left = 1920,
+        };
+        var dp = new OutputScreen
+        {
+            Id = "dp",
+            Label = "Colorlight · DisplayPort",
+            Connector = "DisplayPort",
+            Width = 1920,
+            Height = 1080,
+            Left = 5760,
+        };
+        var hdmi = new OutputScreen
+        {
+            Id = "hdmi",
+            Label = "TV · HDMI",
+            Connector = "HDMI",
+            Width = 1920,
+            Height = 1080,
+            Left = 7680,
+        };
+        var screens = new List<OutputScreen> { panel, usbc, dp, hdmi };
+        Assert.Equal(["usbc", "dp", "hdmi"], ScreenAssign.OutputPool(screens).Select(s => s.Id).ToArray());
+        Assert.True(ScreenAssign.IsProducerScreen(panel, screens));
+        Assert.False(ScreenAssign.IsProducerScreen(usbc, screens));
+        Assert.Contains("Producer", ScreenAssign.ScreenChoiceLabel(panel, screens));
+        Assert.Contains("wall/TV", ScreenAssign.ScreenChoiceLabel(usbc, screens));
+
+        var display = new Display { Id = "d1", Name = "Display 1", Channel = 1, ScreenId = panel.Id };
+        var resolved = ScreenAssign.ResolveOutputScreen(display, screens, null, out var skipped);
+        Assert.True(skipped);
+        Assert.Equal("usbc", resolved!.Id);
+    }
+
+    [Fact]
+    public void DesktopPrimaryStaysTheProducer()
+    {
+        var gui = new OutputScreen
+        {
+            Id = "gui",
+            Label = "Dell · HDMI",
+            IsPrimary = true,
+            Connector = "HDMI",
+            Width = 2560,
+            Height = 1440,
+            Left = 0,
+        };
+        var wall = new OutputScreen
+        {
+            Id = "wall",
+            Label = "Novastar · DisplayPort",
+            Connector = "DisplayPort",
+            Width = 1920,
+            Height = 1080,
+            Left = 2560,
+        };
+        var screens = new List<OutputScreen> { gui, wall };
+        Assert.Equal("wall", Assert.Single(ScreenAssign.OutputPool(screens)).Id);
+        Assert.Contains("Producer", ScreenAssign.ScreenChoiceLabel(gui, screens));
+        Assert.Contains("wall/TV", ScreenAssign.ScreenChoiceLabel(wall, screens));
+    }
+
+    [Fact]
+    public void SecondScreenOnlyIsTheOutput()
+    {
+        var tv = new OutputScreen
+        {
+            Id = "hdmi",
+            Label = "TV · HDMI",
+            IsPrimary = true,
+            Connector = "HDMI",
+            Width = 3840,
+            Height = 2160,
+        };
+        var screens = new List<OutputScreen> { tv };
+        Assert.Equal("hdmi", Assert.Single(ScreenAssign.OutputPool(screens)).Id);
+        Assert.False(ScreenAssign.IsProducerScreen(tv, screens));
+        Assert.Contains("wall/TV", ScreenAssign.ScreenChoiceLabel(tv, screens));
+    }
+
+    [Fact]
+    public void ConfirmedPortModeIsNotReplacedByEdid()
+    {
+        var port = new OutputScreen
+        {
+            Id = "usbc",
+            Label = "LG · USB-C",
+            Connector = "USB-C",
+            Width = 1920,
+            Height = 1080,
+            PhysicalWidth = 3840,
+            PhysicalHeight = 2160,
+            ScaleFactor = 2,
+            ModeConfirmed = true,
+        };
+        Assert.True(ScreenAssign.LooksLikeDpiScaledMode(port));
+        Assert.Equal(1920, ScreenAssign.ScreenWidth(port));
+        Assert.Equal(1080, ScreenAssign.ScreenHeight(port));
+        Assert.True(ScreenAssign.WindowsModeDiffersFromController(port));
+        Assert.Equal("LG · USB-C · wall/TV 1920×1080 (EDID 3840×2160)", ScreenAssign.ScreenChoiceLabel(port));
+    }
 }

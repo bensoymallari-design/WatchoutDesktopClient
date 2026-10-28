@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Watchout.Core;
 using Watchout.Core.Engine;
+using Watchout.Core.Stage;
 using Watchout.Desktop.Gpu;
 using Watchout.Desktop.Interop;
 using Watchout.Desktop.Media;
@@ -103,10 +104,10 @@ public static class AppBoot
     static (bool, string) Display()
     {
         var screens = Monitors.List();
-        var walls = screens.Where(s => !s.IsPrimary).ToList();
-        var note = screens.Count == 1
-            ? $"{screens[0].Label} {screens[0].Width}×{screens[0].Height} (extend a wall screen in Win+P)"
-            : $"{screens.Count} screens · wall {walls.FirstOrDefault()?.Label ?? "extra"}";
+        var walls = screens.Where(s => !ScreenAssign.IsProducerScreen(s, screens)).ToList();
+        var note = walls.Count == 0
+            ? $"{screens[0].Label} {screens[0].Width}×{screens[0].Height} (Win+P Extend — HDMI, DisplayPort, or USB-C)"
+            : $"{screens.Count} screens · {string.Join(", ", walls.Select(w => w.Label))}";
         return (true, note);
     }
 

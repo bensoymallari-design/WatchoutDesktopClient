@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -19,6 +20,7 @@ public sealed class OutputWindow : Window
     GpuOutputWall? _wall;
     bool _loggedOwnerFail;
     bool _loggedDropWall;
+    bool _placing;
 
     public (int W, int H) DestSize
     {
@@ -68,9 +70,14 @@ public sealed class OutputWindow : Window
         {
             if (e.Key == Key.Escape) Close();
         };
-        SourceInitialized += (_, _) => PlaceOnScreen();
+        SourceInitialized += (_, _) =>
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (HwndSource.FromHwnd(hwnd) is { } source)
+                source.AddHook(HoldOutputRect);
+            PlaceOnScreen();
+        };
         Loaded += (_, _) => PlaceOnScreen(refresh: true);
-        DpiChanged += (_, _) => PlaceOnScreen(refresh: true);
         Closing += (_, _) =>
         {
             _wall?.Dispose();
@@ -117,8 +124,50 @@ public sealed class OutputWindow : Window
         }
     }
 
+    /// <summary>
+    /// A 150% laptop panel sends WM_DPICHANGED with a rect for that scale.
+    /// HDMI, DisplayPort, and USB-C walls are a different scale. mpv and OBS
+    /// ignore the suggestion and keep the OS monitor rectangle; WPF would
+    /// otherwise shrink a 4K port to 2560.
+    /// </summary>
+    IntPtr HoldOutputRect(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WmDpiChanged = 0x02E0;
+        const int WmWindowPosChanging = 0x0046;
+        const uint SwpNoMove = 0x0002;
+        const uint SwpNoSize = 0x0001;
+        if (msg == WmDpiChanged)
+        {
+            PlaceOnScreen();
+            handled = true;
+            return IntPtr.Zero;
+        }
+        if (msg != WmWindowPosChanging || lParam == IntPtr.Zero) return IntPtr.Zero;
+        var pos = Marshal.PtrToStructure<WindowPos>(lParam);
+        var (w, h) = OutputViewMath.WallPixels(ScreenW, ScreenH);
+        if ((pos.Flags & SwpNoMove) == 0)
+        {
+            pos.X = _screen.Left;
+            pos.Y = _screen.Top;
+        }
+        if ((pos.Flags & SwpNoSize) == 0 && w >= 64 && h >= 64)
+        {
+            pos.Cx = w;
+            pos.Cy = h;
+        }
+        Marshal.StructureToPtr(pos, lParam, false);
+        return IntPtr.Zero;
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi) =>
+        PlaceOnScreen(refresh: true);
+
     public void PlaceOnScreen(bool refresh = false)
     {
+        if (_placing) return;
+        _placing = true;
+        try
+        {
         WindowState = WindowState.Normal;
         var hwnd = new WindowInteropHelper(this).Handle;
         var (w, h) = OutputViewMath.WallPixels(ScreenW, ScreenH);
@@ -130,6 +179,11 @@ public sealed class OutputWindow : Window
         UpdateLayout();
         _surface.UpdateLayout();
         _surface.Refresh();
+        }
+        finally
+        {
+            _placing = false;
+        }
     }
 
     public void ReviveAfterSinkChange()
@@ -145,4 +199,16 @@ public sealed class OutputWindow : Window
     }
 
     Display? ViewDisplay => _surface.ViewDisplay;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct WindowPos
+    {
+        public IntPtr Hwnd;
+        public IntPtr HwndInsertAfter;
+        public int X;
+        public int Y;
+        public int Cx;
+        public int Cy;
+        public uint Flags;
+    }
 }

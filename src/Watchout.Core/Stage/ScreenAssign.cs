@@ -8,9 +8,32 @@ public static class ScreenAssign
 
     public static IReadOnlyList<OutputScreen> OutputPool(IReadOnlyList<OutputScreen> screens, bool includePrimary = false)
     {
-        var extras = screens.Where(s => !s.IsPrimary).ToList();
-        if (!includePrimary && extras.Count > 0) return extras;
-        return screens;
+        if (includePrimary) return screens.ToList();
+        var walls = screens.Where(s => !IsProducerScreen(s, screens)).ToList();
+        if (walls.Count > 0) return walls;
+        return screens.ToList();
+    }
+
+    public static bool IsInternalPanel(OutputScreen screen) =>
+        screen.IsInternal
+        || string.Equals(screen.Connector, "Internal", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The producer GUI is the built-in panel when the machine has one
+    /// (laptop, tablet). HDMI, DisplayPort, USB-C, HDMI-to-C, DVI, and the
+    /// other extended outputs stay walls even if Windows made the TV the
+    /// primary display. A desktop has no built-in panel, so the primary
+    /// monitor stays the GUI and the other ports are walls. Second-screen-only
+    /// (one external port) is the wall.
+    /// </summary>
+    public static bool IsProducerScreen(OutputScreen screen, IReadOnlyList<OutputScreen>? topology = null)
+    {
+        if (IsInternalPanel(screen)) return true;
+        if (topology is not null && topology.Any(IsInternalPanel))
+            return false;
+        if (topology is { Count: <= 1 })
+            return false;
+        return screen.IsPrimary;
     }
 
     public static OutputScreen? ScreenForDisplay(Display display, IReadOnlyList<OutputScreen> screens)
@@ -38,13 +61,14 @@ public static class ScreenAssign
 
     /// <summary>
     /// Extra Windows screens are the show outputs: LED processors (Colorlight, NovaStar, MCTRL, Linsn, Brompton…),
-    /// TVs, and projectors. They all appear as HDMI/DP monitors after Win+P Extend — WatchMe does not talk
-    /// NovaStar protocol; it fills whichever extra OS screen the processor or TV presents.
+    /// TVs, and projectors. After Win+P Extend they are HDMI, DisplayPort, USB-C, HDMI-to-C, DVI, or USB
+    /// adapters — WatchMe does not talk NovaStar protocol; it fills whichever OS screen that port presents.
     /// </summary>
-    public static string ScreenChoiceLabel(OutputScreen screen) =>
-        screen.IsPrimary
-            ? $"{screen.Label} · Producer {ScreenSizeText(screen)}"
-            : $"{screen.Label} · wall/TV {ScreenSizeText(screen)}";
+    public static string ScreenChoiceLabel(OutputScreen screen, IReadOnlyList<OutputScreen>? topology = null)
+    {
+        var role = IsProducerScreen(screen, topology) ? "Producer" : "wall/TV";
+        return $"{screen.Label} · {role} {ScreenSizeText(screen)}";
+    }
 
     public const int MinModePx = 64;
 
@@ -69,15 +93,15 @@ public static class ScreenAssign
     }
 
     /// <summary>
-    /// Stage copies the Windows HDMI mode (Width×Height). A 1920×1080 extra
-    /// screen becomes a 1920×1080 Display even when EDID prefers 3840.
-    /// NVIDIA custom 3160×2160 in Windows Display is copied as 3160×2160.
-    /// 150% DPI on a 4K panel reports a smaller Width that still maps to the
-    /// physical pixels — keep those so a 3840 wall does not become 2560.
+    /// Stage copies the mode Windows is scanning (Width×Height) on HDMI,
+    /// DisplayPort, USB-C, and HDMI-to-C. A 1920×1080 port stays 1920×1080
+    /// even when EDID prefers 3840. NVIDIA custom 3160×2160 is copied as
+    /// 3160×2160. A 150% reading that was never confirmed by Windows (no
+    /// DEVMODE) still expands to the 3840 panel so the wall is not 2560.
     /// </summary>
     public static int ScreenWidth(OutputScreen screen)
     {
-        if (LooksLikeDpiScaledMode(screen) && screen.PhysicalWidth > 0)
+        if (!screen.ModeConfirmed && LooksLikeDpiScaledMode(screen) && screen.PhysicalWidth > 0)
             return screen.PhysicalWidth;
         if (screen.Width > 0) return screen.Width;
         return screen.PhysicalWidth > 0 ? screen.PhysicalWidth : 1920;
@@ -85,7 +109,7 @@ public static class ScreenAssign
 
     public static int ScreenHeight(OutputScreen screen)
     {
-        if (LooksLikeDpiScaledMode(screen) && screen.PhysicalHeight > 0)
+        if (!screen.ModeConfirmed && LooksLikeDpiScaledMode(screen) && screen.PhysicalHeight > 0)
             return screen.PhysicalHeight;
         if (screen.Height > 0) return screen.Height;
         return screen.PhysicalHeight > 0 ? screen.PhysicalHeight : 1080;
@@ -105,14 +129,18 @@ public static class ScreenAssign
         Math.Abs(value - target) <= Math.Max(2, target * 0.02);
 
     /// <summary>
-    /// True when Windows is driving HDMI at a different mode than the controller
-    /// EDID (not 150% DPI). Stage still copies the Windows mode.
+    /// True when Windows is driving the port at a different mode than the
+    /// controller EDID (not an unconfirmed 150% DPI reading). Stage still
+    /// copies the Windows mode.
     /// </summary>
-    public static bool WindowsModeDiffersFromController(OutputScreen screen) =>
-        screen.Width > 0 && screen.Height > 0
-        && screen.PhysicalWidth > 0 && screen.PhysicalHeight > 0
-        && !LooksLikeDpiScaledMode(screen)
-        && (screen.Width != screen.PhysicalWidth || screen.Height != screen.PhysicalHeight);
+    public static bool WindowsModeDiffersFromController(OutputScreen screen)
+    {
+        if (screen.Width <= 0 || screen.Height <= 0) return false;
+        if (screen.PhysicalWidth <= 0 || screen.PhysicalHeight <= 0) return false;
+        if (screen.Width == screen.PhysicalWidth && screen.Height == screen.PhysicalHeight) return false;
+        if (!screen.ModeConfirmed && LooksLikeDpiScaledMode(screen)) return false;
+        return true;
+    }
 
     public static string ScreenSizeText(OutputScreen screen)
     {
@@ -192,8 +220,7 @@ public static class ScreenAssign
 
     public static OutputScreen? PreferredOutputScreen(IReadOnlyList<OutputScreen> screens, int channel = 1)
     {
-        var extras = screens.Where(s => !s.IsPrimary).ToList();
-        var pool = extras.Count > 0 ? extras : screens.ToList();
+        var pool = OutputPool(screens);
         if (pool.Count == 0) return null;
         return pool[Math.Max(0, Math.Min(pool.Count - 1, channel - 1))];
     }
@@ -208,7 +235,7 @@ public static class ScreenAssign
             return screens.FirstOrDefault(s => s.Id == requested.Id) ?? requested;
         var chosen = ScreenForDisplay(display, screens) ?? screens.FirstOrDefault();
         if (chosen is null) return null;
-        if (!chosen.IsPrimary || screens.Count(s => !s.IsPrimary) == 0) return chosen;
+        if (!IsProducerScreen(chosen, screens) || !screens.Any(s => !IsProducerScreen(s, screens))) return chosen;
         var extra = PreferredOutputScreen(screens, display.Channel);
         if (extra is null || extra.Id == chosen.Id) return chosen;
         skippedProducer = true;

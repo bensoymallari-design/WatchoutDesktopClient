@@ -1,10 +1,15 @@
 using System.Runtime.InteropServices;
+using Watchout.Core.Stage;
 
 namespace Watchout.Desktop.Interop;
 
 /// <summary>
-/// Reads the monitor EDID preferred mode (what an LED processor actually advertises)
-/// and the GDI device name Windows uses for that HDMI/DP port.
+/// Reads the monitor EDID preferred mode and the GDI device name Windows uses
+/// for that port. QueryDisplayConfig is called the way PowerToys and Chromium
+/// do it: <c>QDC_VIRTUAL_MODE_AWARE</c>, then the mode index in the high 16
+/// bits. Without that, DisplayPort, USB-C, and HDMI-to-C on a laptop return
+/// the built-in panel's mode (or the whole query fails) while a plain desktop
+/// HDMI still works.
 /// </summary>
 static class DisplayConfig
 {
@@ -14,19 +19,24 @@ static class DisplayConfig
         int PreferredWidth,
         int PreferredHeight,
         int CurrentWidth,
-        int CurrentHeight);
+        int CurrentHeight,
+        int Left,
+        int Top,
+        string Connector,
+        bool IsInternal);
 
     internal static List<EdidInfo> List()
     {
         var list = new List<EdidInfo>();
         try
         {
-            if (GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out var pathCount, out var modeCount) != 0)
-                return list;
-            var paths = new PathInfo[pathCount];
-            var modes = new ModeInfo[modeCount];
-            if (QueryDisplayConfig(QdcOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero) != 0)
-                return list;
+            var virtualAware = true;
+            if (!TryQuery(QdcOnlyActivePaths | QdcVirtualModeAware, out var paths, out var modes, out var pathCount, out var modeCount))
+            {
+                virtualAware = false;
+                if (!TryQuery(QdcOnlyActivePaths, out paths, out modes, out pathCount, out modeCount))
+                    return list;
+            }
             for (var i = 0; i < pathCount; i++)
             {
                 var path = paths[i];
@@ -35,7 +45,7 @@ static class DisplayConfig
                 source.Header.Size = (uint)Marshal.SizeOf<SourceName>();
                 source.Header.AdapterId = path.Source.AdapterId;
                 source.Header.Id = path.Source.Id;
-                if (GetInfo(ref source) != 0) continue;
+                var sourceOk = GetInfo(ref source) == 0;
 
                 var preferred = new PreferredMode();
                 preferred.Header.Type = GetTargetPreferredMode;
@@ -51,19 +61,28 @@ static class DisplayConfig
                 target.Header.Id = path.Target.Id;
                 GetInfo(ref target);
 
-                var key = DeviceKey(source.ViewGdiDeviceName);
-                if (string.IsNullOrEmpty(key)) continue;
+                var key = sourceOk ? DeviceKey(source.ViewGdiDeviceName) : "";
                 var friendly = string.IsNullOrWhiteSpace(target.MonitorFriendlyDeviceName)
                     ? ""
                     : target.MonitorFriendlyDeviceName.Trim();
-                var current = CurrentDesktop(path, modes, modeCount);
+                var tech = path.Target.OutputTechnology;
+                if (tech == 0 && target.OutputTechnology != 0)
+                    tech = target.OutputTechnology;
+                var connector = DisplayConnectors.Name(tech, target.MonitorDevicePath, friendly);
+                var current = CurrentDesktop(path, modes, modeCount, virtualAware);
+                if (string.IsNullOrEmpty(key) && current.W < 64 && string.IsNullOrEmpty(friendly))
+                    continue;
                 list.Add(new EdidInfo(
                     key,
                     friendly,
                     (int)preferred.Width,
                     (int)preferred.Height,
                     current.W,
-                    current.H));
+                    current.H,
+                    current.X,
+                    current.Y,
+                    connector,
+                    DisplayConnectors.IsInternalTechnology(tech)));
             }
         }
         catch
@@ -73,42 +92,54 @@ static class DisplayConfig
         return list;
     }
 
+    static bool TryQuery(uint flags, out PathInfo[] paths, out ModeInfo[] modes, out uint pathCount, out uint modeCount)
+    {
+        paths = [];
+        modes = [];
+        pathCount = 0;
+        modeCount = 0;
+        if (GetDisplayConfigBufferSizes(flags, out pathCount, out modeCount) != 0)
+            return false;
+        if (pathCount == 0) return false;
+        paths = new PathInfo[pathCount];
+        modes = new ModeInfo[Math.Max(1, modeCount)];
+        var pc = pathCount;
+        var mc = modeCount;
+        if (QueryDisplayConfig(flags, ref pc, paths, ref mc, modes, IntPtr.Zero) != 0)
+            return false;
+        pathCount = pc;
+        modeCount = mc;
+        return true;
+    }
+
     internal static string DeviceKey(string? device) =>
         (device ?? "").Replace(@"\\.\", "", StringComparison.Ordinal).Trim();
 
-    const uint InvalidModeIdx = 0xffffffff;
     const uint SourceType = 1;
     const uint TargetType = 2;
 
-    static (int W, int H) CurrentDesktop(PathInfo path, ModeInfo[] modes, uint modeCount)
+    static (int W, int H, int X, int Y) CurrentDesktop(PathInfo path, ModeInfo[] modes, uint modeCount, bool virtualAware)
     {
-        var source = ReadSource(path.Source.ModeInfoIdx, modes, modeCount);
+        var virtualMode = virtualAware && (path.Flags & DisplayConnectors.PathSupportsVirtualMode) != 0;
+        var source = ReadSource(path.Source.ModeInfoIdx, modes, modeCount, virtualMode);
         if (source.W >= 64 && source.H >= 64) return source;
-        return ReadTargetActive(path.Target.ModeInfoIdx, modes, modeCount);
+        var target = ReadTargetActive(path.Target.ModeInfoIdx, modes, modeCount, virtualMode);
+        return (target.W, target.H, source.X, source.Y);
     }
 
-    static int ModeIndex(uint packed, uint modeCount)
+    static (int W, int H, int X, int Y) ReadSource(uint packed, ModeInfo[] modes, uint modeCount, bool virtualMode)
     {
-        if (packed == InvalidModeIdx) return -1;
-        if (packed < modeCount) return (int)packed;
-        var low = packed & 0xffff;
-        if (low < modeCount) return (int)low;
-        return -1;
-    }
-
-    static (int W, int H) ReadSource(uint idx, ModeInfo[] modes, uint modeCount)
-    {
-        var i = ModeIndex(idx, modeCount);
-        if (i < 0) return (0, 0);
+        var i = DisplayConnectors.ModeIndex(packed, modeCount, virtualMode);
+        if (i < 0 || i >= modes.Length) return (0, 0, 0, 0);
         var mode = modes[i];
-        if (mode.InfoType != SourceType) return (0, 0);
-        return ((int)mode.Width, (int)mode.Height);
+        if (mode.InfoType != SourceType) return (0, 0, 0, 0);
+        return ((int)mode.Width, (int)mode.Height, mode.PositionX, mode.PositionY);
     }
 
-    static (int W, int H) ReadTargetActive(uint idx, ModeInfo[] modes, uint modeCount)
+    static (int W, int H) ReadTargetActive(uint packed, ModeInfo[] modes, uint modeCount, bool virtualMode)
     {
-        var i = ModeIndex(idx, modeCount);
-        if (i < 0) return (0, 0);
+        var i = DisplayConnectors.ModeIndex(packed, modeCount, virtualMode);
+        if (i < 0 || i >= modes.Length) return (0, 0);
         var mode = modes[i];
         if (mode.InfoType != TargetType) return (0, 0);
         return ((int)mode.ActiveWidth, (int)mode.ActiveHeight);
@@ -132,6 +163,7 @@ static class DisplayConfig
     }
 
     const uint QdcOnlyActivePaths = 2;
+    const uint QdcVirtualModeAware = 0x10;
     const uint GetSourceName = 1;
     const uint GetTargetName = 2;
     const uint GetTargetPreferredMode = 3;

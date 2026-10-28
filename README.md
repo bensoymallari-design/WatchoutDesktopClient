@@ -110,11 +110,11 @@ GitHub Actions also uploads a **WatchMe-Setup** artifact on each Windows build o
 
 ## Wall still black after closing or uninstalling WatchMe
 
-Output is a **topmost black window** on that HDMI/DP screen. Uninstalling used to delete files while `WatchMe.exe` was still covering the wall. Win+P Duplicate/Extend **cannot** fix a stuck GPU HDMI mode.
+Output is a **topmost black window** on that HDMI, DisplayPort, or USB-C screen. Uninstalling used to delete files while `WatchMe.exe` was still covering the wall. Win+P Duplicate/Extend **cannot** fix a stuck GPU link.
 
 1. Esc (closes Output), or Task Manager → **End task WatchMe**.
 2. **Reboot the PC once** if the wall is still black with no WatchMe.exe. Then unplug HDMI for 10 seconds and plug it back.
-3. Run the new `WatchMe-Setup.exe` — setup kills WatchMe and re-applies Windows Extend. In the app: **Help → Reset HDMI / wall displays**.
+3. Run the new `WatchMe-Setup.exe` — setup kills WatchMe and re-applies Windows Extend. In the app: **Help → Reset wall displays**.
 
 Do not pick the Producer laptop as the Output screen.
 
@@ -143,7 +143,7 @@ Visual Studio: open `Watchout.sln`, set **Watchout.Desktop** as startup project,
 1. **New Show** or **Demo Show** (3-wide LED wall).
 2. **Assets → Import** an H.264 MP4, or drag files onto Assets. Then **drag the asset onto a Stage display** (or onto the Timeline). Press **Space** or **Play**.
 3. Drag the clip on **Stage** to snap it; drag the amber handles to resize. **Fit wall** / **Fit display** / **Fit to media**.
-4. **Devices → Find screens** / **Assign screens**. Pick the LED wall, TV, or processor (Colorlight, NovaStar, any extra HDMI) — not the Producer laptop. Then **Output**.
+4. **Devices → Find screens** / **Assign screens**. Pick the LED wall, TV, or processor on HDMI, DisplayPort, USB-C, or an HDMI-to-C adapter — not the built-in panel. Then **Output**. Win+P must be Extend (Duplicate is a single screen).
 5. Click the Stage, press **Space**. Esc stops (or closes outputs).
 6. For Resolume NDI: **Assets → NDI**. For cards: **Live → Connect All Capture Cards**.
 7. **Cue transitions** — right-click the **start** of a clip on the timeline (Fade in, Dissolve, Wipe, Scale). Right-click the **end** for the matching out. Properties → **Start transition** / **End transition** picks the same filters and durations.

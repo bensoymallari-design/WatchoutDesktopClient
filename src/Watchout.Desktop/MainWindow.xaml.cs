@@ -149,9 +149,9 @@ public partial class MainWindow : Window
     void ResetDisplays_Click(object sender, RoutedEventArgs e)
     {
         App.ReleaseHardware();
-        App.Session.Log("Reset HDMI / wall displays — Windows Extend was re-applied. If the wall is still black, reboot once.");
+        App.Session.Log("Reset wall displays — Windows Extend was re-applied. If the wall is still black, reboot once.");
         MessageBox.Show(this,
-            "Windows display mode was reset to Extend.\n\nIf the HDMI wall is still black, reboot this PC once. Killing WatchMe while Output was up can leave the GPU HDMI link stuck until reboot. Unplug HDMI for 10 seconds after the reboot if it is still dark.",
+            "Windows display mode was reset to Extend.\n\nIf the HDMI, DisplayPort, or USB-C wall is still black, reboot this PC once. Killing WatchMe while Output was up can leave the GPU link stuck until reboot. Unplug that cable for 10 seconds after the reboot if it is still dark.",
             "Reset displays",
             MessageBoxButton.OK, MessageBoxImage.Information);
     }
