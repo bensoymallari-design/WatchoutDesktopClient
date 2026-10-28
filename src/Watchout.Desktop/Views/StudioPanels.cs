@@ -710,10 +710,11 @@ public class DevicesPanel : UserControl
             _fp = "";
             var found = Interop.Monitors.List();
             var n = found.Count;
-            App.Session.Log(n <= 1
-                ? "Only the Producer laptop is visible. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, any brand), then Find screens."
-                : $"{n} OS screens — extra HDMI/DP outputs are LED walls, TVs, and processors. Pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
-            foreach (var screen in found.Where(s => !s.IsPrimary))
+            var walls = ScreenAssign.OutputPool(found).Where(s => !ScreenAssign.IsProducerScreen(s, found)).ToList();
+            App.Session.Log(walls.Count == 0
+                ? "Only the producer screen is visible. Win+P → Extend so Windows sees the LED wall, TV, or processor on HDMI, DisplayPort, USB-C, or an HDMI-to-C adapter, then Find screens."
+                : $"{n} OS screens — HDMI, DisplayPort, USB-C, and HDMI-to-C outputs are LED walls, TVs, and processors. Pick one on each Display row, or Assign screens to copy the layout onto the Stage.");
+            foreach (var screen in walls)
                 App.Session.Log($"{screen.Label}: Windows {ScreenAssign.ScreenWidth(screen)}×{ScreenAssign.ScreenHeight(screen)}"
                     + (ScreenAssign.WindowsModeDiffersFromController(screen) ? $", EDID {screen.PhysicalWidth}×{screen.PhysicalHeight}" : ""));
             Reload();
@@ -730,15 +731,15 @@ public class DevicesPanel : UserControl
         });
         _root.Children.Add(monitorBar);
         foreach (var screen in screens)
-            _root.Children.Add(MonitorRow(screen, show));
+            _root.Children.Add(MonitorRow(screen, screens, show));
         _root.Children.Add(new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
             Foreground = (Brush)FindResource("Wo.Muted"),
-            Text = extras.Count == 0
-                ? "Only the laptop is detected. Win+P → Extend so Windows sees the LED wall, TV, or processor (Colorlight, NovaStar, MCTRL, any brand), then Find screens. Output on the laptop looks blurry and the wall stays black."
-                : "LED processors, TVs, and projectors all show up as extra OS screens — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. Create an NVIDIA custom resolution if you need one, set that extra screen to it in Windows Display settings, then Find screens. Assign screens copies that Windows size onto the Stage (3160×2160 NVIDIA → 3160×2160 Stage). On each Display row pick that wall/TV screen — not the Producer laptop — then Output.",
+            Text = extras.Count == 0 || extras.All(s => ScreenAssign.IsProducerScreen(s, screens))
+                ? "Only the producer screen is detected. Win+P → Extend (Duplicate is one screen). HDMI, DisplayPort, USB-C, and HDMI-to-C adapters then show up as their own screens. Output on the built-in panel looks blurry and the wall stays black."
+                : "LED processors, TVs, and projectors show up as extended screens on HDMI, DisplayPort, USB-C, HDMI-to-C, DVI, or a USB adapter — Colorlight, NovaStar, MCTRL, Linsn, or a plain TV. A USB-C dongle is often listed as DisplayPort or USB-C; that port is still a wall, even if Windows made it the main display. Create an NVIDIA custom resolution if you need one, set that screen to it in Windows Display settings, then Find screens. Assign screens copies that Windows size onto the Stage. On each Display row pick the wall — not the built-in panel — then Output.",
         });
 
         _root.Children.Add(Header("AUDIO"));
@@ -872,7 +873,7 @@ public class DevicesPanel : UserControl
         };
         box.Items.Add(Choice(ScreenAssign.AutoChoiceLabel(display.Channel), ScreenAssign.AutoKey(display.Channel)));
         foreach (var screen in screens)
-            box.Items.Add(Choice(ScreenAssign.ScreenChoiceLabel(screen), screen.Id));
+            box.Items.Add(Choice(ScreenAssign.ScreenChoiceLabel(screen, screens), screen.Id));
         var want = ScreenAssign.AssignmentKey(display);
         foreach (ComboBoxItem item in box.Items)
             if (Equals(item.Tag, want)) box.SelectedItem = item;
@@ -901,7 +902,7 @@ public class DevicesPanel : UserControl
         return row;
     }
 
-    UIElement MonitorRow(OutputScreen screen, Show? show)
+    UIElement MonitorRow(OutputScreen screen, IReadOnlyList<OutputScreen> screens, Show? show)
     {
         var row = new Grid { Margin = new Thickness(0, 6, 0, 0) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -909,7 +910,7 @@ public class DevicesPanel : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var label = new TextBlock
         {
-            Text = ScreenAssign.ScreenChoiceLabel(screen),
+            Text = ScreenAssign.ScreenChoiceLabel(screen, screens),
             Foreground = (Brush)FindResource("Wo.Text"),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,

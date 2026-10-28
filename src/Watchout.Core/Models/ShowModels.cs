@@ -466,6 +466,15 @@ public sealed class OutputScreen
     public int PhysicalHeight { get; set; }
     public bool IsPrimary { get; set; }
     public double ScaleFactor { get; set; } = 1;
+    /// <summary>HDMI, DisplayPort, USB-C, DVI, VGA, SDI, USB, Internal, or empty when Windows did not say.</summary>
+    public string Connector { get; set; } = "";
+    /// <summary>Built-in panel (eDP / LVDS). Not an HDMI, DisplayPort, or USB-C output.</summary>
+    public bool IsInternal { get; set; }
+    /// <summary>
+    /// Width/Height came from the mode Windows is scanning (EnumDisplaySettings or CCD),
+    /// not a DPI-scaled guess. EDID must not replace that mode.
+    /// </summary>
+    public bool ModeConfirmed { get; set; }
 }
 
 public sealed class RecentShow

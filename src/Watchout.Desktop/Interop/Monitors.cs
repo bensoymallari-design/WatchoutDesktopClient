@@ -20,21 +20,19 @@ public static class Monitors
             var primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0;
             var device = info.szDevice ?? "";
             var key = DisplayConfig.DeviceKey(device);
-            var match = edid.FirstOrDefault(e => string.Equals(e.DeviceKey, key, StringComparison.OrdinalIgnoreCase));
+            var match = MatchEdid(edid, key, r.Left, r.Top);
             var current = CurrentMode(device);
             var windows = ScreenAssign.PickWindowsMode(
                 current.W, current.H, width, height, match.CurrentWidth, match.CurrentHeight);
             var physicalW = match.PreferredWidth > 0 ? match.PreferredWidth : windows.W;
             var physicalH = match.PreferredHeight > 0 ? match.PreferredHeight : windows.H;
-            var label = !string.IsNullOrWhiteSpace(match.FriendlyName)
-                ? match.FriendlyName
-                : string.IsNullOrWhiteSpace(key)
-                    ? (primary ? "Primary" : $"Monitor {screens.Count + 1}")
-                    : key;
+            var connector = match.Connector ?? "";
+            var confirmed = (current.W >= ScreenAssign.MinModePx && current.H >= ScreenAssign.MinModePx)
+                || (match.CurrentWidth >= ScreenAssign.MinModePx && match.CurrentHeight >= ScreenAssign.MinModePx);
             screens.Add(new OutputScreen
             {
                 Id = string.IsNullOrWhiteSpace(key) ? $"{r.Left},{r.Top},{windows.W}x{windows.H}" : key,
-                Label = label,
+                Label = BuildLabel(match.FriendlyName, connector, key, primary, screens.Count + 1),
                 Left = r.Left,
                 Top = r.Top,
                 Width = windows.W,
@@ -43,9 +41,18 @@ public static class Monitors
                 PhysicalHeight = physicalH,
                 IsPrimary = primary,
                 ScaleFactor = DpiScale(hMonitor),
+                Connector = connector,
+                IsInternal = match.IsInternal,
+                ModeConfirmed = confirmed,
             });
             return true;
         }, IntPtr.Zero);
+
+        screens.Sort(static (a, b) =>
+        {
+            var c = a.Left.CompareTo(b.Left);
+            return c != 0 ? c : a.Top.CompareTo(b.Top);
+        });
 
         if (screens.Count == 0)
         {
@@ -63,6 +70,40 @@ public static class Monitors
         return screens;
     }
 
+    /// <summary>
+    /// GDI name first. USB-C docks and hybrid GPUs sometimes leave the source
+    /// name blank; the desktop position still identifies the port.
+    /// </summary>
+    static DisplayConfig.EdidInfo MatchEdid(List<DisplayConfig.EdidInfo> edid, string key, int left, int top)
+    {
+        if (!string.IsNullOrEmpty(key))
+        {
+            var byName = edid.FirstOrDefault(e => string.Equals(e.DeviceKey, key, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(byName.DeviceKey))
+                return byName;
+        }
+        var byPos = edid.Where(e => e.Left == left && e.Top == top).ToList();
+        if (byPos.Count == 0) return default;
+        foreach (var entry in byPos)
+        {
+            if (!string.IsNullOrEmpty(entry.FriendlyName) || !string.IsNullOrEmpty(entry.Connector))
+                return entry;
+        }
+        return byPos[0];
+    }
+
+    static string BuildLabel(string? friendly, string connector, string key, bool primary, int index)
+    {
+        var name = !string.IsNullOrWhiteSpace(friendly)
+            ? friendly.Trim()
+            : string.IsNullOrWhiteSpace(key)
+                ? (primary ? "Primary" : $"Monitor {index}")
+                : key;
+        if (string.IsNullOrEmpty(connector) || connector == "Internal") return name;
+        if (name.Contains(connector, StringComparison.OrdinalIgnoreCase)) return name;
+        return $"{name} · {connector}";
+    }
+
     public static (int W, int H) WindowsPixels(IntPtr hMonitor)
     {
         if (hMonitor == IntPtr.Zero) return (0, 0);
@@ -74,7 +115,7 @@ public static class Monitors
         var device = info.szDevice ?? "";
         var current = CurrentMode(device);
         var key = DisplayConfig.DeviceKey(device);
-        var match = DisplayConfig.List().FirstOrDefault(e => string.Equals(e.DeviceKey, key, StringComparison.OrdinalIgnoreCase));
+        var match = MatchEdid(DisplayConfig.List(), key, r.Left, r.Top);
         return ScreenAssign.PickWindowsMode(current.W, current.H, width, height, match.CurrentWidth, match.CurrentHeight);
     }
 
